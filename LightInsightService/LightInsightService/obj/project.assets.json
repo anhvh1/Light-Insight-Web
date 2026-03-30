@@ -1146,11 +1146,28 @@
       "LightInsightBUS/1.0.0": {
         "type": "project",
         "framework": ".NETCoreApp,Version=v9.0",
+        "dependencies": {
+          "LightInsightDAL": "1.0.0"
+        },
         "compile": {
           "bin/placeholder/LightInsightBUS.dll": {}
         },
         "runtime": {
           "bin/placeholder/LightInsightBUS.dll": {}
+        }
+      },
+      "LightInsightDAL/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v9.0",
+        "dependencies": {
+          "LightInsightUtiltites": "1.0.0",
+          "System.Data.SqlClient": "4.9.1"
+        },
+        "compile": {
+          "bin/placeholder/LightInsightDAL.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/LightInsightDAL.dll": {}
         }
       },
       "LightInsightUtiltites/1.0.0": {
@@ -3106,6 +3123,11 @@
       "type": "project",
       "path": "../LightInsightBUS/LightInsightBUS.csproj",
       "msbuildProject": "../LightInsightBUS/LightInsightBUS.csproj"
+    },
+    "LightInsightDAL/1.0.0": {
+      "type": "project",
+      "path": "../LightInsightDAL/LightInsightDAL.csproj",
+      "msbuildProject": "../LightInsightDAL/LightInsightDAL.csproj"
     },
     "LightInsightUtiltites/1.0.0": {
       "type": "project",

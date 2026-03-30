@@ -6,6 +6,7 @@ D:\PhiNV\LightInsightService\LightInsightService\LightInsightUtiltites\obj\Debug
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightUtiltites\obj\Debug\net9.0\LightInsightUtiltites.AssemblyInfoInputs.cache
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightUtiltites\obj\Debug\net9.0\LightInsightUtiltites.AssemblyInfo.cs
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightUtiltites\obj\Debug\net9.0\LightInsightUtiltites.csproj.CoreCompileInputs.cache
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightUtiltites\obj\Debug\net9.0\LightInsightUtiltites.sourcelink.json
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightUtiltites\obj\Debug\net9.0\LightInsightUtiltites.dll
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightUtiltites\obj\Debug\net9.0\refint\LightInsightUtiltites.dll
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightUtiltites\obj\Debug\net9.0\LightInsightUtiltites.pdb

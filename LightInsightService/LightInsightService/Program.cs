@@ -1,20 +1,26 @@
-﻿using LightInsightUtiltites;
+﻿using LightInsightBUS.Interfaces;
+using LightInsightBUS.Service;
+using LightInsightUtiltites;
+
+
 var builder = WebApplication.CreateBuilder(args);
 
 // 👇 QUAN TRỌNG
-builder.Host.UseWindowsService();
+//builder.Host.UseWindowsService();
 
 // Config
-var port = builder.Configuration.GetValue<int>("ServiceSettings:Port");
+//var port = builder.Configuration.GetValue<int>("ServiceSettings:Port");
 
 // 👇 KHÔNG bind IP cụ thể
-builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+//builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-//builder.Services.AddScoped<CameraServiceBUS>();
+
+// ADD SCROPED SERVICES
+builder.Services.AddScoped<ICameraService, CameraServiceBUS>();
 
 // CORS
 builder.Services.AddCors(c =>

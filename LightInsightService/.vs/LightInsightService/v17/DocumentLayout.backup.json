@@ -7,6 +7,26 @@
       "RelativeMoniker": "D:0:0:{76A5DADB-F315-4AEA-840F-6559327DA103}|LightInsightService\\LightInsightService.csproj|solutionrelative:lightinsightservice\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{76A5DADB-F315-4AEA-840F-6559327DA103}|LightInsightService\\LightInsightService.csproj|d:\\phinv\\lightinsightservice\\lightinsightservice\\lightinsightservice\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{76A5DADB-F315-4AEA-840F-6559327DA103}|LightInsightService\\LightInsightService.csproj|solutionrelative:lightinsightservice\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2E7F2E94-C3A0-4480-B0EF-D65FBAADD0F3}|LightInsightDAL\\LightInsightDAL.csproj|d:\\phinv\\lightinsightservice\\lightinsightservice\\lightinsightdal\\repositories\\milestone\\camera\\cameraservicedal.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2E7F2E94-C3A0-4480-B0EF-D65FBAADD0F3}|LightInsightDAL\\LightInsightDAL.csproj|solutionrelative:lightinsightdal\\repositories\\milestone\\camera\\cameraservicedal.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5F77F8E0-C47E-4283-8330-55462362F579}|LightInsightBUS\\LightInsightBUS.csproj|d:\\phinv\\lightinsightservice\\lightinsightservice\\lightinsightbus\\interfaces\\icameraservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5F77F8E0-C47E-4283-8330-55462362F579}|LightInsightBUS\\LightInsightBUS.csproj|solutionrelative:lightinsightbus\\interfaces\\icameraservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5F77F8E0-C47E-4283-8330-55462362F579}|LightInsightBUS\\LightInsightBUS.csproj|d:\\phinv\\lightinsightservice\\lightinsightservice\\lightinsightbus\\service\\cameraservicebus.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5F77F8E0-C47E-4283-8330-55462362F579}|LightInsightBUS\\LightInsightBUS.csproj|solutionrelative:lightinsightbus\\service\\cameraservicebus.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{76A5DADB-F315-4AEA-840F-6559327DA103}|LightInsightService\\LightInsightService.csproj|d:\\phinv\\lightinsightservice\\lightinsightservice\\lightinsightservice\\controllers\\milestone\\camera\\cameracontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{76A5DADB-F315-4AEA-840F-6559327DA103}|LightInsightService\\LightInsightService.csproj|solutionrelative:lightinsightservice\\controllers\\milestone\\camera\\cameracontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{4A3EBA45-6638-4BD4-B425-866218B29912}|LightInsightUtiltites\\LightInsightUtiltites.csproj|d:\\phinv\\lightinsightservice\\lightinsightservice\\lightinsightutiltites\\sqlhelper.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{4A3EBA45-6638-4BD4-B425-866218B29912}|LightInsightUtiltites\\LightInsightUtiltites.csproj|solutionrelative:lightinsightutiltites\\sqlhelper.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
@@ -18,7 +38,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 13,
+          "SelectedChildIndex": 18,
           "Children": [
             {
               "$type": "Bookmark",
@@ -74,29 +94,93 @@
             },
             {
               "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "CameraController.cs",
+              "DocumentMoniker": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightService\\Controllers\\MileStone\\Camera\\CameraController.cs",
+              "RelativeDocumentMoniker": "LightInsightService\\Controllers\\MileStone\\Camera\\CameraController.cs",
+              "ToolTip": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightService\\Controllers\\MileStone\\Camera\\CameraController.cs",
+              "RelativeToolTip": "LightInsightService\\Controllers\\MileStone\\Camera\\CameraController.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAJAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-30T08:45:00.706Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "CameraServiceBUS.cs",
+              "DocumentMoniker": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightBUS\\Service\\CameraServiceBUS.cs",
+              "RelativeDocumentMoniker": "LightInsightBUS\\Service\\CameraServiceBUS.cs",
+              "ToolTip": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightBUS\\Service\\CameraServiceBUS.cs",
+              "RelativeToolTip": "LightInsightBUS\\Service\\CameraServiceBUS.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAAJAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-30T08:37:43.865Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "ICameraService.cs",
+              "DocumentMoniker": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightBUS\\Interfaces\\ICameraService.cs",
+              "RelativeDocumentMoniker": "LightInsightBUS\\Interfaces\\ICameraService.cs",
+              "ToolTip": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightBUS\\Interfaces\\ICameraService.cs",
+              "RelativeToolTip": "LightInsightBUS\\Interfaces\\ICameraService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAuwAgAAAAVAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-30T08:36:30.938Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "CameraServiceDAL.cs",
+              "DocumentMoniker": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightDAL\\Repositories\\MileStone\\Camera\\CameraServiceDAL.cs",
+              "RelativeDocumentMoniker": "LightInsightDAL\\Repositories\\MileStone\\Camera\\CameraServiceDAL.cs",
+              "ToolTip": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightDAL\\Repositories\\MileStone\\Camera\\CameraServiceDAL.cs",
+              "RelativeToolTip": "LightInsightDAL\\Repositories\\MileStone\\Camera\\CameraServiceDAL.cs",
+              "ViewState": "AgIAAAkAAAAAAAAAAAAAABgAAAANAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-30T08:32:20.316Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightService\\appsettings.json",
+              "RelativeDocumentMoniker": "LightInsightService\\appsettings.json",
+              "ToolTip": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightService\\appsettings.json",
+              "RelativeToolTip": "LightInsightService\\appsettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-03-30T08:03:45.35Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
               "DocumentIndex": 0,
               "Title": "Program.cs",
               "DocumentMoniker": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightService\\Program.cs",
               "RelativeDocumentMoniker": "LightInsightService\\Program.cs",
-              "ToolTip": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightService\\Program.cs*",
-              "RelativeToolTip": "LightInsightService\\Program.cs*",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAGAAAAAAAAAA==",
+              "ToolTip": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightService\\Program.cs",
+              "RelativeToolTip": "LightInsightService\\Program.cs",
+              "ViewState": "AgIAABkAAAAAAAAAAAAYwDgAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-03-30T07:49:56.315Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 6,
               "Title": "SQLHelper.cs",
               "DocumentMoniker": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightUtiltites\\SQLHelper.cs",
               "RelativeDocumentMoniker": "LightInsightUtiltites\\SQLHelper.cs",
-              "ToolTip": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightUtiltites\\SQLHelper.cs*",
-              "RelativeToolTip": "LightInsightUtiltites\\SQLHelper.cs*",
+              "ToolTip": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightUtiltites\\SQLHelper.cs",
+              "RelativeToolTip": "LightInsightUtiltites\\SQLHelper.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAAfAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-03-30T07:48:10.189Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-03-30T07:48:10.189Z"
             }
           ]
         },

@@ -1,10 +1,15 @@
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\bin\Debug\net9.0\LightInsightDAL.deps.json
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\bin\Debug\net9.0\LightInsightDAL.dll
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\bin\Debug\net9.0\LightInsightDAL.pdb
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\bin\Debug\net9.0\LightInsightUtiltites.dll
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\bin\Debug\net9.0\LightInsightUtiltites.pdb
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\obj\Debug\net9.0\LightInsightDAL.csproj.AssemblyReference.cache
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\obj\Debug\net9.0\LightInsightDAL.GeneratedMSBuildEditorConfig.editorconfig
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\obj\Debug\net9.0\LightInsightDAL.AssemblyInfoInputs.cache
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\obj\Debug\net9.0\LightInsightDAL.AssemblyInfo.cs
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\obj\Debug\net9.0\LightInsightDAL.csproj.CoreCompileInputs.cache
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\obj\Debug\net9.0\LightInsightDAL.sourcelink.json
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\obj\Debug\net9.0\LightIns.5CD67340.Up2Date
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\obj\Debug\net9.0\LightInsightDAL.dll
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\obj\Debug\net9.0\refint\LightInsightDAL.dll
 D:\PhiNV\LightInsightService\LightInsightService\LightInsightDAL\obj\Debug\net9.0\LightInsightDAL.pdb

@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("LightInsightModel")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+09912725dc6545152121511fd6880248202ffa5b")]
 [assembly: System.Reflection.AssemblyProductAttribute("LightInsightModel")]
 [assembly: System.Reflection.AssemblyTitleAttribute("LightInsightModel")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
