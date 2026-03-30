@@ -1,0 +1,12 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/LightInsightService/LightInsightService/obj/Debug/net9.0/LightInsightService.AssemblyInfoInputs.cache
+/LightInsightService/LightInsightBUS/obj/Debug/net9.0/LightInsightBUS.AssemblyInfo.cs
+/LightInsightService/LightInsightBUS/obj/Debug/net9.0/LightInsightBUS.AssemblyInfoInputs.cache
+/LightInsightService/LightInsightDAL/obj/Debug/net9.0/LightInsightDAL.AssemblyInfo.cs
+/LightInsightService/LightInsightDAL/obj/Debug/net9.0/LightInsightDAL.AssemblyInfoInputs.cache
+/LightInsightService/LightInsightService/obj/Debug/net9.0/LightInsightService.AssemblyInfo.cs
+/LightInsightService/.vs/LightInsightService/FileContentIndex/49844d11-512d-4ac8-aa25-c487271cd363.vsidx
+/LightInsightService/.vs/LightInsightService/FileContentIndex/770d5882-119e-4203-a1e0-18a4debb3fe9.vsidx
