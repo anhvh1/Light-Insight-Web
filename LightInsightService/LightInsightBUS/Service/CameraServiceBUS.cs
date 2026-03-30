@@ -18,8 +18,9 @@ namespace LightInsightBUS.Service
         }
         public Dictionary<string, string> LoadCameraUriMap()
         {
+            var a = cameraDAL.LoadCameraUriMap();
             // Gọi phương thức DAL để lấy dữ liệu
-            return cameraDAL.LoadCameraUriMap();
+            return a;
         }
     }
 }

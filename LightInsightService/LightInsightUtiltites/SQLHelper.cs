@@ -5,7 +5,7 @@ using System.Collections;
 using System.Configuration;
 using MySql;
 using MySql.Data.MySqlClient;
-using Microsoft.Data.Sqlite;
+//using Microsoft.Data.Sqlite;
 
 namespace LightInsightUtiltites
 {
@@ -372,92 +372,92 @@ namespace LightInsightUtiltites
         }
 
         // sử dụng sql lite
-        public static SqliteDataReader ExecuteReaderV2(string connString, CommandType cmdType, string cmdText, params SqliteParameter[] cmdParms)
-        {
-            var conn = new SqliteConnection(connString);
-            var cmd = new SqliteCommand();
-            try
-            {
-                PrepareCommand(cmd, conn, null, cmdType, cmdText, cmdParms);
-                SqliteDataReader rdr = cmd.ExecuteReader(CommandBehavior.CloseConnection);
-                return rdr;
-            }
-            catch
-            {
-                conn.Close();
-                throw;
-            }
-        }
+    //    public static SqliteDataReader ExecuteReaderV2(string connString, CommandType cmdType, string cmdText, params SqliteParameter[] cmdParms)
+    //    {
+    //        var conn = new SqliteConnection(connString);
+    //        var cmd = new SqliteCommand();
+    //        try
+    //        {
+    //            PrepareCommand(cmd, conn, null, cmdType, cmdText, cmdParms);
+    //            SqliteDataReader rdr = cmd.ExecuteReader(CommandBehavior.CloseConnection);
+    //            return rdr;
+    //        }
+    //        catch
+    //        {
+    //            conn.Close();
+    //            throw;
+    //        }
+    //    }
 
-        public static int ExecuteNonQueryV2(string connString, CommandType cmdType, string cmdText, params SqliteParameter[] cmdParms)
-        {
-            using (var conn = new SqliteConnection(connString))
-            {
-                using (var cmd = new SqliteCommand())
-                {
-                    PrepareCommand(cmd, conn, null, cmdType, cmdText, cmdParms);
-                    int val = cmd.ExecuteNonQuery();
-                    cmd.Parameters.Clear();
-                    return val;
-                }
-            }
-        }
-        public static int ExecuteNonQueryV2(SqliteConnection conn, SqliteTransaction trans,
-    CommandType cmdType, string cmdText, params SqliteParameter[] cmdParms)
-        {
-            using (var cmd = new SqliteCommand())
-            {
-                PrepareCommand(cmd, conn, trans, cmdType, cmdText, cmdParms);
-                int val = cmd.ExecuteNonQuery();
-                cmd.Parameters.Clear();
-                return val;
-            }
-        }
+    //    public static int ExecuteNonQueryV2(string connString, CommandType cmdType, string cmdText, params SqliteParameter[] cmdParms)
+    //    {
+    //        using (var conn = new SqliteConnection(connString))
+    //        {
+    //            using (var cmd = new SqliteCommand())
+    //            {
+    //                PrepareCommand(cmd, conn, null, cmdType, cmdText, cmdParms);
+    //                int val = cmd.ExecuteNonQuery();
+    //                cmd.Parameters.Clear();
+    //                return val;
+    //            }
+    //        }
+    //    }
+    //    public static int ExecuteNonQueryV2(SqliteConnection conn, SqliteTransaction trans,
+    //CommandType cmdType, string cmdText, params SqliteParameter[] cmdParms)
+    //    {
+    //        using (var cmd = new SqliteCommand())
+    //        {
+    //            PrepareCommand(cmd, conn, trans, cmdType, cmdText, cmdParms);
+    //            int val = cmd.ExecuteNonQuery();
+    //            cmd.Parameters.Clear();
+    //            return val;
+    //        }
+    //    }
 
-        public static object ExecuteScalarV2(string connString, CommandType cmdType, string cmdText, params SqliteParameter[] cmdParms)
-        {
-            using (var conn = new SqliteConnection(connString))
-            {
-                using (var cmd = new SqliteCommand())
-                {
-                    PrepareCommand(cmd, conn, null, cmdType, cmdText, cmdParms);
-                    object val = cmd.ExecuteScalar();
-                    cmd.Parameters.Clear();
-                    return val;
-                }
-            }
-        }
-        public static object ExecuteScalarV2(SqliteConnection conn, SqliteTransaction trans,
-         CommandType cmdType, string cmdText, params SqliteParameter[] cmdParms)
-        {
-            using (var cmd = new SqliteCommand())
-            {
-                PrepareCommand(cmd, conn, trans, cmdType, cmdText, cmdParms);
-                object val = cmd.ExecuteScalar();
-                cmd.Parameters.Clear();
-                return val;
-            }
-        }
+    //    public static object ExecuteScalarV2(string connString, CommandType cmdType, string cmdText, params SqliteParameter[] cmdParms)
+    //    {
+    //        using (var conn = new SqliteConnection(connString))
+    //        {
+    //            using (var cmd = new SqliteCommand())
+    //            {
+    //                PrepareCommand(cmd, conn, null, cmdType, cmdText, cmdParms);
+    //                object val = cmd.ExecuteScalar();
+    //                cmd.Parameters.Clear();
+    //                return val;
+    //            }
+    //        }
+    //    }
+    //    public static object ExecuteScalarV2(SqliteConnection conn, SqliteTransaction trans,
+    //     CommandType cmdType, string cmdText, params SqliteParameter[] cmdParms)
+    //    {
+    //        using (var cmd = new SqliteCommand())
+    //        {
+    //            PrepareCommand(cmd, conn, trans, cmdType, cmdText, cmdParms);
+    //            object val = cmd.ExecuteScalar();
+    //            cmd.Parameters.Clear();
+    //            return val;
+    //        }
+    //    }
 
 
-        private static void PrepareCommand(SqliteCommand cmd, SqliteConnection conn, SqliteTransaction trans, CommandType cmdType, string cmdText, SqliteParameter[] cmdParms)
-        {
-            if (conn.State != ConnectionState.Open)
-                conn.Open();
+    //    private static void PrepareCommand(SqliteCommand cmd, SqliteConnection conn, SqliteTransaction trans, CommandType cmdType, string cmdText, SqliteParameter[] cmdParms)
+    //    {
+    //        if (conn.State != ConnectionState.Open)
+    //            conn.Open();
 
-            cmd.Connection = conn;
-            cmd.CommandText = cmdText;
-            cmd.CommandType = cmdType;
+    //        cmd.Connection = conn;
+    //        cmd.CommandText = cmdText;
+    //        cmd.CommandType = cmdType;
 
-            if (trans != null)
-                cmd.Transaction = trans;
+    //        if (trans != null)
+    //            cmd.Transaction = trans;
 
-            if (cmdParms != null)
-            {
-                foreach (SqliteParameter parm in cmdParms)
-                    cmd.Parameters.Add(parm);
-            }
-        }
+    //        if (cmdParms != null)
+    //        {
+    //            foreach (SqliteParameter parm in cmdParms)
+    //                cmd.Parameters.Add(parm);
+    //        }
+    //    }
 
 
 

@@ -15,7 +15,7 @@ namespace LightInsightService.Controllers.MileStone.Camera
             _service = service;
         }
 
-        [HttpGet("uris")]
+        [HttpGet("Uri")]
         public IActionResult GetUris()
         {
             return Ok(_service.LoadCameraUriMap());
