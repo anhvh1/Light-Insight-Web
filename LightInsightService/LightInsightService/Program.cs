@@ -1,0 +1,55 @@
+﻿using LightInsightUtiltites;
+var builder = WebApplication.CreateBuilder(args);
+
+// 👇 QUAN TRỌNG
+builder.Host.UseWindowsService();
+
+// Config
+var port = builder.Configuration.GetValue<int>("ServiceSettings:Port");
+
+// 👇 KHÔNG bind IP cụ thể
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+//builder.Services.AddScoped<CameraServiceBUS>();
+
+// CORS
+builder.Services.AddCors(c =>
+{
+    c.AddPolicy("AllowOrigin", policy =>
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+});
+
+// Logging
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
+var app = builder.Build();
+
+// Validate connection string
+var connStr = builder.Configuration.GetValue<string>("ConnectionStrings:DefaultConnection");
+
+if (string.IsNullOrEmpty(connStr))
+{
+    throw new Exception("Connection string is null!");
+}
+
+SQLHelper.appConnectionStrings = connStr;
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseCors("AllowOrigin");
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();

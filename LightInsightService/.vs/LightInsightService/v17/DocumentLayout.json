@@ -1,0 +1,133 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\PhiNV\\LightInsightService\\LightInsightService\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{76A5DADB-F315-4AEA-840F-6559327DA103}|LightInsightService\\LightInsightService.csproj|d:\\phinv\\lightinsightservice\\lightinsightservice\\lightinsightservice\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{76A5DADB-F315-4AEA-840F-6559327DA103}|LightInsightService\\LightInsightService.csproj|solutionrelative:lightinsightservice\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{76A5DADB-F315-4AEA-840F-6559327DA103}|LightInsightService\\LightInsightService.csproj|d:\\phinv\\lightinsightservice\\lightinsightservice\\lightinsightservice\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{76A5DADB-F315-4AEA-840F-6559327DA103}|LightInsightService\\LightInsightService.csproj|solutionrelative:lightinsightservice\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4A3EBA45-6638-4BD4-B425-866218B29912}|LightInsightUtiltites\\LightInsightUtiltites.csproj|d:\\phinv\\lightinsightservice\\lightinsightservice\\lightinsightutiltites\\sqlhelper.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{4A3EBA45-6638-4BD4-B425-866218B29912}|LightInsightUtiltites\\LightInsightUtiltites.csproj|solutionrelative:lightinsightutiltites\\sqlhelper.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 13,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{6d4078d1-5951-4ed1-ac0e-0a8099c1cce5}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:130:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:131:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:132:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:133:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:134:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:136:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:137:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:130:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightService\\appsettings.json",
+              "RelativeDocumentMoniker": "LightInsightService\\appsettings.json",
+              "ToolTip": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightService\\appsettings.json",
+              "RelativeToolTip": "LightInsightService\\appsettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-03-30T08:03:45.35Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Program.cs",
+              "DocumentMoniker": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightService\\Program.cs",
+              "RelativeDocumentMoniker": "LightInsightService\\Program.cs",
+              "ToolTip": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightService\\Program.cs",
+              "RelativeToolTip": "LightInsightService\\Program.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAQAAAAhAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-30T07:49:56.315Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "SQLHelper.cs",
+              "DocumentMoniker": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightUtiltites\\SQLHelper.cs",
+              "RelativeDocumentMoniker": "LightInsightUtiltites\\SQLHelper.cs",
+              "ToolTip": "D:\\PhiNV\\LightInsightService\\LightInsightService\\LightInsightUtiltites\\SQLHelper.cs",
+              "RelativeToolTip": "LightInsightUtiltites\\SQLHelper.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAAfAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-30T07:48:10.189Z",
+              "EditorCaption": ""
+            }
+          ]
+        },
+        {
+          "DockedWidth": 1873,
+          "SelectedChildIndex": -1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{34e76e81-ee4a-11d0-ae2e-00a0c90fffc3}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

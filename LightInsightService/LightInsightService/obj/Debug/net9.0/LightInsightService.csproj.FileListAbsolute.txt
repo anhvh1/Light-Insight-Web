@@ -1,0 +1,7 @@
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightService\obj\Debug\net9.0\LightInsightService.csproj.AssemblyReference.cache
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightService\obj\Debug\net9.0\LightInsightService.GeneratedMSBuildEditorConfig.editorconfig
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightService\obj\Debug\net9.0\LightInsightService.AssemblyInfoInputs.cache
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightService\obj\Debug\net9.0\LightInsightService.AssemblyInfo.cs
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightService\obj\Debug\net9.0\LightInsightService.csproj.CoreCompileInputs.cache
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightService\obj\Debug\net9.0\LightInsightService.MvcApplicationPartsAssemblyInfo.cs
+D:\PhiNV\LightInsightService\LightInsightService\LightInsightService\obj\Debug\net9.0\LightInsightService.MvcApplicationPartsAssemblyInfo.cache
