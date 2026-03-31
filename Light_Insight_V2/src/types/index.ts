@@ -55,3 +55,29 @@ export interface Rule {
   action: string;
   on: boolean;
 }
+
+// --- API PRIORITY TYPES ---
+export interface PriorityLevel {
+  ID: number;
+  PriorityName: string;
+}
+
+export interface AnalyticsEvent {
+  ID: string;
+  Name: string;
+}
+
+export interface PriorityMapping {
+  ID: number;
+  PriorityID: number;
+  PriorityName: string;
+  AnalyticsEvents: string[]; // Danh sách tên các event
+}
+
+export interface ApiResponse<T> {
+  Status: number;
+  Message: string;
+  MessageDetail: string | null;
+  Data: T;
+  TotalRow: number;
+}

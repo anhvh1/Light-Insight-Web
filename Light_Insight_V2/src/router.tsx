@@ -9,8 +9,8 @@ import { MapView } from './features/map/MapView';
 import { VideoWall } from './features/video/VideoWall';
 import { IncidentManagement } from './features/incidents/IncidentManagement';
 import { Configuration_V3 } from './features/config/Configuration_V3';
-import { Configuration_V2 } from './features/config/Configuration_V2';
-import { Configuration } from './features/config/Configuration';
+// import { Configuration_V2 } from './features/config/Configuration_V2';
+// import { Configuration } from './features/config/Configuration';
 
 // 1. Định nghĩa Root Route
 const rootRoute = createRootRoute({
