@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MOCK_INCIDENTS } from '@/lib/mock-data';
-import type { Incident, IncidentStatus, Priority } from '@/types';
+import type { Incident, IncidentStatus } from '@/types';
 import { StatusPill, TypeBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 import { 
@@ -9,14 +9,8 @@ import {
   FileDown, 
   ChevronRight, 
   CheckCircle2, 
-  Clock, 
-  MapPin, 
-  User, 
   ExternalLink,
   Video,
-  Camera,
-  Database,
-  Car,
   Link2
 } from 'lucide-react';
 

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { MOCK_ALARMS, MOCK_DEVICES } from '@/lib/mock-data';
-import type { Alarm, Device } from '@/types';
+import { MOCK_ALARMS } from '@/lib/mock-data';
+// import type { Device } from '@/types';
 import { cn } from '@/lib/utils';
-import { Camera, MapPin, AlertCircle, Info, ChevronRight, Monitor, DoorClosed, Power, ShieldAlert } from 'lucide-react';
+import { MapPin, ChevronRight } from 'lucide-react';
 
 const STATS = [
   { label: 'CAMERA ACTIVE', val: '47', sub: '/ 52 total', color: 'text-psim-green' },
@@ -14,7 +14,7 @@ const STATS = [
 
 export function MapView() {
   const [activeFloor, setActiveFloor] = useState('B1');
-  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
+  // const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const floors = ['L5', 'L4', 'L3', 'L2', 'L1', 'B1', 'B2'];
 
   return (
