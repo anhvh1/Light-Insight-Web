@@ -5,6 +5,9 @@ import {
 } from '@tanstack/react-router';
 import { MainLayout } from './components/layout/MainLayout';
 import { AlarmConsole } from './features/alarms/AlarmConsole';
+import { MapView } from './features/map/MapView';
+import { VideoWall } from './features/video/VideoWall';
+import { IncidentManagement } from './features/incidents/IncidentManagement';
 
 // 1. Định nghĩa Root Route
 const rootRoute = createRootRoute({
@@ -20,17 +23,38 @@ const indexRoute = createRoute({
   component: AlarmConsole, // Mặc định hiển thị Alarm Console
 });
 
-// 3. Định nghĩa Alarm Route
+// 3. Định nghĩa các Route
 const alarmRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/alarm',
   component: AlarmConsole,
 });
 
+const mapViewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/map',
+  component: MapView,
+});
+
+const videoWallRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/wall',
+  component: VideoWall,
+});
+
+const incidentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/incident',
+  component: IncidentManagement,
+});
+
 // 4. Tạo cây Route
 const routeTree = rootRoute.addChildren([
   indexRoute,
   alarmRoute,
+  mapViewRoute,
+  videoWallRoute,
+  incidentRoute,
 ]);
 
 // 5. Khởi tạo Router

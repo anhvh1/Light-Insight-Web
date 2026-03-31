@@ -12,8 +12,16 @@ export const MOCK_ALARMS: Alarm[] = [
 ];
 
 export const MOCK_INCIDENTS: Incident[] = [
-  { id: '0847', pri: 'critical', title: 'Xe không đăng ký Cổng B1', src: 'lpr', loc: 'B1 · Cổng IN', status: 'new', user: 'Trần Hùng', mttd: '8s' },
-  { id: '0846', pri: 'critical', title: 'Đỗ xe sai ô D22', src: 'ai', loc: 'B1 · Ô D22', status: 'new', user: 'Trần Hùng', mttd: '12s' },
+  { id: '0847', pri: 'critical', title: 'Xe không đăng ký Cổng B1 — Biển 43A-88821', src: 'lpr', loc: 'B1 · Cổng IN', status: 'new', user: 'Trần Hùng', mttd: '8s' },
+  { id: '0846', pri: 'critical', title: 'Đỗ xe sai ô D22 · CAM-B1-04', src: 'ai', loc: 'B1 · Ô D22', status: 'new', user: 'Trần Hùng', mttd: '12s' },
+  { id: '0845', pri: 'high', title: 'Từ chối quẹt thẻ 3 lần · Cửa T2', src: 'acs', loc: 'T2 · Thang máy', status: 'ack', user: 'Lê Văn Đức', mttd: '45s' },
+  { id: '0844', pri: 'high', title: 'Chiếm dụng hành lang · Sảnh L1', src: 'ai', loc: 'L1 · Hành lang A', status: 'prog', user: 'Nguyễn Minh', mttd: '1m 20s' },
+  { id: '0843', pri: 'medium', title: 'Xe ngược chiều · CAM-B1-01', src: 'ai', loc: 'B1 · Làn A', status: 'ack', user: 'Trần Hùng', mttd: '30s' },
+  { id: '0842', pri: 'medium', title: 'Biển số không rõ — CAM-LPR-03', src: 'lpr', loc: 'Cổng ra B1', status: 'new', user: 'Chưa nhận', mttd: '—' },
+  { id: '0841', pri: 'low', title: 'Camera mất tín hiệu · CAM-L3-07', src: 'tech', loc: 'L3 · Hành lang C', status: 'prog', user: 'Kỹ Thuật', mttd: '5m' },
+  { id: '0840', pri: 'low', title: 'Mất kết nối BMS 45s · Zone Fire', src: 'bms', loc: 'Server Room', status: 'ack', user: 'Trần Hùng', mttd: '15s' },
+  { id: '0839', pri: 'critical', title: 'Báo cháy giả · Zone 4 L5', src: 'fire', loc: 'L5 · Zone 4', status: 'res', user: 'Nguyễn Minh', mttd: '2m' },
+  { id: '0838', pri: 'high', title: 'Xâm nhập vùng cấm · Kho 2', src: 'ai', loc: 'B2 · Kho 2', status: 'res', user: 'Lê Văn Đức', mttd: '1m 10s' },
 ];
 
 export const MOCK_DEVICES: Device[] = [
