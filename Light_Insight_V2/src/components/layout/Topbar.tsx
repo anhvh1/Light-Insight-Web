@@ -19,8 +19,8 @@ export function Topbar() {
   return (
     <header className="h-[48px] bg-bg-1 border-b border-border flex items-center px-4 gap-3 z-[100] shrink-0">
       <div className="font-heading text-[15px] font-bold text-psim-accent flex items-center gap-2 whitespace-nowrap">
-        <span className="w-[7px] h-[7px] rounded-full bg-psim-accent shadow-[0_0_8px_var(--accent)] animate-pulse" />
-        LIGHT INSIGHT
+        {/* <span className="w-[7px] h-[7px] rounded-full bg-psim-accent shadow-[0_0_8px_var(--accent)] animate-pulse" /> */}
+        <img src="lightjsc.png" className="max-h-10"/>
       </div>
       
       <span className="text-[11px] text-t-2 font-mono px-2.5 py-1 bg-bg-2 rounded border border-border">

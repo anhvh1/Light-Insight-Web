@@ -8,6 +8,8 @@ import { AlarmConsole } from './features/alarms/AlarmConsole';
 import { MapView } from './features/map/MapView';
 import { VideoWall } from './features/video/VideoWall';
 import { IncidentManagement } from './features/incidents/IncidentManagement';
+import { Configuration_V3 } from './features/config/Configuration_V3';
+import { Configuration_V2 } from './features/config/Configuration_V2';
 import { Configuration } from './features/config/Configuration';
 
 // 1. Định nghĩa Root Route
@@ -52,7 +54,9 @@ const incidentRoute = createRoute({
 const configRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/config',
-  component: Configuration,
+  component: Configuration_V3,
+  // component: Configuration_V2,
+  // component: Configuration,
 });
 
 // 4. Tạo cây Route
