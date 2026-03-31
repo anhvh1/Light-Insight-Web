@@ -1,32 +1,100 @@
 ﻿using LightInsightBUS.Interfaces;
+using LightInsightBUS.Interfaces.Login;
+using LightInsightBUS.Interfaces.MileStone.General;
 using LightInsightBUS.Service;
+using LightInsightBUS.Service.Login;
+using LightInsightBUS.Service.MileStone.General;
 using LightInsightUtiltites;
+using Microsoft.OpenApi.Models;
+using System.Text;
 
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    WebRootPath = "Client"
+});
+
 
 // 👇 QUAN TRỌNG
 //builder.Host.UseWindowsService();
 
-// Config
-var port = builder.Configuration.GetValue<int>("ServiceSettings:Port");
+// -------------------- Controllers / Formatters --------------------
+builder.Services
+    .AddControllers(options =>
+    {
+        options.RespectBrowserAcceptHeader = true;
+    })
+    .AddXmlSerializerFormatters()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = null;
+    });
+builder.Services.AddControllersWithViews();
 
 // 👇 KHÔNG bind IP cụ thể
-builder.WebHost.UseUrls("http://0.0.0.0:5262");
+//builder.WebHost.UseUrls("http://0.0.0.0:5262");
 
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
 
 
 // ADD SCROPED SERVICES
 builder.Services.AddScoped<ICameraService, CameraServiceBUS>();
+builder.Services.AddScoped<IPriority, PriorityBUS>();
+builder.Services.AddScoped<IRegister, RegisterBUS>();
+builder.Services.AddScoped<ILogin, LoginBUS>();
 
-// CORS
-builder.Services.AddCors(c =>
+// -------------------- CORS --------------------
+var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+builder.Services.AddCors(options =>
 {
-    c.AddPolicy("AllowOrigin", policy =>
-        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+    options.AddPolicy(name: MyAllowSpecificOrigins, policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .WithExposedHeaders("Content-Disposition");
+    });
+});
+
+// -------------------- Swagger --------------------
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Version = "v1",
+        Title = "LightJSC API - created by AnhVH",
+        Description = "ASP.NET Web API",
+        TermsOfService = new Uri("https://gosol.com.vn"),
+        Contact = new OpenApiContact { Name = "Contact", Url = new Uri("https://gosol.com.vn") },
+        License = new OpenApiLicense { Name = "License", Url = new Uri("https://gosol.com.vn") }
+    });
+
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        In = ParameterLocation.Header,
+        Description = "Please enter a valid token",
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        BearerFormat = "JWT",
+        Scheme = "Bearer"
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 
 // Logging
@@ -46,18 +114,21 @@ if (string.IsNullOrEmpty(connStr))
 
 SQLHelper.appConnectionStrings = connStr;
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+//if (app.Environment.IsDevelopment())
+//{
+app.UseSwagger();
+app.UseSwaggerUI();
+//}
+app.UseStaticFiles();
 app.UseRouting();
-app.UseCors("AllowOrigin");
+app.UseCors(MyAllowSpecificOrigins);
 
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+
 app.MapControllers();
+app.MapFallbackToFile("/index.html");
 
 app.Run();
