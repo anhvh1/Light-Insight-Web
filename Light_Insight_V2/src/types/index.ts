@@ -1,0 +1,83 @@
+export type Priority = 'critical' | 'high' | 'medium' | 'low';
+export type AlarmStatus = 'new' | 'ack' | 'prog';
+export type IncidentStatus = 'new' | 'prog' | 'res' | 'ack';
+export type AlarmType = 'ai' | 'lpr' | 'acs' | 'fire' | 'bms' | 'tech';
+
+export interface Alarm {
+  id: string;
+  pri: Priority;
+  type: AlarmType;
+  title: string;
+  src: string;
+  loc: string;
+  status: AlarmStatus;
+  time: string;
+  corr: number;
+}
+
+export interface Incident {
+  id: string;
+  pri: Priority;
+  title: string;
+  src: AlarmType | 'manual';
+  loc: string;
+  status: IncidentStatus;
+  user: string;
+  mttd: string;
+}
+
+export interface SOPStep {
+  text: string;
+  done: boolean;
+}
+
+export interface Device {
+  id: string | number;
+  name: string;
+  loc: string;
+  status: 'online' | 'offline' | 'alarm' | 'warn' | 'standby';
+  type: 'camera' | 'barrier' | 'door' | 'server' | 'storage';
+  fps?: number;
+  res?: string;
+  info?: string;
+}
+
+export interface AuditLog {
+  t: string;
+  u: string;
+  a: string;
+  ctx: string;
+}
+
+export interface Rule {
+  name: string;
+  trigger: string;
+  action: string;
+  on: boolean;
+}
+
+// --- API PRIORITY TYPES ---
+export interface PriorityLevel {
+  ID: number;
+  PriorityName: string;
+}
+
+export interface AnalyticsEvent {
+  ID: string;
+  Name: string;
+}
+
+export interface PriorityMapping {
+  ID: number;
+  PriorityID: number;
+  PriorityName: string;
+  AnalyticsEvents: string[]; // Danh sách tên các event
+}
+
+export interface ApiResponse<T> {
+  Status: number;
+  Message: string;
+  MessageDetail: string | null;
+  Data: T;
+  TotalRow: number;
+}
