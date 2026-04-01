@@ -35,10 +35,10 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   return (
-    <nav className="w-[58px] bg-bg-1 border-r border-border-dim flex flex-col items-center py-2 gap-0.5 overflow-hidden shrink-0 h-full">
+    <nav className="w-14.5 bg-bg-1 border-r border-border-dim flex flex-col items-center py-2 gap-0.5 overflow-hidden shrink-0 h-full">
       {navItems.map((item, idx) => {
         if (item.type === 'sep') {
-          return <div key={`sep-${idx}`} className="w-[30px] h-[1px] bg-border-dim my-1" />;
+          return <div key={`sep-${idx}`} className="w-7.5 h-px bg-border-dim my-1" />;
         }
 
         const Icon = item.icon!;
@@ -50,25 +50,25 @@ export function Sidebar() {
             activeProps={{ className: 'bg-psim-accent/15 text-psim-accent' }}
             inactiveProps={{ className: 'text-t2 hover:bg-bg3 hover:text-t1' }}
             className={cn(
-              "relative w-[42px] h-[42px] rounded-lg flex items-center justify-center cursor-pointer transition-all duration-150 group"
+              "relative w-10.5 h-10.5 rounded-lg flex items-center justify-center cursor-pointer transition-all duration-150 group"
             )}
           >
             <Icon size={18} />
             
             {/* Tooltip */}
-            <span className="absolute left-[52px] bg-bg3 text-t0 text-[11px] px-2.5 py-1 rounded-md whitespace-nowrap border border-border-brighter pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-[999] shadow-xl">
+            <span className="absolute left-13 bg-bg3 text-t0 text-[11px] px-2.5 py-1 rounded-md whitespace-nowrap border border-border-brighter pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-999 shadow-xl">
               {item.tip}
             </span>
 
             {/* Badge */}
             {item.badge && (
-              <span className="absolute top-[5px] right-[5px] min-w-[14px] h-[14px] bg-psim-red rounded-full text-[9px] font-bold text-white flex items-center justify-center px-[3px] shadow-[0_0_5px_rgba(255,59,92,0.4)]">
+              <span className="absolute top-1.25 right-1.25 min-w-3.5 h-3.5 bg-psim-red rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.75 shadow-[0_0_5px_rgba(255,59,92,0.4)]">
                 {item.badge}
               </span>
             )}
 
             {/* Active Indicator Bar */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[22px] bg-psim-accent rounded-r-[3px] scale-x-0 group-[.active]:scale-x-100 transition-transform origin-left" />
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.75 h-5.5 bg-psim-accent rounded-r-[3px] scale-x-0 group-[.active]:scale-x-100 transition-transform origin-left" />
           </Link>
         );
       })}

@@ -2,7 +2,8 @@ import {
   createRouter, 
   createRootRoute, 
   createRoute,
-  Outlet
+  Outlet,
+  redirect
 } from '@tanstack/react-router';
 import { MainLayout } from './components/layout/MainLayout';
 import { AlarmConsole } from './features/alarms/AlarmConsole';
@@ -11,9 +12,9 @@ import { VideoWall } from './features/video/VideoWall';
 import { IncidentManagement } from './features/incidents/IncidentManagement';
 import { Configuration_V3 } from './features/config/Configuration_V3';
 import { LoginPage } from './features/auth/LoginPage';
-// import { RegisterPage } from './features/auth/RegisterPage';
+import { RegisterPage } from './features/auth/RegisterPage';
 
-// 1. Root Route - Chỉ chứa Outlet
+// 1. Root Route
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
 });
@@ -23,6 +24,12 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
   component: LoginPage,
+  beforeLoad: () => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      throw redirect({ to: '/' });
+    }
+  }
 });
 
 // const registerRoute = createRoute({
@@ -36,6 +43,12 @@ const authLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'layout',
   component: () => <MainLayout />,
+  beforeLoad: () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw redirect({ to: '/login' });
+    }
+  }
 });
 
 // 4. Các trang con nằm trong MainLayout
