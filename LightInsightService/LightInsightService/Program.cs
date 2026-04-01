@@ -1,5 +1,7 @@
-﻿using LightInsightBUS.Interfaces;
+﻿using System.Net.WebSockets;
+using LightInsightBUS.Interfaces;
 using LightInsightBUS.Service;
+using LightInsightService.Sockets.Milestone.Alarms;
 using LightInsightUtiltites;
 
 
@@ -21,6 +23,7 @@ builder.Services.AddSwaggerGen();
 
 // ADD SCROPED SERVICES
 builder.Services.AddScoped<ICameraService, CameraServiceBUS>();
+builder.Services.AddHostedService<MilestoneAlarmSocketWorker>();
 
 // CORS
 builder.Services.AddCors(c =>
@@ -59,5 +62,30 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+
+app.UseWebSockets();
+app.Map("/ws-alarms", async context => {
+    if (context.WebSockets.IsWebSocketRequest)
+    {
+        using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
+        string connId = Guid.NewGuid().ToString();
+
+        // Thêm vào danh sách gửi
+        MilestoneAlarmSocketWorker.Clients.TryAdd(connId, webSocket);
+
+        // Giữ kết nối mở
+        var buffer = new byte[1024];
+        while (webSocket.State == WebSocketState.Open)
+        {
+            await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+        }
+        MilestoneAlarmSocketWorker.Clients.TryRemove(connId, out _);
+    }
+    else
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+    }
+});
 
 app.Run();
