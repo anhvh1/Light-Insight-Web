@@ -20,7 +20,7 @@ export function Topbar() {
     <header className="h-[48px] bg-bg-1 border-b border-border flex items-center px-4 gap-3 z-[100] shrink-0">
       <div className="font-heading text-[15px] font-bold text-psim-accent flex items-center gap-2 whitespace-nowrap">
         {/* <span className="w-[7px] h-[7px] rounded-full bg-psim-accent shadow-[0_0_8px_var(--accent)] animate-pulse" /> */}
-        <img src="lightjsc.png" className="max-h-10"/>
+        <img src="lightjsc.png" className="max-h-6"/>
       </div>
       
       <span className="text-[11px] text-t-2 font-mono px-2.5 py-1 bg-bg-2 rounded border border-border">
@@ -52,7 +52,7 @@ export function Topbar() {
       <div className="w-[1px] h-7 bg-border-brighter mx-1" />
 
       <div className="flex items-center gap-2 px-2.5 py-1 rounded-md border border-border-brighter cursor-pointer hover:bg-bg-3 transition-colors">
-        <div className="w-[26px] h-[26px] rounded-full bg-gradient-to-br from-psim-accent to-purple flex items-center justify-center text-[11px] font-bold text-white">
+        <div className="w-[26px] h-[26px] rounded-full bg-[linear-gradient(135deg,var(--accent2),var(--purple))] from-psim-accent to-purple flex items-center justify-center text-[11px] font-bold text-white">
           TH
         </div>
         <div>

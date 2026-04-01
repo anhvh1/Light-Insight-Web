@@ -244,15 +244,15 @@ export function AlarmConsole() {
             <span className="text-[10px] text-t-2 font-mono whitespace-nowrap">LIÊN LẠC NHANH</span>
             <div className="flex gap-1.5 overflow-x-auto flex-1 scrollbar-hide">
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-bg2 rounded-full text-[11px] cursor-pointer border border-border-dim hover:border-psim-accent transition-colors whitespace-nowrap">
-                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-psim-green to-teal flex items-center justify-center text-[9px] font-bold text-white">NM</div>
+                <div className="w-5 h-5 rounded-full bg-[linear-gradient(135deg,var(--accent2),var(--green))] flex items-center justify-center text-[9px] font-bold text-white">NM</div>
                 Nguyễn Minh · B1
               </div>
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-bg2 rounded-full text-[11px] cursor-pointer border border-border-dim hover:border-psim-accent transition-colors whitespace-nowrap">
-                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-psim-orange to-psim-red flex items-center justify-center text-[9px] font-bold text-white">LĐ</div>
+                <div className="w-5 h-5 rounded-full bg-[linear-gradient(135deg,var(--accent2),var(--purple))] flex items-center justify-center text-[9px] font-bold text-white">LĐ</div>
                 Lê Văn Đức · L1
               </div>
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-bg2 rounded-full text-[11px] cursor-pointer border border-border-dim hover:border-psim-accent transition-colors whitespace-nowrap">
-                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-psim-accent2 to-purple flex items-center justify-center text-[9px] font-bold text-white">KT</div>
+                <div className="w-5 h-5 rounded-full bg-[linear-gradient(135deg,var(--accent2),var(--red))] flex items-center justify-center text-[9px] font-bold text-white">KT</div>
                 Kỹ Thuật
               </div>
             </div>

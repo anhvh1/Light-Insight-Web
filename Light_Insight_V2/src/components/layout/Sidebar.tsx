@@ -35,7 +35,7 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   return (
-    <nav className="w-[58px] bg-bg1 border-r border-border-dim flex flex-col items-center py-2 gap-0.5 overflow-hidden shrink-0 h-full">
+    <nav className="w-[58px] bg-bg-1 border-r border-border-dim flex flex-col items-center py-2 gap-0.5 overflow-hidden shrink-0 h-full">
       {navItems.map((item, idx) => {
         if (item.type === 'sep') {
           return <div key={`sep-${idx}`} className="w-[30px] h-[1px] bg-border-dim my-1" />;
