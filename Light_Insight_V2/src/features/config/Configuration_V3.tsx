@@ -9,15 +9,27 @@ import {
   BellRing, 
   ShieldCheck,
   RefreshCcw,
+  Activity,
+  Globe,
   Database,
   Sliders,
   Plus,
   Trash2,
   Edit2,
+  Filter,
   Search,
+  Car,
+  Key,
+  Flame,
   ShieldAlert,
   X,
-  Check
+  Check,
+  Shield,
+  UserPlus,
+  Lock,
+  SearchIcon,
+  MoreVertical,
+  CheckCircle2
 } from 'lucide-react';
 import { StatusPill } from '@/components/ui/status-badge';
 import { Progress } from '@/components/ui/progress';
@@ -25,6 +37,52 @@ import { priorityApi } from '@/lib/priority-api';
 import type { Priority } from '@/types';
 
 type ConfigSection = 'roles' | 'rules' | 'sop' | 'connectors' | 'escalation' | 'notif' | 'priority';
+
+const ROLES_DATA = [
+  { 
+    id: 'admin', 
+    name: 'Admin', 
+    desc: 'Toàn quyền hệ thống', 
+    color: 'border-psim-red/40', 
+    textColor: 'text-psim-red', 
+    dotColor: 'bg-psim-red',
+    perms: ['Xem tất cả dữ liệu', 'Cấu hình Rule & SOP', 'Quản lý User & Role', 'Xem Audit Log', 'Xuất báo cáo mọi loại'] 
+  },
+  { 
+    id: 'supervisor', 
+    name: 'Supervisor', 
+    desc: 'Trưởng ca / Giám sát', 
+    color: 'border-psim-orange/40', 
+    textColor: 'text-psim-orange', 
+    dotColor: 'bg-psim-orange',
+    perms: ['Xem tất cả Alarm & Incident', 'Escalate & Override SOP', 'Xem Analytics & Report', 'Không được cấu hình Rule'] 
+  },
+  { 
+    id: 'operator', 
+    name: 'Operator', 
+    desc: 'Nhân viên trực ca', 
+    color: 'border-psim-accent2/40', 
+    textColor: 'text-psim-accent2', 
+    dotColor: 'bg-psim-accent2',
+    perms: ['Xem & xử lý Alarm/Incident', 'Thực hiện SOP checklist', 'Giao việc Guard', 'Không xem Analytics chi tiết'] 
+  },
+  { 
+    id: 'viewer', 
+    name: 'Viewer', 
+    desc: 'Ban quản lý / Xem', 
+    color: 'border-white/10', 
+    textColor: 'text-t1', 
+    dotColor: 'bg-white/20',
+    perms: ['Xem Dashboard & Report', 'Xem Camera Live (Read-only)', 'Không xử lý Alarm', 'Không xem Audit Log'] 
+  },
+];
+
+const USERS_DATA = [
+  { name: 'Trần Hùng', email: 't.hung@timessquare.vn', role: 'Operator', status: 'Active', lastLogin: '28/03 22:00', auth: 'AD', initial: 'TH', grad: 'from-psim-accent2 to-blue-600' },
+  { name: 'Nguyễn Văn An', email: 'v.an@timessquare.vn', role: 'Supervisor', status: 'Active', lastLogin: '28/03 21:55', auth: 'AD', initial: 'VA', grad: 'from-psim-orange to-psim-red' },
+  { name: 'Trần Thị Bình', email: 't.binh@timessquare.vn', role: 'Admin', status: 'Active', lastLogin: '28/03 09:00', auth: 'SSO', initial: 'TB', grad: 'from-psim-red to-purple-600' },
+  { name: 'Kỹ Thuật', email: 'kt@timessquare.vn', role: 'Viewer', status: 'Away', lastLogin: '27/03 17:30', auth: 'Local', initial: 'KT', grad: 'from-bg4 to-bg3' },
+];
 
 const CONNECTORS = [
   {
@@ -144,14 +202,12 @@ export function Configuration_V3() {
   const [basket, setBasket] = useState<string[]>([]);
   const [selectedPriorityId, setSelectedPriorityId] = useState<number>(2);
   const [modalSearch, setModalSearch] = useState('');
-  
-  // State cho việc chỉnh sửa nhanh (Update)
   const [editingMapping, setEditingMapping] = useState<{ id: number; name: string; currentPriorityId: number } | null>(null);
 
   const navItems = [
     { id: 'roles', label: 'User & Roles', icon: Users, group: 'Admin' },
     { id: 'rules', label: 'Rule & Alarm Config', icon: Zap, group: 'Admin' },
-    { id: 'priority', label: 'Alarm Priority', icon: Sliders, group: 'Admin' },
+    { id: 'priority', label: 'Alarm Priority V3', icon: Sliders, group: 'Admin' },
     { id: 'sop', label: 'SOP Builder', icon: ClipboardList, group: 'Admin' },
     { id: 'connectors', label: 'Connectors', icon: Plug2, group: 'Admin' },
     { id: 'escalation', label: 'Escalation Rules', icon: ShieldCheck, group: 'Hệ thống' },
@@ -184,6 +240,117 @@ export function Configuration_V3() {
       deleteMutation.mutate(id);
     }
   };
+
+  // --- RENDER ROLES & USERS (4.1) ---
+  const renderRoles = () => (
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-[15px] font-heading font-bold text-t0 uppercase tracking-tight">User & Role Management (4.1)</h2>
+          <div className="h-0.5 w-12 bg-psim-accent2"></div>
+        </div>
+        <button className="bg-psim-accent2 text-white font-bold text-[11px] uppercase tracking-wider gap-2 h-9 px-5 rounded flex items-center shadow-lg shadow-psim-accent2/20 hover:scale-[1.02] transition-all">
+          <Plus size={14} /> Thêm user
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {ROLES_DATA.map(role => (
+          <div key={role.id} className={cn("bg-[#0d1220] border rounded-lg p-4 flex flex-col gap-3 shadow-sm hover:border-white/20 transition-all group", role.color)}>
+            <div className="flex justify-between items-center">
+              <h3 className={cn("text-[14px] font-bold tracking-tight uppercase font-heading", role.textColor)}>{role.name}</h3>
+              <span className="text-[9px] text-t2 font-mono uppercase tracking-widest bg-bg1 px-2 py-0.5 rounded border border-border-dim">{role.desc}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-1">
+              {role.perms.map((p, i) => (
+                <div key={i} className="flex items-center gap-2.5 text-[11px] text-t1">
+                  <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", role.dotColor)} />
+                  <span className="truncate opacity-80 group-hover:opacity-100">{p}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between border-b border-border-dim pb-3">
+        <h3 className="text-[13px] font-bold text-t0 uppercase tracking-widest font-heading">Danh sách Users</h3>
+        <div className="flex gap-2">
+           <div className="relative">
+              <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 text-t2" size={13} />
+              <input className="bg-bg2 border border-border-dim rounded h-8 pl-8 pr-3 text-[11px] text-t1 w-56 focus:border-psim-accent2/50 outline-none transition-all" placeholder="Tìm tên, email..." />
+           </div>
+           <button className="h-8 w-8 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t2 hover:text-t1 transition-colors"><Filter size={14} /></button>
+        </div>
+      </div>
+
+      <div className="bg-transparent border border-border-dim shadow-sm overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-[#121929] border-b border-border-dim">
+              <th className="py-3 px-6 text-[10px] font-mono text-t2 uppercase tracking-widest">Tên</th>
+              <th className="py-3 px-4 text-[10px] font-mono text-t2 uppercase tracking-widest">Email</th>
+              <th className="py-3 px-4 text-[10px] font-mono text-t2 uppercase tracking-widest w-32 text-center">Role</th>
+              <th className="py-3 px-4 text-[10px] font-mono text-t2 uppercase tracking-widest w-32 text-center">Trạng thái</th>
+              <th className="py-3 px-4 text-[10px] font-mono text-t2 uppercase tracking-widest w-48 text-center whitespace-nowrap">Đăng nhập gần nhất</th>
+              <th className="py-3 px-4 text-[10px] font-mono text-t2 uppercase tracking-widest w-16 text-center">SSO</th>
+              <th className="py-3 px-6 text-[10px] font-mono text-t2 uppercase tracking-widest w-28 text-right">Hành động</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-dim/30">
+            {USERS_DATA.map((u, i) => (
+              <tr key={i} className="hover:bg-psim-accent2/[0.03] transition-colors group h-11 bg-bg0">
+                <td className="py-1 px-6">
+                  <div className="flex items-center gap-3">
+                    <div className={cn("w-6 h-6 rounded-full bg-gradient-to-br flex items-center justify-center text-[9px] font-bold text-white shadow-md shrink-0", u.grad)}>
+                      {u.initial}
+                    </div>
+                    <div className="font-bold text-[12px] text-t1 group-hover:text-psim-accent2 transition-colors uppercase truncate">{u.name}</div>
+                  </div>
+                </td>
+                <td className="py-1 px-4">
+                  <div className="text-[11px] text-t2 font-mono truncate lowercase">{u.email}</div>
+                </td>
+                <td className="py-1 px-4 text-center">
+                  <span className={cn(
+                    "px-2.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-tight border",
+                    u.role === 'Admin' ? "bg-psim-red/10 text-psim-red border-psim-red/20" :
+                    u.role === 'Supervisor' ? "bg-psim-orange/10 text-psim-orange border-psim-orange/20" :
+                    u.role === 'Operator' ? "bg-psim-accent2/10 text-psim-accent2 border-psim-accent2/20" :
+                    "bg-bg3 text-t2 border-border-dim"
+                  )}>
+                    {u.role}
+                  </span>
+                </td>
+                <td className="py-1 px-4 text-center">
+                  <span className={cn(
+                    "inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest",
+                    u.status === 'Active' ? "text-psim-green" : "text-psim-orange"
+                  )}>
+                    <span className={cn("w-1 h-1 rounded-full", u.status === 'Active' ? "bg-psim-green animate-pulse shadow-[0_0_6px_var(--color-psim-green)]" : "bg-psim-orange")} />
+                    {u.status}
+                  </span>
+                </td>
+                <td className="py-1 px-4 text-[10px] font-mono text-t2 uppercase text-center whitespace-nowrap">
+                  {u.lastLogin}
+                </td>
+                <td className="py-1 px-4 text-center">
+                  <span className={cn(u.auth === "SSO" ? "bg-[#00C2FF1F] text-psim-accent" : "bg-bg-4 text-t2", "border border-border-dim text-[9px] font-bold px-1.5 py-0.5 rounded")}>
+                    {u.auth}
+                  </span>
+                </td>
+                <td className="py-1 px-6 text-right whitespace-nowrap">
+                  <button className="px-3 py-1 bg-bg-4 border border-border-dim rounded text-[10px] font-bold text-t1 uppercase hover:bg-bg3 hover:text-psim-accent2 transition-all shadow-sm">
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
   const renderPriorityTable = () => {
     const tableData = mappings.flatMap(m => 
@@ -228,7 +395,7 @@ export function Configuration_V3() {
               </thead>
               <tbody className="divide-y divide-border-dim/30">
                 {tableData.map((c, index) => (
-                  <tr key={`${c.mappingId}-${index}`} className="hover:bg-psim-accent/2 transition-colors group h-16 bg-[#0d1220]">
+                  <tr key={`${c.mappingId}-${index}`} className="hover:bg-psim-accent/[0.02] transition-colors group h-16 bg-[#0d1220]">
                     <td className="py-3 px-6 font-mono text-[11px] text-t2 text-center opacity-50">{index + 1}</td>
                     <td className="py-3 px-2">
                       <div className="font-bold text-[13px] text-t1 group-hover:text-psim-accent transition-colors uppercase whitespace-nowrap overflow-hidden text-ellipsis">{c.label}</div>
@@ -281,8 +448,8 @@ export function Configuration_V3() {
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-[18px] font-heading font-bold text-t0">VMS & Device Connectors (4.3)</h2>
-          <p className="text-[12px] text-t2">Trạng thái kết nối API tới các hệ thống ngoại vi</p>
+          <h2 className="text-[18px] font-heading font-bold text-t0 uppercase tracking-tight">VMS & Device Connectors (4.3)</h2>
+          <p className="text-[12px] text-t2 mt-1">Trạng thái kết nối API tới các hệ thống ngoại vi</p>
         </div>
         <div className="flex gap-2">
           <button className="px-4 py-1.5 bg-bg2 border border-border-dim rounded text-[11px] font-bold text-t1 hover:bg-bg3 transition-colors">+ Thêm Connector</button>
@@ -336,7 +503,7 @@ export function Configuration_V3() {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
-        <div className="w-60 border-r border-border-dim bg-bg0 flex flex-col p-4 gap-6 shrink-0">
+        <div className="w-[240px] border-r border-border-dim bg-bg0 flex flex-col p-4 gap-6 shrink-0">
           <div>
             <div className="text-[10px] font-bold text-t2 uppercase tracking-[0.2em] mb-3 px-2">Nhóm 4 — Quản trị</div>
             <div className="flex flex-col gap-0.5">
@@ -390,10 +557,11 @@ export function Configuration_V3() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-8 bg-bg0/10 scrollbar-thin scrollbar-thumb-bg4">
-          <div className="max-w-[1100px]">
+          <div className="w-full">
+            {activeSection === 'roles' && renderRoles()}
             {activeSection === 'priority' && renderPriorityTable()}
             {activeSection === 'connectors' && renderConnectors()}
-            {activeSection !== 'priority' && activeSection !== 'connectors' && (
+            {activeSection !== 'priority' && activeSection !== 'connectors' && activeSection !== 'roles' && (
               <div className="flex flex-col items-center justify-center py-24 opacity-20 gap-4">
                 <ShieldAlert size={48} strokeWidth={1} />
                 <div className="text-center">
@@ -408,10 +576,10 @@ export function Configuration_V3() {
 
       {/* --- CREATE MODAL --- */}
       {isDialogOpen && (
-        <div className="fixed inset-0 z-9999 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/95 animate-in fade-in duration-300" onClick={() => setIsDialogOpen(false)} />
           <div className="relative w-full max-w-6xl bg-[#0d1220] border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-white/5 bg-white/2 flex items-center justify-between">
+            <div className="p-6 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
               <div>
                 <h3 className="text-[18px] font-bold text-white uppercase tracking-tight flex items-center gap-3">
                   <Sliders className="text-psim-accent" size={20} /> Thiết lập Priority hàng loạt
@@ -426,7 +594,7 @@ export function Configuration_V3() {
                 <div className="space-y-3 text-white">
                   <label className="text-[10px] font-bold text-t2 uppercase tracking-widest">Tìm kiếm nhanh</label>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-t2" size={14} />
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-t2" size={14} />
                     <input 
                       className="w-full bg-[#121929] border border-white/10 rounded-md h-10 pl-10 pr-3 text-[12px] text-white outline-none focus:border-psim-accent/50"
                       placeholder="Nhập tên sự kiện..."
@@ -449,7 +617,7 @@ export function Configuration_V3() {
                 </div>
               </div>
 
-              <div className="flex-1 p-6 bg-white/1 overflow-y-auto scrollbar-thin scrollbar-thumb-bg4">
+              <div className="flex-1 p-6 bg-white/[0.01] overflow-y-auto scrollbar-thin scrollbar-thumb-bg4">
                 <div className="grid grid-cols-2 gap-3">
                   {allEvents.filter(a => a.Name.toLowerCase().includes(modalSearch.toLowerCase())).map(event => (
                     <div 
@@ -476,7 +644,7 @@ export function Configuration_V3() {
               </div>
             </div>
 
-            <div className="p-8 border-t border-white/5 bg-white/2 flex items-center justify-between">
+            <div className="p-8 border-t border-white/5 bg-white/[0.02] flex items-center justify-between">
               <div className="flex flex-col gap-3">
                 <span className="text-[10px] font-bold text-t2 uppercase tracking-widest text-white">Chọn mức Priority áp dụng chung:</span>
                 <div className="flex gap-2">
@@ -514,7 +682,7 @@ export function Configuration_V3() {
 
       {/* --- QUICK EDIT MODAL (UPDATE) --- */}
       {editingMapping && (
-        <div className="fixed inset-0 z-9998 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/90 animate-in fade-in duration-200" onClick={() => setEditingMapping(null)} />
           <div className="relative w-full max-w-md bg-[#161b2e] border border-white/10 rounded-xl shadow-2xl p-6 animate-in zoom-in-95 duration-150">
              <div className="flex justify-between items-start mb-6">
