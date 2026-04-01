@@ -1,4 +1,4 @@
-﻿using LightInsightBUS.ExternalServices.MileStone;
+using LightInsightBUS.ExternalServices.MileStone;
 using LightInsightBUS.Interfaces.Connectors;
 using LightInsightDAL.Repositories.Connectors;
 using LightInsightModel.Connectors;
@@ -46,7 +46,7 @@ namespace LightInsightBUS.Service.Connectors
                     model.Status = "Connected";
                 }
                 var newID = await connectorsDAL.AddConnectorAsync(model.Name, model.IpServer, model.Port, model.Username, model.Password, model.VMSID, model.Status);
-                if (newID!=null)
+                if (newID != null)
                 {
                     result.Status = 1;
                     result.Message = "Thêm connector thành công.";
@@ -71,5 +71,26 @@ namespace LightInsightBUS.Service.Connectors
 
         }
 
+        public async Task<BaseResultModel> GetAllVMSAsync()
+        {
+            try
+            {
+                var result = new BaseResultModel();
+                var data = await connectorsDAL.GetAllVMSAsync();
+
+                result.Status = 1;
+                result.Message = "Lấy danh sách VMS thành công.";
+                result.Data = data;
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                var result = new BaseResultModel();
+                result.Status = -1;
+                result.Message = ex.Message;
+                return result;
+            }
+        }
     }
 }

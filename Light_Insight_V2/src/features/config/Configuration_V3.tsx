@@ -868,7 +868,14 @@ export function Configuration_V3() {
                 Hủy bỏ
               </button>
               <button 
-                onClick={() => connectorMutation.mutate(newConnector)}
+                onClick={() => connectorMutation.mutate({
+                  Name: newConnector.name,
+                  IpServer: newConnector.ip,
+                  Port: parseInt(newConnector.port),
+                  Username: newConnector.username,
+                  Password: newConnector.password,
+                  VMSID: 1
+                })}
                 disabled={connectorMutation.isPending || !newConnector.name || !newConnector.ip}
                 className="flex-[2] h-12 bg-psim-accent text-bg0 rounded-lg text-[12px] font-bold uppercase tracking-wider shadow-lg shadow-psim-accent/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >

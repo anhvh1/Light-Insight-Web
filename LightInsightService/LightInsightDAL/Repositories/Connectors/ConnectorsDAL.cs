@@ -1,16 +1,46 @@
-﻿using LightInsightUtiltites;
+﻿using LightInsightModel.Connectors;
+using LightInsightUtiltites;
 using Npgsql;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace LightInsightDAL.Repositories.Connectors
 {
     public class ConnectorsDAL
     {
+        public async Task<List<VMSModel>> GetAllVMSAsync()
+        {
+            var list = new List<VMSModel>();
+            try
+            {
+                await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
+                await conn.OpenAsync();
+
+                var sql = "SELECT * FROM fn_dm_vms_get_all()";
+
+                await using var cmd = new NpgsqlCommand(sql, conn);
+                await using var reader = await cmd.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
+                {
+                    list.Add(new VMSModel
+                    {
+                        VmsId = reader.GetInt32(0),
+                        VmsName = reader.GetString(1)
+                    });
+                }
+                return list;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetAllVMSAsync: {ex.Message}");
+                return list;
+            }
+        }
+
         public async Task<Guid?> AddConnectorAsync(string name, string ipServer, long port,string username, string password, int VMSID, string status = "online")
         {
             try
