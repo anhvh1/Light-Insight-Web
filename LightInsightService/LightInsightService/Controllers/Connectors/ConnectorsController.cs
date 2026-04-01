@@ -21,5 +21,12 @@ namespace LightInsightService.Controllers.Connectors
             var result = await iconnectors.AddConnectorAsync(req);
             return Ok(result);
         }
+
+        [HttpGet("GetAllVMS")]
+        public async Task<IActionResult> GetAllVMS()
+        {
+            var result = await iconnectors.GetAllVMSAsync();
+            return Ok(result);
+        }
     }
 }
