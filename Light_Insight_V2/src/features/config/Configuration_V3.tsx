@@ -204,6 +204,19 @@ export function Configuration_V3() {
     }
   });
 
+  const connectorMutation = useMutation({
+    mutationFn: priorityApi.insertConnector,
+    onSuccess: (res) => {
+      if (res.Status === 1) {
+        alert('Thêm connector thành công!');
+        setIsConnectorDialogOpen(false);
+        setNewConnector({ name: '', ip: '', port: '', username: '', password: '' });
+      } else {
+        alert(res.Message || 'Có lỗi xảy ra');
+      }
+    }
+  });
+
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: { ID: number; PriorityID: number } }) => 
       priorityApi.updateMapping(id, data),
@@ -218,6 +231,14 @@ export function Configuration_V3() {
   });
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isConnectorDialogOpen, setIsConnectorDialogOpen] = useState(false);
+  const [newConnector, setNewConnector] = useState({
+    name: '',
+    ip: '',
+    port: '',
+    username: '',
+    password: ''
+  });
   const [basket, setBasket] = useState<string[]>([]);
   const [selectedPriorityId, setSelectedPriorityId] = useState<number>(2);
   const [modalSearch, setModalSearch] = useState('');
@@ -477,7 +498,12 @@ export function Configuration_V3() {
           <p className="text-[12px] text-t-2 mt-1">Trạng thái kết nối API tới các hệ thống ngoại vi</p>
         </div>
         <div className="flex gap-2">
-          <button className="px-4 py-1.5 bg-bg2 border border-border-dim rounded text-[11px] font-bold text-t-1 hover:bg-bg3 transition-colors">+ Thêm Connector</button>
+          <button 
+            onClick={() => setIsConnectorDialogOpen(true)}
+            className="px-4 py-1.5 bg-bg2 border border-border-dim rounded text-[11px] font-bold text-t-1 hover:bg-bg3 transition-colors"
+          >
+            + Thêm Connector
+          </button>
           <button className="px-4 py-1.5 bg-bg2 border border-border-dim rounded text-[11px] font-bold text-t-1 hover:bg-bg3 transition-colors flex items-center gap-2">
             <RefreshCcw size={14} /> Refresh
           </button>
@@ -758,6 +784,98 @@ export function Configuration_V3() {
                   Đóng
                 </button>
              </div>
+          </div>
+        </div>
+      )}
+      {/* --- ADD CONNECTOR MODAL --- */}
+      {isConnectorDialogOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/90 animate-in fade-in duration-200" onClick={() => setIsConnectorDialogOpen(false)} />
+          <div className="relative w-full max-w-lg bg-[#161b2e] border border-white/10 rounded-xl shadow-2xl p-8 animate-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <h3 className="text-[18px] font-bold text-white uppercase tracking-tight">Thêm Connector Mới</h3>
+                <p className="text-[11px] text-t-2 mt-1">Kết nối hệ thống ngoại vi (VMS, ACS, LPR...)</p>
+              </div>
+              <button onClick={() => setIsConnectorDialogOpen(false)} className="text-t-2 hover:text-white transition-colors"><X size={20} /></button>
+            </div>
+
+            <div className="flex flex-col gap-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Tên kết nối</label>
+                <input 
+                  className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all"
+                  placeholder="Ví dụ: Milestone Primary Server"
+                  value={newConnector.name}
+                  onChange={(e) => setNewConnector({...newConnector, name: e.target.value})}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">IP Server</label>
+                  <input 
+                    className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all font-mono"
+                    placeholder="192.168.1.100"
+                    value={newConnector.ip}
+                    onChange={(e) => setNewConnector({...newConnector, ip: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Port</label>
+                  <input 
+                    className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all font-mono"
+                    placeholder="8080"
+                    value={newConnector.port}
+                    onChange={(e) => setNewConnector({...newConnector, port: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Tài khoản</label>
+                <div className="relative">
+                  <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t-2" size={16} />
+                  <input 
+                    className="w-full bg-black/20 border border-white/10 rounded-lg h-11 pl-11 pr-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all"
+                    placeholder="admin"
+                    value={newConnector.username}
+                    onChange={(e) => setNewConnector({...newConnector, username: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Mật khẩu</label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t-2" size={16} />
+                  <input 
+                    type="password"
+                    className="w-full bg-black/20 border border-white/10 rounded-lg h-11 pl-11 pr-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all"
+                    placeholder="••••••••"
+                    value={newConnector.password}
+                    onChange={(e) => setNewConnector({...newConnector, password: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-10 flex gap-3">
+              <button 
+                onClick={() => setIsConnectorDialogOpen(false)}
+                className="flex-1 h-12 rounded-lg text-[12px] font-bold text-t-2 uppercase hover:bg-white/5 transition-all"
+              >
+                Hủy bỏ
+              </button>
+              <button 
+                onClick={() => connectorMutation.mutate(newConnector)}
+                disabled={connectorMutation.isPending || !newConnector.name || !newConnector.ip}
+                className="flex-[2] h-12 bg-psim-accent text-bg0 rounded-lg text-[12px] font-bold uppercase tracking-wider shadow-lg shadow-psim-accent/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {connectorMutation.isPending && <RefreshCcw size={16} className="animate-spin" />}
+                Lưu cấu hình
+              </button>
+            </div>
           </div>
         </div>
       )}
