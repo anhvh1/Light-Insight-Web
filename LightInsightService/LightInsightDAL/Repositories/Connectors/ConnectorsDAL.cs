@@ -1,4 +1,4 @@
-﻿using LightInsightModel.Connectors;
+using LightInsightModel.Connectors;
 using LightInsightUtiltites;
 using Npgsql;
 using System;
