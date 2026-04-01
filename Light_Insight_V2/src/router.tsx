@@ -12,9 +12,9 @@ import { VideoWall } from './features/video/VideoWall';
 import { IncidentManagement } from './features/incidents/IncidentManagement';
 import { Configuration_V3 } from './features/config/Configuration_V3';
 import { LoginPage } from './features/auth/LoginPage';
-import { RegisterPage } from './features/auth/RegisterPage';
+// import { RegisterPage } from './features/auth/RegisterPage';
 
-// 1. Root Route
+// 1. Root Route - Chỉ chứa Outlet
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
 });
@@ -99,7 +99,7 @@ const routeTree = rootRoute.addChildren([
     videoWallRoute,
     incidentRoute,
     configRoute,
-  ]),
+  ])
 ]);
 
 // 6. Khởi tạo Router
