@@ -17,8 +17,19 @@ namespace LightInsightService.Controllers.Login
         [HttpPost("Login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest req)
         {
-            var result = await _service.Login(req.Username,req.Password);
-            return Ok(result);
+            try 
+            {
+                var result = await _service.Login(req.Username, req.Password);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { 
+                    Message = "Backend Error: " + ex.Message, 
+                    StackTrace = ex.StackTrace,
+                    InnerException = ex.InnerException?.Message 
+                });
+            }
         }
         [HttpGet("Users")]
         public async Task<IActionResult> Users([FromQuery] PagingRequest req)
