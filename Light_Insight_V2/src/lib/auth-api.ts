@@ -28,22 +28,46 @@ export interface UserInfo {
 
 export const authApi = {
   login: async (data: LoginRequest) => {
-    // Gọi đến API Đăng nhập
     const response = await apiClient.post<ApiResponse<any>>('/Login/Login', data);
     return response.data || { Status: 0, Message: 'Lỗi không xác định' };
   },
 
   register: async (data: RegisterRequest) => {
-    // Gọi đến API Đăng ký
     const response = await apiClient.post<ApiResponse<null>>('/Register/Register', data);
     return response.data || { Status: 0, Message: 'Lỗi đăng ký' };
   },
 
   getUsers: async (search?: string, page: number = 1, pageSize: number = 10) => {
-    // Lấy danh sách user (nếu cần cho quản trị)
     const response = await apiClient.get<ApiResponse<UserInfo[]>>('/Login/Users', {
       params: { search, page, pageSize }
     });
     return response.data || { Data: [], Status: 0, Message: '' };
+  },
+
+  getUserFromToken: () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return null;
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      const decoded = JSON.parse(jsonPayload);
+      // Backend Claims: username, name, email, phone, roleId
+      return {
+        username: decoded.username,
+        name: decoded.name,
+        roleId: decoded.roleId
+      };
+    } catch (e) {
+      return null;
+    }
+  },
+
+  logout: () => {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user_info');
+    window.location.href = '/login';
   }
 };
