@@ -98,3 +98,4 @@ obj/
 /LightInsightService/LightInsightDAL/obj/project.assets.json
 /LightInsightService/LightInsightDAL/obj/project.nuget.cache
 /LightInsightService/LightInsightUtiltites/obj/Debug/net9.0/LightInsightUtiltites.csproj.CoreCompileInputs.cache
+node_modules
