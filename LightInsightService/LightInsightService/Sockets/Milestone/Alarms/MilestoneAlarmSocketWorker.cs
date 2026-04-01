@@ -1,15 +1,19 @@
-﻿using System.Collections.Concurrent;
-using System.Net.WebSockets;
+﻿using System.Net.WebSockets;
 using System.Text;
-using Newtonsoft.Json;
+using Microsoft.AspNetCore.SignalR;
 using Newtonsoft.Json.Linq;
 
 namespace LightInsightService.Sockets.Milestone.Alarms
 {
     public class MilestoneAlarmSocketWorker : BackgroundService
     {
-        // Danh sách các kết nối từ React FE
-        public static readonly ConcurrentDictionary<string, WebSocket> Clients = new();
+        // Nhúng SignalR Hub Context để có thể gọi FE
+        private readonly IHubContext<MilestoneAlarmHub> _hubContext;
+
+        public MilestoneAlarmSocketWorker(IHubContext<MilestoneAlarmHub> hubContext)
+        {
+            _hubContext = hubContext;
+        }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -31,24 +35,23 @@ namespace LightInsightService.Sockets.Milestone.Alarms
                             // --- BƯỚC: CHỈNH SỬA KEY VALUE ---
                             var transformedData = Transform(rawStr);
 
-                            // --- BƯỚC: GỬI SANG REACT FE ---
+                            // --- BƯỚC: GỬI SANG REACT FE QUA SIGNALR ---
                             await Broadcast(transformedData, stoppingToken);
                         }
                     }
                 }
                 catch { /* Tự động kết nối lại nếu Milestone sập */ }
+
                 await Task.Delay(5000, stoppingToken);
             }
         }
 
-        private string Transform(string json)
+        // Đổi kiểu trả về thành object để SignalR tự động map ra JSON
+        private object Transform(string json)
         {
             try
             {
-                // Parse JSON an toàn bằng JObject
                 var raw = JObject.Parse(json);
-
-                // Tạo Object mới với bộ Key chuẩn camelCase cho FE
                 var feData = new
                 {
                     alarmId = raw["AlarmId"]?.ToString(),
@@ -58,40 +61,25 @@ namespace LightInsightService.Sockets.Milestone.Alarms
                     location = raw["Location"]?.ToString(),
                     message = raw["Message"]?.ToString(),
                     time = raw["Time"]?.ToString(),
-
-                    // Nhóm trạng thái
                     stateName = raw["StateName"]?.ToString(),
                     stateLevel = (int?)raw["StateLevel"],
-
-                    // Nhóm độ ưu tiên
                     priorityName = raw["PriorityName"]?.ToString(),
                     priorityLevel = (int?)raw["PriorityLevel"]
                 };
-
-                // Serialize lại thành chuỗi JSON với key mới
-                return JsonConvert.SerializeObject(feData);
+                return feData;
             }
             catch
             {
-                // Nếu parse lỗi, trả về nguyên gốc để không mất data
+                // Trả về chuỗi gốc nếu parse lỗi
                 return json;
             }
         }
 
-        private async Task Broadcast(string message, CancellationToken ct)
+        private async Task Broadcast(object data, CancellationToken ct)
         {
-            var bytes = Encoding.UTF8.GetBytes(message);
-            foreach (var client in Clients)
-            {
-                if (client.Value.State == WebSocketState.Open)
-                {
-                    await client.Value.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct);
-                }
-                else
-                {
-                    Clients.TryRemove(client.Key, out _);
-                }
-            }
+            // Gửi dữ liệu tới tất cả client đang kết nối vào Hub
+            // Gọi hàm có tên "ReceiveAlarm" trên Frontend (React)
+            await _hubContext.Clients.All.SendAsync("ReceiveAlarm", data, cancellationToken: ct);
         }
     }
 }
