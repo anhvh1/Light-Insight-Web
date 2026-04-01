@@ -46,17 +46,33 @@ builder.Services.AddScoped<IPriority, PriorityBUS>();
 builder.Services.AddScoped<IRegister, RegisterBUS>();
 builder.Services.AddScoped<ILogin, LoginBUS>();
 
+
+builder.Services.AddSignalR();
+
 // -------------------- CORS --------------------
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(name: MyAllowSpecificOrigins, policy =>
-    {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader()
-              .WithExposedHeaders("Content-Disposition");
-    });
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .WithExposedHeaders("Content-Disposition");
+        });
+    //options.AddPolicy(name: MyAllowSpecificOrigins, policy =>
+    //{
+    //    policy.WithOrigins(
+    //              "http://localhost:8080",       // Dành cho lúc code dưới local (React thường chạy port 3000)
+    //              "http://localhost:5173",       // Dành cho Vite/Vue
+    //              "https://ten-mien-cua-ban.com.vn", // Dành cho lúc đẩy lên server thật
+    //              "http://192.168.100.120:8080"
+    //          )
+    //          .AllowAnyMethod()
+    //          .AllowAnyHeader()
+    //          .AllowCredentials()
+    //          .WithExposedHeaders("Content-Disposition");
+    //});
 });
 builder.Services.AddHostedService<MilestoneAlarmSocketWorker>();
 
@@ -135,28 +151,6 @@ app.MapControllers();
 app.MapFallbackToFile("/index.html");
 
 
-app.UseWebSockets();
-app.Map("/ws-alarms", async context => {
-    if (context.WebSockets.IsWebSocketRequest)
-    {
-        using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-        string connId = Guid.NewGuid().ToString();
-
-        // Thêm vào danh sách gửi
-        MilestoneAlarmSocketWorker.Clients.TryAdd(connId, webSocket);
-
-        // Giữ kết nối mở
-        var buffer = new byte[1024];
-        while (webSocket.State == WebSocketState.Open)
-        {
-            await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-        }
-        MilestoneAlarmSocketWorker.Clients.TryRemove(connId, out _);
-    }
-    else
-    {
-        context.Response.StatusCode = StatusCodes.Status400BadRequest;
-    }
-});
+app.MapHub<MilestoneAlarmHub>("/alarm-hub");
 
 app.Run();
