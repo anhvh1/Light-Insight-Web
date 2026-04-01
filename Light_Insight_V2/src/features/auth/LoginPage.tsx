@@ -45,7 +45,7 @@ export function LoginPage() {
   return (
     <div className="min-h-screen w-full bg-bg-0 flex items-center justify-center p-4 font-sans text-t-0">
       {/* Container chính của Form */}
-      <div className="w-full max-w-[420px] bg-bg-1 border border-white/10 rounded-2xl shadow-2xl overflow-hidden relative">
+      <div className="w-full max-w-105 bg-bg-1 border border-white/10 rounded-2xl shadow-2xl overflow-hidden relative">
         {/* Thanh accent màu xanh ở trên cùng */}
         <div className="absolute top-0 left-0 w-full h-1.5 bg-psim-accent shadow-[0_0_15px_rgba(0,194,255,0.5)]"></div>
 
