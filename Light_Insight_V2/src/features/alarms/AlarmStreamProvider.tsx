@@ -3,7 +3,8 @@ import * as signalR from '@microsoft/signalr';
 import type { Alarm } from '@/types';
 import { normalizeAlarm, type SignalRAlarmPayload } from './alarm-mapper';
 
-const HUB_URL = 'http://lightinsight.gosol.com.vn/alarm-hub';
+const HUB_BASE_URL = import.meta.env.VITE_ALARM_HUB_URL;
+const HUB_URL = HUB_BASE_URL ? `${HUB_BASE_URL.replace(/\/$/, '')}/alarm-hub` : '';
 
 // TODO: doi ten event cho dung voi hub backend dang emit
 const HUB_EVENT_NAME = 'ReceiveAlarm';
@@ -26,6 +27,11 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!HUB_URL) {
+      console.error('Missing VITE_ALARM_HUB_URL environment variable.');
+      return;
+    }
+
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(HUB_URL, { withCredentials: false })
       .withAutomaticReconnect()
