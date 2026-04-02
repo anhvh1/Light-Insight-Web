@@ -12,5 +12,7 @@ namespace LightInsightBUS.Interfaces.General
         Task<BaseResultModel> UpdateMapAsync(DMMapModel model);
         Task<BaseResultModel> DeleteMapAsync(Guid id);
         Task<BaseResultModel> UploadMapImageAsync(Guid id, System.IO.Stream fileStream, string fileName, string baseUrl = null);
+        Task<BaseResultModel> SaveMarkersAsync(DMMapSaveMarkersModel model);
+        Task<BaseResultModel> GetMarkersByMapIdAsync(Guid mapId);
     }
 }

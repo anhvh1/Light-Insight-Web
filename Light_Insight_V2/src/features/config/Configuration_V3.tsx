@@ -273,6 +273,7 @@ export function Configuration_V3() {
   });
 
   const [editingMapData, setEditingMapData] = useState<{ Id: string; Name: string; Code: string; ParentId: string | null } | null>(null);
+  const [mapToDelete, setMapToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const { data: mapTreeResponse, isLoading: isLoadingMapTree } = useQuery({
     queryKey: ['map-tree'],
@@ -325,6 +326,21 @@ export function Configuration_V3() {
     }
   });
 
+  const deleteMapMutation = useMutation({
+    mutationFn: mapApi.deleteMap,
+    onSuccess: (res) => {
+      setResponseModal({
+        isOpen: true,
+        status: res.Status,
+        message: res.Message || (res.Status === 1 ? 'Xóa bản đồ thành công.' : 'Có lỗi xảy ra')
+      });
+      if (res.Status === 1) {
+        queryClient.invalidateQueries({ queryKey: ['map-tree'] });
+        setMapToDelete(null);
+      }
+    }
+  });
+
   const [isConnectorDialogOpen, setIsConnectorDialogOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [newConnector, setNewConnector] = useState({
@@ -338,6 +354,7 @@ export function Configuration_V3() {
   const [basket, setBasket] = useState<string[]>([]);
   const [selectedPriorityId, setSelectedPriorityId] = useState<number>(2);
   const [modalSearch, setModalSearch] = useState('');
+  const [mapSearch, setMapSearch] = useState('');
   const [editingMapping, setEditingMapping] = useState<{ id: number; name: string; currentPriorityId: number } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -401,10 +418,12 @@ export function Configuration_V3() {
               <input 
                 className="w-full bg-black/20 border border-white/10 rounded-lg h-9 pl-9 pr-4 text-[11px] text-white outline-none focus:border-psim-orange/50 transition-all"
                 placeholder="Tìm theo tên bản đồ"
+                value={mapSearch}
+                onChange={(e) => setMapSearch(e.target.value)}
               />
             </div>
             <div className="flex flex-col gap-2 overflow-y-auto scrollbar-thin pr-1">
-              {flatMaps.map((map, i) => (
+              {flatMaps.filter(m => m.name.toLowerCase().includes(mapSearch.toLowerCase())).map((map, i) => (
                 <div key={map.id} className="p-3 bg-white/5 border border-white/5 rounded-lg hover:border-psim-orange/30 transition-all group cursor-pointer">
                   <div className="flex justify-between items-center">
                     <div style={{ paddingLeft: `${map.depth * 12}px` }}>
@@ -445,7 +464,15 @@ export function Configuration_V3() {
                       >
                         <Edit2 size={12} />
                       </button>
-                      <button className="p-1 hover:bg-white/10 rounded text-psim-red"><Trash2 size={12} /></button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMapToDelete({ id: map.id, name: map.name });
+                        }}
+                        className="p-1 hover:bg-white/10 rounded text-psim-red"
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1465,6 +1492,45 @@ export function Configuration_V3() {
                 {updateMapMutation.isPending && <RefreshCcw size={14} className="animate-spin" />}
                 Lưu thay đổi
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- DELETE MAP CONFIRMATION MODAL --- */}
+      {mapToDelete && (
+        <div className="fixed inset-0 z-[11000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setMapToDelete(null)} />
+          <div className="relative w-full max-w-sm bg-[#161b2e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 flex flex-col items-center text-center">
+              <div className="w-20 h-20 rounded-full bg-psim-red/20 text-psim-red flex items-center justify-center mb-6 shadow-lg shadow-psim-red/10 animate-pulse">
+                <Trash2 size={40} />
+              </div>
+              
+              <h3 className="text-[18px] font-bold text-white uppercase tracking-tight mb-2">
+                Xác nhận xóa bản đồ
+              </h3>
+              
+              <p className="text-[13px] text-t-2 leading-relaxed mb-8 px-4">
+                Bạn có chắc chắn muốn xóa bản đồ <span className="text-white font-bold">"{mapToDelete.name}"</span>? Hành động này sẽ gỡ bỏ bản đồ khỏi hệ thống phân cấp.
+              </p>
+              
+              <div className="w-full flex gap-3">
+                <button 
+                  onClick={() => setMapToDelete(null)}
+                  className="flex-1 h-12 rounded-xl text-[12px] font-bold text-t-2 uppercase border border-white/10 hover:bg-white/5 transition-all"
+                >
+                  Hủy
+                </button>
+                <button 
+                  onClick={() => deleteMapMutation.mutate(mapToDelete.id)}
+                  disabled={deleteMapMutation.isPending}
+                  className="flex-[2] h-12 bg-psim-red text-white rounded-xl text-[12px] font-bold uppercase tracking-widest shadow-lg shadow-psim-red/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deleteMapMutation.isPending && <RefreshCcw size={14} className="animate-spin" />}
+                  Xác nhận xóa
+                </button>
+              </div>
             </div>
           </div>
         </div>

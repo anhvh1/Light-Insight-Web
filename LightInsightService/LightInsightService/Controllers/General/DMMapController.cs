@@ -61,5 +61,19 @@ namespace LightInsightService.Controllers.General
                 return Ok(result);
             }
         }
+
+        [HttpPost("SaveMarkers")]
+        public async Task<IActionResult> SaveMarkers(DMMapSaveMarkersModel model)
+        {
+            var result = await _dmMapBUS.SaveMarkersAsync(model);
+            return Ok(result);
+        }
+
+        [HttpGet("GetMarkers/{mapId}")]
+        public async Task<IActionResult> GetMarkers(Guid mapId)
+        {
+            var result = await _dmMapBUS.GetMarkersByMapIdAsync(mapId);
+            return Ok(result);
+        }
     }
 }

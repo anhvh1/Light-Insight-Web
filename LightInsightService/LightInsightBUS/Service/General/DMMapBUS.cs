@@ -5,6 +5,7 @@ using LightInsightModel.MileStone.General;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace LightInsightBUS.Service.General
@@ -16,6 +17,77 @@ namespace LightInsightBUS.Service.General
         public DMMapBUS()
         {
             _dmMapDAL = new DMMapDAL();
+        }
+
+        public async Task<BaseResultModel> SaveMarkersAsync(DMMapSaveMarkersModel model)
+        {
+            var result = new BaseResultModel();
+            try
+            {
+                if (model == null)
+                {
+                    result.Status = 0;
+                    result.Message = "Dữ liệu không hợp lệ.";
+                    return result;
+                }
+
+                // Serialize list markers sang JSON string để truyền vào PostgreSQL
+                var markersJson = JsonSerializer.Serialize(model.Markers, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower // Để khớp với logic item->>'camera_id' nếu cần, hoặc mặc định tùy DB
+                });
+                
+                // Tuy nhiên, logic trong SQL của bạn đang dùng: item->>'camera_id'
+                // Nên ta cần đảm bảo JSON property name khớp.
+                // Nếu FE gửi camera_id thì serialize mặc định sẽ là CameraId.
+                // Tôi sẽ tạo một custom anonymous object để đảm bảo key khớp 100% với SQL.
+                var dbMarkers = model.Markers.Select(m => new
+                {
+                    camera_id = m.CameraId,
+                    camera_name = m.CameraName,
+                    pos_x = m.PosX,
+                    pos_y = m.PosY,
+                    icon = m.Icon
+                }).ToList();
+
+                var jsonString = JsonSerializer.Serialize(dbMarkers);
+
+                var success = await _dmMapDAL.ReplaceMarkersAsync(model.MapId, jsonString);
+                if (success)
+                {
+                    result.Status = 1;
+                    result.Message = "Lưu vị trí camera thành công.";
+                }
+                else
+                {
+                    result.Status = 0;
+                    result.Message = "Lưu vị trí camera thất bại.";
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Status = -1;
+                result.Message = ex.Message;
+            }
+            return result;
+        }
+
+        public async Task<BaseResultModel> GetMarkersByMapIdAsync(Guid mapId)
+        {
+            var result = new BaseResultModel();
+            try
+            {
+                var markers = await _dmMapDAL.GetMarkersByMapIdAsync(mapId);
+                result.Status = 1;
+                result.Message = "Lấy danh sách vị trí camera thành công.";
+                result.Data = markers;
+            }
+            catch (Exception ex)
+            {
+                result.Status = -1;
+                result.Message = ex.Message;
+            }
+            return result;
         }
 
         public async Task<BaseResultModel> GetAllMapsTreeAsync(string baseUrl = null)

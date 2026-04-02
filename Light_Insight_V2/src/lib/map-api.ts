@@ -15,5 +15,10 @@ export const mapApi = {
   updateMap: async (data: { Id: string; Name: string; Code: string; ParentId: string | null }) => {
     const response = await apiClient.put<ApiResponse<null>>('/DMMap/Update', data);
     return response.data || { Status: -1, Message: 'Unknown error' };
+  },
+
+  deleteMap: async (id: string) => {
+    const response = await apiClient.delete<ApiResponse<null>>(`/DMMap/Delete/${id}`);
+    return response.data || { Status: -1, Message: 'Delete failed' };
   }
 };

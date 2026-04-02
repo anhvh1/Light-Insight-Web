@@ -138,5 +138,65 @@ namespace LightInsightDAL.Repositories.General
                 return false;
             }
         }
+
+        public async Task<bool> ReplaceMarkersAsync(Guid mapId, string markersJson)
+        {
+            try
+            {
+                await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
+                await conn.OpenAsync();
+
+                var sql = "SELECT public.fn_dm_map_marker_replace(@p_map_id, @p_markers::jsonb)";
+
+                await using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("p_map_id", mapId);
+                cmd.Parameters.AddWithValue("p_markers", markersJson);
+
+                var result = await cmd.ExecuteScalarAsync();
+                return result is bool && (bool)result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in ReplaceMarkersAsync: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<List<DMMapMarkerModel>> GetMarkersByMapIdAsync(Guid mapId)
+        {
+            var list = new List<DMMapMarkerModel>();
+            try
+            {
+                await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
+                await conn.OpenAsync();
+
+                var sql = "SELECT * FROM public.fn_dm_map_marker_get_by_map(@p_map_id)";
+
+                await using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("p_map_id", mapId);
+
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    list.Add(new DMMapMarkerModel
+                    {
+                        Id = reader.GetGuid(0),
+                        MapId = reader.GetGuid(1),
+                        CameraId = reader.GetString(2),
+                        CameraName = reader.GetString(3),
+                        PosX = reader.GetDouble(4),
+                        PosY = reader.GetDouble(5),
+                        Icon = reader.IsDBNull(6) ? null : reader.GetString(6),
+                        CreatedAt = reader.GetDateTime(7)
+                    });
+                }
+                return list;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetMarkersByMapIdAsync: {ex.Message}");
+                return list;
+            }
+        }
     }
 }
