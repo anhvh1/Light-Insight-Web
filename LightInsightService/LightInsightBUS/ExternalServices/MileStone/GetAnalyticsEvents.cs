@@ -18,45 +18,54 @@ namespace LightInsightBUS.ExternalServices.MileStone
 
         private const string TOKEN_URL = "http://192.168.100.10:80/API/IDP/connect/token";
 
-        public async Task<string> GetTokenAsync()
+        public async Task<string> GetTokenAsync(string admin, string password)
         {
-            // Nếu token còn hạn → dùng lại
-            if (!string.IsNullOrEmpty(_accessToken) && DateTime.Now < _expireTime)
+            try
             {
+                // Nếu token còn hạn → dùng lại
+                if (!string.IsNullOrEmpty(_accessToken) && DateTime.Now < _expireTime)
+                {
+                    return _accessToken;
+                }
+
+                // Nếu hết hạn → gọi lại API
+                var request = new HttpRequestMessage(HttpMethod.Post, TOKEN_URL);
+
+                request.Content = new FormUrlEncodedContent(new[]
+                {
+                new KeyValuePair<string, string>("grant_type", "password"),
+                new KeyValuePair<string, string>("username", admin),
+                new KeyValuePair<string, string>("password", password),
+                new KeyValuePair<string, string>("client_id", "GrantValidatorClient"),
+                 });
+
+                request.Headers.Add("Accept", "application/json");
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var json = await response.Content.ReadAsStringAsync();
+
+                var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(json);
+
+                // Lưu token
+                _accessToken = tokenResponse.access_token;
+
+                // Trừ buffer 30s để tránh sát hạn bị lỗi
+                _expireTime = DateTime.Now.AddSeconds(tokenResponse.expires_in - 30);
+
                 return _accessToken;
             }
-
-            // Nếu hết hạn → gọi lại API
-            var request = new HttpRequestMessage(HttpMethod.Post, TOKEN_URL);
-
-            request.Content = new FormUrlEncodedContent(new[]
+            catch (Exception)
             {
-            new KeyValuePair<string, string>("grant_type", "password"),
-            new KeyValuePair<string, string>("username", "admin"),
-            new KeyValuePair<string, string>("password", "Promise@123"),
-            new KeyValuePair<string, string>("client_id", "GrantValidatorClient"),
-        });
 
-            request.Headers.Add("Accept", "application/json");
-
-            var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
-            var json = await response.Content.ReadAsStringAsync();
-
-            var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(json);
-
-            // Lưu token
-            _accessToken = tokenResponse.access_token;
-
-            // Trừ buffer 30s để tránh sát hạn bị lỗi
-            _expireTime = DateTime.Now.AddSeconds(tokenResponse.expires_in - 30);
-
-            return _accessToken;
+                return null;
+            }
+            
         }
         public async Task<List<SimpleEvent>> GetSimpleEventsAsync()
         {
-            string token = await GetTokenAsync();
+            string token = await GetTokenAsync("admin", "Promise@123");
 
             var request = new HttpRequestMessage(HttpMethod.Get, API_URL);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -66,7 +75,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
             // retry nếu token hết hạn
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                token = await GetTokenAsync();
+                token = await GetTokenAsync("admin", "Promise@123");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                 response = await _httpClient.SendAsync(request);
             }
