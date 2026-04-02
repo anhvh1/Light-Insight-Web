@@ -14,10 +14,8 @@ namespace LightInsightModel.Connectors
         [Column("id")]
         public Guid Id { get; set; }
 
-        [Required]
-        [MaxLength(100)]
         [Column("name")]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [MaxLength(20)]
         [Column("status")]
