@@ -1,16 +1,17 @@
 export type Priority = 'critical' | 'high' | 'medium' | 'low';
 export type AlarmStatus = 'new' | 'ack' | 'prog';
 export type IncidentStatus = 'new' | 'prog' | 'res' | 'ack';
-export type AlarmType = 'ai' | 'lpr' | 'acs' | 'fire' | 'bms' | 'tech';
+export type AlarmType = 'ai' | 'lpr' | 'acs' | 'fire' | 'bms' | 'tech' | 'light';
 
 export interface Alarm {
   id: string;
-  pri: Priority;
+  pri: string;
   type: AlarmType;
+  typeLabel?: string;
   title: string;
   src: string;
   loc: string;
-  status: AlarmStatus;
+  status: string;
   time: string;
   corr: number;
 }
