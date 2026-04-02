@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { 
@@ -31,14 +31,17 @@ import {
   MoreVertical,
   CheckCircle2,
   Eye,
-  EyeOff
+  EyeOff,
+  Map as MapIcon,
+  Upload
 } from 'lucide-react';
 import { StatusPill } from '@/components/ui/status-badge';
 import { Progress } from '@/components/ui/progress';
 import { priorityApi } from '@/lib/priority-api';
-import type { Priority } from '@/types';
+import { mapApi } from '@/lib/map-api';
+import type { Priority, MapTreeNode } from '@/types';
 
-type ConfigSection = 'roles' | 'rules' | 'sop' | 'connectors' | 'escalation' | 'notif' | 'priority';
+type ConfigSection = 'roles' | 'rules' | 'sop' | 'connectors' | 'escalation' | 'notif' | 'priority' | 'map_management';
 
 const ROLES_DATA = [
   { 
@@ -262,6 +265,66 @@ export function Configuration_V3() {
   const vmsList = vmsListResponse?.Data || [];
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isCreateMapModalOpen, setIsCreateMapModalOpen] = useState(false);
+  const [newMapData, setNewMapData] = useState<{ Name: string; Code: string; ParentId: string | null }>({
+    Name: '',
+    Code: '',
+    ParentId: null
+  });
+
+  const [editingMapData, setEditingMapData] = useState<{ Id: string; Name: string; Code: string; ParentId: string | null } | null>(null);
+
+  const { data: mapTreeResponse, isLoading: isLoadingMapTree } = useQuery({
+    queryKey: ['map-tree'],
+    queryFn: mapApi.getAllTree,
+    enabled: activeSection === 'map_management' || isCreateMapModalOpen
+  });
+  const mapTree = mapTreeResponse?.Data || [];
+
+  // Flatten map tree for select
+  const flattenMapTree = (nodes: MapTreeNode[], depth = 0): { id: string; name: string; depth: number }[] => {
+    let result: { id: string; name: string; depth: number }[] = [];
+    nodes.forEach(node => {
+      result.push({ id: node.Id, name: node.Name, depth });
+      if (node.Children && node.Children.length > 0) {
+        result = [...result, ...flattenMapTree(node.Children, depth + 1)];
+      }
+    });
+    return result;
+  };
+  const flatMaps = flattenMapTree(mapTree);
+
+  const createMapMutation = useMutation({
+    mutationFn: mapApi.createMap,
+    onSuccess: (res) => {
+      setResponseModal({
+        isOpen: true,
+        status: res.Status,
+        message: res.Message || (res.Status === 1 ? 'Tạo bản đồ thành công.' : 'Có lỗi xảy ra')
+      });
+      if (res.Status === 1) {
+        queryClient.invalidateQueries({ queryKey: ['map-tree'] });
+        setIsCreateMapModalOpen(false);
+        setNewMapData({ Name: '', Code: '', ParentId: null });
+      }
+    }
+  });
+
+  const updateMapMutation = useMutation({
+    mutationFn: mapApi.updateMap,
+    onSuccess: (res) => {
+      setResponseModal({
+        isOpen: true,
+        status: res.Status,
+        message: res.Message || (res.Status === 1 ? 'Cập nhật bản đồ thành công.' : 'Có lỗi xảy ra')
+      });
+      if (res.Status === 1) {
+        queryClient.invalidateQueries({ queryKey: ['map-tree'] });
+        setEditingMapData(null);
+      }
+    }
+  });
+
   const [isConnectorDialogOpen, setIsConnectorDialogOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [newConnector, setNewConnector] = useState({
@@ -277,20 +340,200 @@ export function Configuration_V3() {
   const [modalSearch, setModalSearch] = useState('');
   const [editingMapping, setEditingMapping] = useState<{ id: number; name: string; currentPriorityId: number } | null>(null);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [mapImage, setMapImage] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setMapImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const navItems = [
     { id: 'roles', label: 'User & Roles', icon: Users, group: 'Admin' },
     { id: 'rules', label: 'Rule & Alarm Config', icon: Zap, group: 'Admin' },
     { id: 'priority', label: 'Alarm Priority V3', icon: Sliders, group: 'Admin' },
     { id: 'sop', label: 'SOP Builder', icon: ClipboardList, group: 'Admin' },
     { id: 'connectors', label: 'Connectors', icon: Plug2, group: 'Admin' },
+    { id: 'map_management', label: 'Map Management', icon: MapIcon, group: 'Admin' },
     { id: 'escalation', label: 'Escalation Rules', icon: ShieldCheck, group: 'Hệ thống' },
     { id: 'notif', label: 'Notifications', icon: BellRing, group: 'Hệ thống' },
   ];
 
+  // --- RENDER MAP MANAGEMENT (Based on image.png) ---
+  const renderMapManagement = () => (
+    <div className="flex flex-col h-full animate-in fade-in duration-500 w-full overflow-hidden -mt-2">
+      {/* Top Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-[18px] font-heading font-bold text-t0 uppercase tracking-tight">Bố cục bản đồ</h2>
+          <p className="text-[11px] text-t-2">Tạo bản đồ và đặt camera để theo dõi.</p>
+        </div>
+        <button 
+          onClick={() => setIsCreateMapModalOpen(true)}
+          className="bg-psim-orange text-white font-bold text-[11px] uppercase tracking-wider gap-2 h-9 px-5 rounded-md flex items-center shadow-lg shadow-psim-orange/20 hover:scale-[1.02] transition-all"
+        >
+          <Plus size={16} /> Tạo bản đồ
+        </button>
+      </div>
+
+      <div className="flex gap-4 flex-1 overflow-hidden pb-2">
+        {/* Left Sidebar: Maps & Cameras */}
+        <div className="w-72 flex flex-col gap-4 shrink-0 overflow-hidden">
+          {/* Section: Bản đồ */}
+          <div className="bg-bg1 border border-border-dim rounded-xl p-4 flex flex-col gap-3 flex-1 overflow-hidden">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[12px] font-bold text-white uppercase tracking-wider">Bản đồ</h3>
+              <button 
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['map-tree'] })}
+                className="p-1 hover:bg-white/5 rounded transition-colors text-t-2"
+              >
+                <RefreshCcw size={12} className={isLoadingMapTree ? "animate-spin" : ""} />
+              </button>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-t-2" size={13} />
+              <input 
+                className="w-full bg-black/20 border border-white/10 rounded-lg h-9 pl-9 pr-4 text-[11px] text-white outline-none focus:border-psim-orange/50 transition-all"
+                placeholder="Tìm theo tên bản đồ"
+              />
+            </div>
+            <div className="flex flex-col gap-2 overflow-y-auto scrollbar-thin pr-1">
+              {flatMaps.map((map, i) => (
+                <div key={map.id} className="p-3 bg-white/5 border border-white/5 rounded-lg hover:border-psim-orange/30 transition-all group cursor-pointer">
+                  <div className="flex justify-between items-center">
+                    <div style={{ paddingLeft: `${map.depth * 12}px` }}>
+                      <div className="text-[12px] font-bold text-t-1 group-hover:text-white transition-colors">{map.name}</div>
+                      <div className="text-[9px] text-t-2 font-mono uppercase">Level {map.depth + 1}</div>
+                    </div>
+                    <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Find original node to get the code (it's in the tree, we need a way to find it or we can just use name/id for now if tree is not flat)
+                          // For simplicity, we search in the flat list if it had more info, but for now we'll just use the data we have.
+                          const originalMap = mapTreeResponse?.Data.find(m => m.Id === map.id) || null; // This only works for root maps
+                          
+                          // Helper to find node in tree
+                          const findNode = (nodes: MapTreeNode[], id: string): MapTreeNode | null => {
+                            for (const node of nodes) {
+                              if (node.Id === id) return node;
+                              if (node.Children) {
+                                const found = findNode(node.Children, id);
+                                if (found) return found;
+                              }
+                            }
+                            return null;
+                          };
+                          
+                          const node = findNode(mapTree, map.id);
+                          if (node) {
+                            setEditingMapData({
+                              Id: node.Id,
+                              Name: node.Name,
+                              Code: node.Code,
+                              ParentId: node.ParentId
+                            });
+                          }
+                        }}
+                        className="p-1 hover:bg-white/10 rounded text-psim-orange"
+                      >
+                        <Edit2 size={12} />
+                      </button>
+                      <button className="p-1 hover:bg-white/10 rounded text-psim-red"><Trash2 size={12} /></button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {flatMaps.length === 0 && !isLoadingMapTree && (
+                <div className="py-10 text-center opacity-20 text-[10px] uppercase font-bold tracking-widest">Chưa có bản đồ</div>
+              )}
+            </div>
+          </div>
+
+          {/* Section: Camera */}
+          <div className="bg-bg1 border border-border-dim rounded-xl p-4 flex flex-col gap-3 h-[40%]">
+            <h3 className="text-[12px] font-bold text-white uppercase tracking-wider">Camera</h3>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-t-2" size={13} />
+              <input 
+                className="w-full bg-black/20 border border-white/10 rounded-lg h-9 pl-9 pr-4 text-[11px] text-white outline-none focus:border-psim-orange/50 transition-all"
+                placeholder="Tìm theo mã hoặc IP"
+              />
+            </div>
+            <div className="flex flex-col gap-2 overflow-y-auto scrollbar-thin pr-1">
+              {[
+                { name: 'Gate 54', ip: '192.168.100.54' },
+                { name: 'Store 20', ip: '192.168.100.20' }
+              ].map((cam, i) => (
+                <div key={i} className="p-2.5 bg-white/5 border border-white/5 rounded-lg hover:border-psim-accent/30 transition-all cursor-move active:scale-95">
+                  <div className="text-[11px] font-bold text-t-1 uppercase tracking-tight">{cam.name}</div>
+                  <div className="text-[9px] text-t-2 font-mono">IP: {cam.ip}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Main Area: Map Canvas */}
+        <div className="flex-1 bg-bg1 border border-border-dim rounded-xl flex flex-col overflow-hidden relative shadow-inner">
+          <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between shrink-0">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <span className="text-[14px] font-bold text-white uppercase tracking-tight">Cổng</span>
+                <span className="bg-psim-orange/20 text-psim-orange text-[9px] font-bold px-1.5 py-0.5 rounded border border-psim-orange/30">ẢNH</span>
+              </div>
+              <span className="text-[10px] text-t-2 mt-0.5">Bản đồ ảnh với kéo thả.</span>
+            </div>
+            <div className="flex gap-2">
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept="image/*" 
+                onChange={handleFileChange} 
+              />
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="h-8 px-3 rounded bg-white/5 border border-white/10 text-[10px] font-bold text-t-2 uppercase flex items-center gap-2 hover:bg-white/10 transition-all"
+              >
+                <Upload size={12} /> Tải ảnh
+              </button>
+              <button disabled={!mapImage} className="h-8 px-3 rounded bg-white/5 border border-white/5 text-[10px] font-bold text-t-2 uppercase opacity-30 cursor-not-allowed">
+                Lưu vị trí
+              </button>
+            </div>
+          </div>
+
+          <div 
+            className="flex-1 flex flex-col items-center justify-center bg-black/40 relative group cursor-pointer overflow-hidden"
+            onClick={() => !mapImage && fileInputRef.current?.click()}
+          >
+            {mapImage ? (
+              <img src={mapImage} alt="Map Floorplan" className="w-full h-full object-contain animate-in fade-in zoom-in-95 duration-500" />
+            ) : (
+              <div className="flex flex-col items-center gap-3 opacity-20 group-hover:opacity-40 transition-all">
+                <MapIcon size={48} strokeWidth={1} className="text-white" />
+                <p className="text-[11px] text-white font-medium uppercase tracking-widest">Upload floorplan</p>
+              </div>
+            )}
+            
+            <div className="absolute inset-4 border border-dashed border-white/5 rounded-2xl pointer-events-none" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   useEffect(() => {
-    if (isDialogOpen || editingMapping) document.body.style.overflow = 'hidden';
+    if (isDialogOpen || editingMapping || isCreateMapModalOpen || isConnectorDialogOpen || editingMapData) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = 'unset';
-  }, [isDialogOpen, editingMapping]);
+  }, [isDialogOpen, editingMapping, isCreateMapModalOpen, isConnectorDialogOpen, editingMapData]);
 
   const handleSaveConfig = () => {
     insertMutation.mutate({
@@ -715,7 +958,8 @@ export function Configuration_V3() {
             {activeSection === 'roles' && renderRoles()}
             {activeSection === 'priority' && renderPriorityTable()}
             {activeSection === 'connectors' && renderConnectors()}
-            {activeSection !== 'priority' && activeSection !== 'connectors' && activeSection !== 'roles' && (
+            {activeSection === 'map_management' && renderMapManagement()}
+            {activeSection !== 'priority' && activeSection !== 'connectors' && activeSection !== 'roles' && activeSection !== 'map_management' && (
               <div className="flex flex-col items-center justify-center py-24 opacity-20 gap-4">
                 <ShieldAlert size={48} strokeWidth={1} />
                 <div className="text-center">
@@ -1080,6 +1324,146 @@ export function Configuration_V3() {
                 )}
               >
                 Xác nhận (OK)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- CREATE MAP MODAL --- */}
+      {isCreateMapModalOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/90 animate-in fade-in duration-200" onClick={() => setIsCreateMapModalOpen(false)} />
+          <div className="relative w-full max-w-md bg-[#161b2e] border border-white/10 rounded-xl shadow-2xl p-8 animate-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <h3 className="text-[18px] font-bold text-white uppercase tracking-tight">Tạo bản đồ mới</h3>
+                <p className="text-[11px] text-t-2 mt-1">Thêm bản đồ vào hệ thống phân cấp.</p>
+              </div>
+              <button onClick={() => setIsCreateMapModalOpen(false)} className="text-t-2 hover:text-white transition-colors"><X size={20} /></button>
+            </div>
+
+            <div className="flex flex-col gap-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1 text-white">Tên bản đồ</label>
+                <input 
+                  className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-[13px] text-white outline-none focus:border-psim-orange/50 transition-all"
+                  placeholder="Ví dụ: Tòa nhà A - Tầng 1"
+                  value={newMapData.Name}
+                  onChange={(e) => setNewMapData({...newMapData, Name: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1 text-white">Mã bản đồ</label>
+                <input 
+                  className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-[13px] text-white outline-none focus:border-psim-orange/50 transition-all font-mono"
+                  placeholder="Ví dụ: MAP_001"
+                  value={newMapData.Code}
+                  onChange={(e) => setNewMapData({...newMapData, Code: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1 text-white">Bản đồ cha</label>
+                <select 
+                  className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-[13px] text-white outline-none focus:border-psim-orange/50 transition-all appearance-none cursor-pointer"
+                  value={newMapData.ParentId || ''}
+                  onChange={(e) => setNewMapData({...newMapData, ParentId: e.target.value || null})}
+                >
+                  <option value="" className="bg-[#161b2e]">-- Không có (Bản đồ gốc) --</option>
+                  {flatMaps.map((map) => (
+                    <option key={map.id} value={map.id} className="bg-[#161b2e]">
+                      {'\u00A0'.repeat(map.depth * 4)}{map.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-10 flex gap-3">
+              <button 
+                onClick={() => setIsCreateMapModalOpen(false)}
+                className="flex-1 h-11 rounded-lg text-[11px] font-bold text-t-2 uppercase border border-white/10 hover:bg-white/5 transition-all"
+              >
+                Hủy bỏ
+              </button>
+              <button 
+                onClick={() => createMapMutation.mutate(newMapData)}
+                disabled={createMapMutation.isPending || !newMapData.Name || !newMapData.Code}
+                className="flex-1 h-11 bg-psim-orange text-white rounded-lg text-[11px] font-bold uppercase tracking-wider shadow-lg shadow-psim-orange/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {createMapMutation.isPending && <RefreshCcw size={14} className="animate-spin" />}
+                Tạo bản đồ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- EDIT MAP MODAL --- */}
+      {editingMapData && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/90 animate-in fade-in duration-200" onClick={() => setEditingMapData(null)} />
+          <div className="relative w-full max-w-md bg-[#161b2e] border border-white/10 rounded-xl shadow-2xl p-8 animate-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <h3 className="text-[18px] font-bold text-white uppercase tracking-tight">Chỉnh sửa bản đồ</h3>
+                <p className="text-[11px] text-psim-orange mt-1 font-mono uppercase">ID: {editingMapData.Id}</p>
+              </div>
+              <button onClick={() => setEditingMapData(null)} className="text-t-2 hover:text-white transition-colors"><X size={20} /></button>
+            </div>
+
+            <div className="flex flex-col gap-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1 text-white">Tên bản đồ</label>
+                <input 
+                  className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-[13px] text-white outline-none focus:border-psim-orange/50 transition-all"
+                  value={editingMapData.Name}
+                  onChange={(e) => setEditingMapData({...editingMapData, Name: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1 text-white">Mã bản đồ</label>
+                <input 
+                  className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-[13px] text-white outline-none focus:border-psim-orange/50 transition-all font-mono"
+                  value={editingMapData.Code}
+                  onChange={(e) => setEditingMapData({...editingMapData, Code: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1 text-white">Bản đồ cha</label>
+                <select 
+                  className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-[13px] text-white outline-none focus:border-psim-orange/50 transition-all appearance-none cursor-pointer"
+                  value={editingMapData.ParentId || ''}
+                  onChange={(e) => setEditingMapData({...editingMapData, ParentId: e.target.value || null})}
+                >
+                  <option value="" className="bg-[#161b2e]">-- Không có (Bản đồ gốc) --</option>
+                  {flatMaps.filter(m => m.id !== editingMapData.Id).map((map) => (
+                    <option key={map.id} value={map.id} className="bg-[#161b2e]">
+                      {'\u00A0'.repeat(map.depth * 4)}{map.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-10 flex gap-3">
+              <button 
+                onClick={() => setEditingMapData(null)}
+                className="flex-1 h-11 rounded-lg text-[11px] font-bold text-t-2 uppercase border border-white/10 hover:bg-white/5 transition-all"
+              >
+                Hủy bỏ
+              </button>
+              <button 
+                onClick={() => updateMapMutation.mutate(editingMapData)}
+                disabled={updateMapMutation.isPending || !editingMapData.Name || !editingMapData.Code}
+                className="flex-1 h-11 bg-psim-orange text-white rounded-lg text-[11px] font-bold uppercase tracking-wider shadow-lg shadow-psim-orange/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {updateMapMutation.isPending && <RefreshCcw size={14} className="animate-spin" />}
+                Lưu thay đổi
               </button>
             </div>
           </div>

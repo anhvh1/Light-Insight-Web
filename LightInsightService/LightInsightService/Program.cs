@@ -11,6 +11,8 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 using LightInsightBUS.Interfaces.Connectors;
 using LightInsightBUS.Service.Connectors;
+using LightInsightBUS.Interfaces.General;
+using LightInsightBUS.Service.General;
 
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -48,6 +50,7 @@ builder.Services.AddScoped<IPriority, PriorityBUS>();
 builder.Services.AddScoped<IRegister, RegisterBUS>();
 builder.Services.AddScoped<ILogin, LoginBUS>();
 builder.Services.AddScoped<IConnectors, ConnectorsBUS>();
+builder.Services.AddScoped<IDMMap, DMMapBUS>();
 
 
 builder.Services.AddSignalR();
@@ -142,6 +145,19 @@ app.UseSwagger();
 app.UseSwaggerUI();
 //}
 app.UseStaticFiles();
+
+// Thêm cấu hình phục vụ thư mục Upload
+string uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "Upload");
+if (!Directory.Exists(uploadPath))
+{
+    Directory.CreateDirectory(uploadPath);
+}
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadPath),
+    RequestPath = "/Upload"
+});
+
 app.UseRouting();
 app.UseCors(MyAllowSpecificOrigins);
 
