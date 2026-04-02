@@ -32,5 +32,29 @@ export const priorityApi = {
   deleteMapping: async (id: number) => {
     const response = await apiClient.delete<ApiResponse<null>>(`/Priorities/${id}`);
     return response.data || { Status: -1, Message: 'Delete failed' };
+  },
+
+  // 7. Lấy danh sách VMS
+  getAllVMS: async () => {
+    const response = await apiClient.get<ApiResponse<{ VmsId: number; VmsName: string }[]>>('/Connectors/GetAllVMS');
+    return response.data || { Data: [], Status: 0, Message: '' };
+  },
+
+  // 8. Thêm Connector mới
+  insertConnector: async (data: any) => {
+    const response = await apiClient.post<ApiResponse<null>>('/Connectors/Connect', data);
+    return response.data || { Status: -1, Message: 'Unknown error' };
+  },
+
+  // 9. Lấy danh sách Connectors
+  getAllConnectors: async () => {
+    const response = await apiClient.get<ApiResponse<any[]>>('/Connectors/GetAllConnectors');
+    return response.data || { Data: [], Status: 0, Message: '' };
+  },
+
+  // 10. Xóa Connector
+  deleteConnector: async (id: string) => {
+    const response = await apiClient.delete<ApiResponse<null>>(`/Connectors/Delete/${id}`);
+    return response.data || { Status: -1, Message: 'Delete failed' };
   }
 };

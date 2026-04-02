@@ -22,6 +22,27 @@ namespace LightInsightService.Controllers.Connectors
             return Ok(result);
         }
 
+        [HttpPut("Update")]
+        public async Task<IActionResult> Update(ConnectorsModel req)
+        {
+            var result = await iconnectors.UpdateConnectorAsync(req);
+            return Ok(result);
+        }
+
+        [HttpDelete("Delete/{id}")]
+        public async Task<IActionResult> Delete(Guid id)
+        {
+            var result = await iconnectors.DeleteConnectorAsync(id);
+            return Ok(result);
+        }
+
+        [HttpGet("GetAllConnectors")]
+        public async Task<IActionResult> GetAllConnectors()
+        {
+            var result = await iconnectors.GetAllConnectorsAsync();
+            return Ok(result);
+        }
+
         [HttpGet("GetAllVMS")]
         public async Task<IActionResult> GetAllVMS()
         {

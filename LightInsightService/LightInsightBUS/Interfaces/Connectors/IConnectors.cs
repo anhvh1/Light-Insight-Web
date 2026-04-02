@@ -11,6 +11,9 @@ namespace LightInsightBUS.Interfaces.Connectors
     public interface IConnectors
     {
         Task<BaseResultModel> AddConnectorAsync(ConnectorsModel model);
+        Task<BaseResultModel> UpdateConnectorAsync(ConnectorsModel model);
+        Task<BaseResultModel> DeleteConnectorAsync(Guid id);
+        Task<BaseResultModel> GetAllConnectorsAsync();
         Task<BaseResultModel> GetAllVMSAsync();
     }
 }

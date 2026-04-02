@@ -71,6 +71,106 @@ namespace LightInsightBUS.Service.Connectors
 
         }
 
+        public async Task<BaseResultModel> UpdateConnectorAsync(ConnectorsModel model)
+        {
+            try
+            {
+                var result = new BaseResultModel();
+                var ping = await checkServerBUS.CheckTcpConnectionAsync(model.IpServer, model.Port);
+                var token = await getAnalyticsEvents.GetTokenAsync(model.Username, model.Password);
+
+                if (!ping)
+                {
+                    result.Status = 0;
+                    result.Message = "Không thể kết nối đến server. Vui lòng kiểm tra lại thông tin kết nối.";
+                    return result;
+                }
+                if (string.IsNullOrEmpty(token))
+                {
+                    result.Status = 0;
+                    result.Message = "Thông tin đăng nhập không chính xác. Vui lòng kiểm tra lại.";
+                    return result;
+                }
+                else
+                {
+                    model.Status = "Connected";
+                }
+
+                var success = await connectorsDAL.UpdateConnectorAsync(model.Id, model.Name, model.IpServer, model.Port, model.Username, model.Password, model.VMSID, model.Status);
+                if (success)
+                {
+                    result.Status = 1;
+                    result.Message = "Cập nhật connector thành công.";
+                    return result;
+                }
+                else
+                {
+                    result.Status = -1;
+                    result.Message = "Cập nhật connector thất bại. Vui lòng thử lại.";
+                    return result;
+                }
+
+            }
+            catch (Exception ex)
+            {
+                var result = new BaseResultModel();
+                result.Status = -1;
+                result.Message = ex.Message;
+                return result;
+            }
+        }
+
+        public async Task<BaseResultModel> DeleteConnectorAsync(Guid id)
+        {
+            try
+            {
+                var result = new BaseResultModel();
+                var success = await connectorsDAL.DeleteConnectorAsync(id);
+
+                if (success)
+                {
+                    result.Status = 1;
+                    result.Message = "Xóa connector thành công.";
+                }
+                else
+                {
+                    result.Status = -1;
+                    result.Message = "Xóa connector thất bại. Không tìm thấy connector hoặc có lỗi xảy ra.";
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                var result = new BaseResultModel();
+                result.Status = -1;
+                result.Message = ex.Message;
+                return result;
+            }
+        }
+
+        public async Task<BaseResultModel> GetAllConnectorsAsync()
+        {
+            try
+            {
+                var result = new BaseResultModel();
+                var data = await connectorsDAL.GetAllConnectorsAsync();
+
+                result.Status = 1;
+                result.Message = "Lấy danh sách connectors thành công.";
+                result.Data = data;
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                var result = new BaseResultModel();
+                result.Status = -1;
+                result.Message = ex.Message;
+                return result;
+            }
+        }
+
         public async Task<BaseResultModel> GetAllVMSAsync()
         {
             try
