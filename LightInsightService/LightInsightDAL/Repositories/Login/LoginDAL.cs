@@ -36,7 +36,8 @@ namespace LightInsightDAL.Repositories.Login
                 Email = reader.IsDBNull(2) ? null : reader.GetString(2),
                 PhoneNumber = reader.IsDBNull(3) ? null : reader.GetString(3),
                 RoleId = reader.GetGuid(4),
-                Status = reader.IsDBNull(5) ? null : reader.GetString(5)
+                Status = reader.IsDBNull(5) ? null : reader.GetString(5),
+                RoleName = reader.IsDBNull(6) ? "Operator" : reader.GetString(6)
             };
         }
         public string GenerateToken(User user)
@@ -50,7 +51,8 @@ namespace LightInsightDAL.Repositories.Login
                 new Claim("name", user.Name ?? ""),
                 new Claim("email", user.Email ?? ""),
                 new Claim("phone", user.PhoneNumber ?? ""),
-                new Claim("roleId", user.RoleId.ToString())
+                new Claim("roleId", user.RoleId.ToString()),
+                new Claim("roleName", user.RoleName ?? "Operator")
             };
 
             var token = new JwtSecurityToken(

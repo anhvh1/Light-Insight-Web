@@ -54,11 +54,12 @@ export const authApi = {
         return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
       }).join(''));
       const decoded = JSON.parse(jsonPayload);
-      // Backend Claims: username, name, email, phone, roleId
+      // Backend Claims: username, name, email, phone, roleId, roleName
       return {
         username: decoded.username,
         name: decoded.name,
-        roleId: decoded.roleId
+        roleId: decoded.roleId,
+        roleName: decoded.roleName
       };
     } catch (e) {
       return null;
