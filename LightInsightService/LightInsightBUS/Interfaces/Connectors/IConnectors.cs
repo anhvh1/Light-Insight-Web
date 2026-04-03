@@ -15,5 +15,6 @@ namespace LightInsightBUS.Interfaces.Connectors
         Task<BaseResultModel> DeleteConnectorAsync(Guid id);
         Task<BaseResultModel> GetAllConnectorsAsync();
         Task<BaseResultModel> GetAllVMSAsync();
+        Task<BaseResultModel> LoadAllConnectorsToCacheAsync();
     }
 }
