@@ -1271,11 +1271,14 @@ export function Configuration_V3() {
                   }}
                 >
                   <option value={0} disabled className="bg-[#161b2e]">-- Chọn VMS --</option>
-                  {vmsList.map((vms) => (
-                    <option key={vms.VmsId} value={vms.VmsId} className="bg-[#161b2e]">
-                      {vms.VmsName}
-                    </option>
-                  ))}
+                  {vmsList
+                    .filter(vms => !actualConnectors.some((c: any) => c.VmsName === vms.VmsName))
+                    .map((vms) => (
+                      <option key={vms.VmsId} value={vms.VmsId} className="bg-[#161b2e]">
+                        {vms.VmsName}
+                      </option>
+                    ))
+                  }
                 </select>
               </div>
 
