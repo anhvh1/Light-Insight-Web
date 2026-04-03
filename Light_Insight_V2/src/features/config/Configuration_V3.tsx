@@ -34,6 +34,7 @@ import {
   EyeOff,
   Map as MapIcon,
   Upload,
+  Cctv,
   User,
   Mail,
   Phone,
@@ -379,9 +380,57 @@ export function Configuration_V3() {
   const [selectedPriorityId, setSelectedPriorityId] = useState<number>(2);
   const [modalSearch, setModalSearch] = useState('');
   const [mapSearch, setMapSearch] = useState('');
+  const [deviceSearch, setDeviceSearch] = useState('');
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
   const [selectedVmsId, setSelectedVmsId] = useState<number | null>(null);
+  const [placedDevices, setPlacedDevices] = useState<{ 
+    id: string; 
+    name: string; 
+    x: number; 
+    y: number; 
+    mapId: string; 
+    rotation: number;
+    vmsId: number;
+  }[]>([]);
+  const [draggingDevice, setDraggingDevice] = useState<{ id: string; name: string; vmsId: number } | null>(null);
+  const [movingDeviceId, setMovingDeviceId] = useState<string | null>(null);
+
+  const { data: camerasResponse, isLoading: isLoadingCameras } = useQuery({
+    queryKey: ['cameras', selectedVmsId],
+    queryFn: () => mapApi.getCameras(selectedVmsId!),
+    enabled: !!selectedVmsId && activeSection === 'map_management'
+  });
+  const cameras = camerasResponse?.Data || [];
+
+  const { data: markersResponse } = useQuery({
+    queryKey: ['map-markers', selectedMapId],
+    queryFn: () => mapApi.getMarkers(selectedMapId!),
+    enabled: !!selectedMapId && activeSection === 'map_management'
+  });
+
+  useEffect(() => {
+    if (markersResponse?.Data) {
+      const markers = markersResponse.Data.map((m: any) => ({
+        id: m.CameraId,
+        name: m.CameraName,
+        x: m.PosX,
+        y: m.PosY,
+        mapId: m.MapId,
+        rotation: m.Rotation || 0,
+        vmsId: m.VmsId || 0
+      }));
+      setPlacedDevices(prev => {
+        // Keep markers from other maps, replace markers for current map
+        const otherMapsMarkers = prev.filter(d => d.mapId !== selectedMapId);
+        return [...otherMapsMarkers, ...markers];
+      });
+    }
+  }, [markersResponse, selectedMapId]);
+
   const [zoomScale, setZoomScale] = useState(1);
+  const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
   const [editingMapping, setEditingMapping] = useState<{ id: number; name: string; currentPriorityId: number } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -396,6 +445,130 @@ export function Configuration_V3() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleDragStart = (e: React.DragEvent, device: { Id: string; Name: string; vmsId: number }) => {
+    setDraggingDevice(device);
+    e.dataTransfer.setData('deviceId', device.Id);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left - mapOffset.x) / (rect.width * zoomScale)) * 100;
+    const y = ((e.clientY - rect.top - mapOffset.y) / (rect.height * zoomScale)) * 100;
+
+    if (draggingDevice && selectedMapId) {
+      // New placement from sidebar
+      if (placedDevices.some(d => d.id === draggingDevice.Id && d.mapId === selectedMapId)) return;
+      setPlacedDevices(prev => [...prev, {
+        id: draggingDevice.Id,
+        name: draggingDevice.Name,
+        x,
+        y,
+        mapId: selectedMapId,
+        rotation: 0,
+        vmsId: draggingDevice.vmsId
+      }]);
+      setDraggingDevice(null);
+    } else if (movingDeviceId) {
+      // Repositioning existing device
+      setPlacedDevices(prev => prev.map(d => 
+        (d.id === movingDeviceId && d.mapId === selectedMapId) ? { ...d, x, y } : d
+      ));
+      setMovingDeviceId(null);
+    }
+  };
+
+  const saveMarkersMutation = useMutation({
+    mutationFn: mapApi.saveMarkers,
+    onSuccess: (res) => {
+      setResponseModal({
+        isOpen: true,
+        status: res.Status,
+        message: res.Message || (res.Status === 1 ? 'Lưu vị trí thiết bị thành công.' : 'Có lỗi xảy ra')
+      });
+    }
+  });
+
+  const [rotatingDeviceId, setRotatingDeviceId] = useState<string | null>(null);
+
+  const handleCanvasMouseMove = (e: React.MouseEvent) => {
+    if (!selectedMapId) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    
+    if (isPanning) {
+      const dx = e.clientX - lastMousePos.x;
+      const dy = e.clientY - lastMousePos.y;
+      setMapOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+      setLastMousePos({ x: e.clientX, y: e.clientY });
+      return;
+    }
+
+    const x = ((e.clientX - rect.left - mapOffset.x) / (rect.width * zoomScale)) * 100;
+    const y = ((e.clientY - rect.top - mapOffset.y) / (rect.height * zoomScale)) * 100;
+
+    if (movingDeviceId) {
+      setPlacedDevices(prev => prev.map(d => 
+        (d.id === movingDeviceId && d.mapId === selectedMapId) ? { ...d, x, y } : d
+      ));
+    } else if (rotatingDeviceId) {
+      const device = placedDevices.find(d => d.id === rotatingDeviceId && d.mapId === selectedMapId);
+      if (device) {
+        // Calculate angle between device center and mouse
+        const deviceScreenX = rect.left + mapOffset.x + (device.x / 100) * rect.width * zoomScale;
+        const deviceScreenY = rect.top + mapOffset.y + (device.y / 100) * rect.height * zoomScale;
+        const dx = e.clientX - deviceScreenX;
+        const dy = e.clientY - deviceScreenY;
+        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+        setPlacedDevices(prev => prev.map(d => 
+          (d.id === rotatingDeviceId && d.mapId === selectedMapId) ? { ...d, rotation: angle + 90 } : d
+        ));
+      }
+    }
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!mapImage) return;
+    
+    const zoomSpeed = 0.1;
+    const delta = e.deltaY < 0 ? 1 : -1;
+    const oldScale = zoomScale;
+    const newScale = Math.min(10, Math.max(0.1, oldScale + delta * zoomSpeed * oldScale));
+    
+    if (newScale !== oldScale) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      // Adjust offset to zoom at mouse position
+      const newOffsetX = mouseX - (mouseX - mapOffset.x) * (newScale / oldScale);
+      const newOffsetY = mouseY - (mouseY - mapOffset.y) * (newScale / oldScale);
+
+      setZoomScale(newScale);
+      setMapOffset({ x: newOffsetX, y: newOffsetY });
+    }
+  };
+
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 0 && !movingDeviceId && !rotatingDeviceId) {
+      setIsPanning(true);
+      setLastMousePos({ x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const handleCanvasMouseUp = () => {
+    setMovingDeviceId(null);
+    setRotatingDeviceId(null);
+    setIsPanning(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const removePlacedDevice = (id: string) => {
+    setPlacedDevices(prev => prev.filter(d => !(d.id === id && d.mapId === selectedMapId)));
   };
 
   const navItems = [
@@ -541,12 +714,15 @@ export function Configuration_V3() {
               <select 
                 className="bg-black/40 border border-white/10 rounded h-7 px-2 text-[10px] text-white outline-none focus:border-psim-orange/50 transition-all cursor-pointer min-w-[100px]"
                 value={selectedVmsId || ''}
-                onChange={(e) => setSelectedVmsId(e.target.value ? parseInt(e.target.value) : null)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedVmsId(val ? parseInt(val) : null);
+                }}
               >
                 <option value="" className="bg-[#161b2e]">-- Hệ thống --</option>
-                {vmsList.map((vms) => (
-                  <option key={vms.VmsId} value={vms.VmsId} className="bg-[#161b2e]">
-                    {vms.VmsName}
+                {actualConnectors.map((c: any) => (
+                  <option key={c.Id} value={c.VmsID} className="bg-[#161b2e]">
+                    {c.VmsName}
                   </option>
                 ))}
               </select>
@@ -555,20 +731,53 @@ export function Configuration_V3() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-t-2" size={13} />
               <input 
                 className="w-full bg-black/20 border border-white/10 rounded-lg h-9 pl-9 pr-4 text-[11px] text-white outline-none focus:border-psim-orange/50 transition-all"
-                placeholder="Tìm theo mã hoặc IP"
+                placeholder="Tìm theo tên thiết bị"
+                value={deviceSearch}
+                onChange={(e) => setDeviceSearch(e.target.value)}
               />
-            </div>
-            <div className="flex flex-col gap-2 overflow-y-auto scrollbar-thin pr-1 flex-1">
-              {[
-                { name: 'Gate 54', ip: '192.168.100.54' },
-                { name: 'Store 20', ip: '192.168.100.20' }
-              ].map((cam, i) => (
-                <div key={i} className="p-2.5 bg-white/5 border border-white/5 rounded-lg hover:border-psim-accent/30 transition-all cursor-move active:scale-95 shrink-0">
-                  <div className="text-[11px] font-bold text-t-1 uppercase tracking-tight">{cam.name}</div>
-                  <div className="text-[9px] text-t-2 font-mono">IP: {cam.ip}</div>
+              </div>
+              <div className="flex flex-col gap-2 overflow-y-auto scrollbar-thin pr-1 flex-1">
+              {isLoadingCameras ? (
+                <div className="py-10 text-center animate-pulse flex flex-col items-center gap-2">
+                  <RefreshCcw className="animate-spin text-psim-orange" size={16} />
+                  <span className="text-[10px] text-t-2 uppercase tracking-widest font-bold">Đang tải thiết bị...</span>
                 </div>
-              ))}
-            </div>
+              ) : (
+                <>
+                  {cameras
+                    .filter(cam => cam.Name?.toLowerCase().includes(deviceSearch.toLowerCase()))
+                    .map((cam, i) => {
+                      const isPlaced = placedDevices.some(d => d.id === cam.Id && d.mapId === selectedMapId);
+                      return (
+                        <div 
+                          key={cam.Id || i} 
+                          draggable={!isPlaced}
+                          onDragStart={(e) => handleDragStart(e, { Id: cam.Id, Name: cam.Name, vmsId: selectedVmsId! })}
+                          className={cn(
+                            "p-3 bg-white/5 border border-white/5 rounded-lg transition-all active:scale-95 shrink-0 group flex items-center justify-between",
+                            isPlaced ? "opacity-40 grayscale cursor-not-allowed border-dashed" : "hover:border-psim-accent/30 cursor-move"
+                          )}
+                        >
+                          <div className={cn(
+                            "text-[11px] font-bold text-t-1 uppercase tracking-tight transition-colors",
+                            !isPlaced && "group-hover:text-psim-orange"
+                          )}>{cam.Name}</div>
+                          {isPlaced && <CheckCircle2 size={12} className="text-psim-green" />}
+                        </div>
+                      );
+                    })
+                  }
+
+                  {cameras.length === 0 && selectedVmsId && (
+                    <div className="py-10 text-center opacity-20 text-[10px] uppercase font-bold tracking-widest">Không có thiết bị</div>
+                  )}
+                  {!selectedVmsId && (
+                    <div className="py-10 text-center opacity-20 text-[10px] uppercase font-bold tracking-widest">Chọn hệ thống để xem thiết bị</div>
+                  )}
+                </>
+              )}
+              </div>
+
           </div>
         </div>
 
@@ -619,27 +828,137 @@ export function Configuration_V3() {
               >
                 <Upload size={12} /> Tải ảnh
               </button>
-              <button disabled={!mapImage} className="h-8 px-3 rounded bg-white/5 border border-white/5 text-[10px] font-bold text-t-2 uppercase opacity-30 cursor-not-allowed">
+              <button 
+                disabled={!mapImage || placedDevices.filter(d => d.mapId === selectedMapId).length === 0 || saveMarkersMutation.isPending} 
+                onClick={() => {
+                  if (!selectedMapId) return;
+                  const markers = placedDevices
+                    .filter(d => d.mapId === selectedMapId)
+                    .map(d => ({
+                      CameraId: d.id,
+                      CameraName: d.name,
+                      PosX: d.x,
+                      PosY: d.y,
+                      Icon: 'Cctv',
+                      VmsId: d.vmsId,
+                      Rotation: d.rotation
+                    }));
+                  
+                  saveMarkersMutation.mutate({
+                    MapId: selectedMapId,
+                    Markers: markers
+                  });
+                }}
+                className={cn(
+                  "h-8 px-3 rounded text-[10px] font-bold text-t-2 uppercase transition-all flex items-center gap-2",
+                  (!mapImage || placedDevices.filter(d => d.mapId === selectedMapId).length === 0 || saveMarkersMutation.isPending) 
+                    ? "bg-white/5 border border-white/5 opacity-30 cursor-not-allowed" 
+                    : "bg-psim-orange text-white border border-psim-orange shadow-lg shadow-psim-orange/20 hover:scale-[1.02]"
+                )}
+              >
+                {saveMarkersMutation.isPending && <RefreshCcw size={12} className="animate-spin" />}
                 Lưu vị trí
               </button>
             </div>
           </div>
 
           <div 
-            className="flex-1 flex flex-col items-center justify-center bg-black/40 relative group overflow-hidden"
-            onWheel={(e) => {
-              if (mapImage) {
-                if (e.deltaY < 0) setZoomScale(prev => Math.min(5, prev + 0.1));
-                else setZoomScale(prev => Math.max(0.1, prev - 0.1));
-              }
-            }}
+            className={cn(
+              "flex-1 flex flex-col items-center justify-center bg-black/40 relative group overflow-hidden select-none",
+              isPanning ? "cursor-grabbing" : "cursor-grab"
+            )}
+            onWheel={handleWheel}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+            onMouseLeave={handleCanvasMouseUp}
           >
             {mapImage ? (
               <div 
-                className="w-full h-full flex items-center justify-center transition-transform duration-200"
-                style={{ transform: `scale(${zoomScale})` }}
+                className="w-full h-full flex items-center justify-center transition-transform duration-75 relative origin-center"
+                style={{ 
+                  transform: `translate(${mapOffset.x}px, ${mapOffset.y}px) scale(${zoomScale})`
+                }}
               >
-                <img src={mapImage} alt="Map Floorplan" className="max-w-full max-h-full object-contain animate-in fade-in zoom-in-95 duration-500" />
+                <div className="relative max-w-full max-h-full">
+                  <img src={mapImage} alt="Map Floorplan" className="max-w-full max-h-full object-contain animate-in fade-in zoom-in-95 duration-500" />
+                  
+                  {/* --- RENDER PLACED DEVICES --- */}
+                  {placedDevices
+                    .filter(d => d.mapId === selectedMapId)
+                    .map((device) => (
+                      <div 
+                        key={device.id}
+                        style={{ left: `${device.x}%`, top: `${device.y}%` }}
+                        className="absolute -translate-x-1/2 -translate-y-1/2 group/device pointer-events-auto z-10"
+                      >
+                        <div className="relative flex flex-col items-center">
+                          {/* Device Name Tag (Above, NOT rotating) */}
+                          <div className="bg-white border border-black/10 rounded px-2 py-0.5 mb-3 whitespace-nowrap shadow-xl z-30 pointer-events-none">
+                            <span className="text-[9px] font-bold text-black uppercase tracking-tight">{device.name}</span>
+                          </div>
+
+                          {/* --- ROTATION WRAPPER (This part rotates) --- */}
+                          <div 
+                            className="relative w-10 h-10 flex items-center justify-center transition-transform duration-75"
+                            style={{ transform: `rotate(${device.rotation}deg)` }}
+                          >
+                            {/* --- FIELD OF VIEW (FoV) --- */}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 pointer-events-none">
+                              {/* Triangle FoV pointing "forward" relative to container */}
+                              <div className="relative -top-[100px]">
+                                <svg width="140" height="100" viewBox="0 0 140 100" className="drop-shadow-2xl opacity-60">
+                                  <path 
+                                    d="M70 100 L0 0 L140 0 Z" 
+                                    fill="rgba(0, 194, 255, 0.2)" 
+                                    stroke="rgba(0, 194, 255, 0.4)" 
+                                    strokeWidth="1"
+                                  />
+                                </svg>
+                                
+                                {/* Rotation Handle (Red Dot at the base of FoV) */}
+                                <div 
+                                  className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-4 h-4 bg-psim-red rounded-full border-2 border-white shadow-lg cursor-pointer pointer-events-auto hover:scale-125 transition-transform z-40 active:scale-90"
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    setRotatingDeviceId(device.id);
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Cctv Icon (At the center of rotation) */}
+                            <div 
+                              className={cn(
+                                "w-10 h-10 bg-[#1a1f2e] text-white rounded-xl flex items-center justify-center shadow-2xl border border-white/20 cursor-move transition-all active:scale-95 z-20",
+                                movingDeviceId === device.id && "scale-110 border-psim-orange"
+                              )}
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                setMovingDeviceId(device.id);
+                              }}
+                            >
+                              <Cctv size={22} strokeWidth={2} className="-rotate-90" />
+                            </div>
+                          </div>
+
+                          {/* Remove button */}
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removePlacedDevice(device.id);
+                            }}
+                            className="absolute -top-4 -right-4 w-6 h-6 bg-psim-red text-white rounded-full flex items-center justify-center opacity-0 group-hover/device:opacity-100 transition-opacity hover:scale-110 shadow-lg z-40"
+                          >
+                            <X size={12} strokeWidth={3} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-3 opacity-20 group-hover:opacity-40 transition-all">

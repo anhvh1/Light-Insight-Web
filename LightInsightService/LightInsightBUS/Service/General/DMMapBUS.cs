@@ -52,7 +52,9 @@ namespace LightInsightBUS.Service.General
                     camera_name = m.CameraName,
                     pos_x = m.PosX,
                     pos_y = m.PosY,
-                    icon = m.Icon
+                    icon = m.Icon,
+                    vms_id = m.VmsId,
+                    rotation = m.Rotation
                 }).ToList();
 
                 var jsonString = JsonSerializer.Serialize(dbMarkers);
