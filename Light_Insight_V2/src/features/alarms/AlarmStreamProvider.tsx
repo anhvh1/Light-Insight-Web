@@ -9,13 +9,20 @@ const HUB_URL = HUB_BASE_URL ? `${HUB_BASE_URL.replace(/\/$/, '')}/alarm-hub` : 
 
 // TODO: doi ten event cho dung voi hub backend dang emit
 const HUB_EVENT_NAME = 'ReceiveAlarm';
-const MAX_ALARMS = 300;
+const MAX_ALARMS = 100;
+const SERVER_PAGE_SIZE = 100;
 
 type AlarmStreamContextValue = {
   alarms: Alarm[];
   connected: boolean;
+  loading: boolean;
+  currentPage: number;
+  pageSize: number;
+  canNextPage: boolean;
   newCount: number;
   refreshAlarms: () => Promise<void>;
+  nextPage: () => Promise<void>;
+  prevPage: () => Promise<void>;
   clearNewFlags: () => void;
   markAlarmAsRead: (alarmId: string) => void;
 };
@@ -25,6 +32,9 @@ const AlarmStreamContext = createContext<AlarmStreamContextValue | null>(null);
 export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [canNextPage, setCanNextPage] = useState(true);
 
   const clearNewFlags = useCallback(() => {
     setAlarms((prev) => prev.map((alarm) => ({ ...alarm, isNew: false })));
@@ -38,15 +48,38 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const refreshAlarms = useCallback(async () => {
+  const fetchPage = useCallback(async (page: number) => {
+    setLoading(true);
     try {
-      const rows = await alarmApi.getAll();
+      const rows = await alarmApi.getAll({ page, pageSize: SERVER_PAGE_SIZE });
       const nextAlarms = rows.map(normalizeApiAlarm).slice(0, MAX_ALARMS);
       setAlarms(nextAlarms);
+      setCurrentPage(page);
+      setCanNextPage(rows.length >= SERVER_PAGE_SIZE);
+      return true;
     } catch (error) {
       console.error('Failed to load alarm list:', error);
+      return false;
+    } finally {
+      setLoading(false);
     }
   }, []);
+
+  const refreshAlarms = useCallback(async () => {
+    await fetchPage(1);
+  }, [fetchPage]);
+
+  const nextPage = useCallback(async () => {
+    if (loading || !canNextPage) return;
+    const targetPage = currentPage + 1;
+    const ok = await fetchPage(targetPage);
+    if (!ok) return;
+  }, [canNextPage, currentPage, fetchPage, loading]);
+
+  const prevPage = useCallback(async () => {
+    if (loading || currentPage <= 1) return;
+    await fetchPage(currentPage - 1);
+  }, [currentPage, fetchPage, loading]);
 
   const addAlarm = useCallback((payload: AlarmPayload) => {
     const alarm = normalizeSignalRAlarm(payload);
@@ -88,8 +121,33 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
 
   const newCount = useMemo(() => alarms.filter((alarm) => alarm.isNew).length, [alarms]);
   const value = useMemo(
-    () => ({ alarms, connected, newCount, refreshAlarms, clearNewFlags, markAlarmAsRead }),
-    [alarms, connected, newCount, refreshAlarms, clearNewFlags, markAlarmAsRead]
+    () => ({
+      alarms,
+      connected,
+      loading,
+      currentPage,
+      pageSize: SERVER_PAGE_SIZE,
+      canNextPage,
+      newCount,
+      refreshAlarms,
+      nextPage,
+      prevPage,
+      clearNewFlags,
+      markAlarmAsRead,
+    }),
+    [
+      alarms,
+      connected,
+      loading,
+      currentPage,
+      canNextPage,
+      newCount,
+      refreshAlarms,
+      nextPage,
+      prevPage,
+      clearNewFlags,
+      markAlarmAsRead,
+    ]
   );
 
   return (

@@ -4,15 +4,23 @@ import { StatusPill, TypeBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 import { useAlarmSignalR } from './useAlarmSignalR';
 
-const PAGE_SIZE = 15;
-
 export function AlarmConsole() {
-  const { alarms, connected, refreshAlarms, markAlarmAsRead } = useAlarmSignalR();
+  const {
+    alarms,
+    connected,
+    loading,
+    currentPage,
+    pageSize,
+    canNextPage,
+    refreshAlarms,
+    nextPage,
+    prevPage,
+    markAlarmAsRead,
+  } = useAlarmSignalR();
 
   const [activeTab, setActiveTab] = useState<string>('all');
   const [filterType, setFilterType] = useState<AlarmType | 'all'>('all');
   const [selectedAlarmId, setSelectedAlarmId] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
 
   const selectedAlarm = useMemo(
     () => alarms.find(a => a.id === selectedAlarmId) ?? null,
@@ -34,9 +42,9 @@ export function AlarmConsole() {
 
   const tabs = ['all', 'new', 'ack', 'prog'];
   const filterTypes: (AlarmType | 'all')[] = ['all', 'ai', 'lpr', 'acs', 'fire', 'bms', 'tech', 'light'];
-  const totalPages = Math.max(1, Math.ceil(filteredAlarms.length / PAGE_SIZE));
-  const startIndex = (currentPage - 1) * PAGE_SIZE;
-  const paginatedAlarms = filteredAlarms.slice(startIndex, startIndex + PAGE_SIZE);
+  const hasRecords = filteredAlarms.length > 0;
+  const startRecord = hasRecords ? (currentPage - 1) * pageSize + 1 : 0;
+  const endRecord = hasRecords ? (currentPage - 1) * pageSize + filteredAlarms.length : 0;
 
   const handleAcknowledge = () => {
     if (!selectedAlarmId) return;
@@ -44,22 +52,12 @@ export function AlarmConsole() {
   };
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [activeTab, filterType]);
-
-  useEffect(() => {
     void refreshAlarms();
   }, [refreshAlarms]);
 
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
-
   const renderAlarmTable = () => (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto">
+      <div className="alarm-scrollbar flex-1 overflow-y-auto pr-1">
         <table className="w-full border-collapse text-left">
           <thead>
             <tr>
@@ -74,7 +72,7 @@ export function AlarmConsole() {
             </tr>
           </thead>
           <tbody>
-            {paginatedAlarms.map((alarm) => (
+            {filteredAlarms.map((alarm) => (
               <tr
                 key={alarm.id}
                 className={cn(
@@ -112,18 +110,22 @@ export function AlarmConsole() {
       <div className="flex items-center justify-between gap-3 border-t border-border-dim bg-bg1 px-3 py-2 text-[11px]">
         <button
           className="rounded-md border border-border-dim px-3 py-1 text-t1 transition-colors hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={currentPage === 1}
-          onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+          disabled={loading || currentPage === 1}
+          onClick={() => {
+            void prevPage();
+          }}
         >
           Prev
         </button>
         <div className="font-mono text-t-2">
-          Trang {currentPage} / {totalPages} · {filteredAlarms.length} alarm
+          Bản ghi {startRecord} - {endRecord}
         </div>
         <button
           className="rounded-md border border-border-dim px-3 py-1 text-t1 transition-colors hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={currentPage === totalPages}
-          onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+          disabled={loading || !canNextPage}
+          onClick={() => {
+            void nextPage();
+          }}
         >
           Next
         </button>
