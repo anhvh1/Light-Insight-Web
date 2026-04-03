@@ -1,6 +1,6 @@
 import type { Alarm } from '@/types';
 
-export interface SignalRAlarmPayload {
+export interface AlarmPayload {
   alarmId?: string;
   alarmName?: string;
   location?: string;
@@ -32,17 +32,44 @@ function formatDisplayTime(value?: string): string {
   return value;
 }
 
-export function normalizeAlarm(payload: SignalRAlarmPayload): Alarm {
+function normalizePriority(priorityName?: string): string {
+  const normalized = (priorityName ?? '').trim().toLowerCase();
+  if (normalized === 'critical') return 'critical';
+  if (normalized === 'high') return 'high';
+  if (normalized === 'medium') return 'medium';
+  if (normalized === 'low') return 'low';
+  return 'medium';
+}
+
+function normalizeStatus(stateName?: string): string {
+  const normalized = (stateName ?? '').trim().toLowerCase();
+  if (normalized === 'new') return 'new';
+  if (normalized === 'ack' || normalized === 'acknowledged') return 'ack';
+  if (normalized === 'prog' || normalized === 'in progress' || normalized === 'progress') return 'prog';
+  return 'new';
+}
+
+function toAlarm(payload: AlarmPayload, isNew: boolean): Alarm {
+  const id = payload.alarmId?.trim() || generateId();
   return {
-    id: generateId(),
-    title: payload.message ?? '',
-    pri: (payload.priorityName ?? '').toLowerCase(),
+    id,
+    title: payload.message ?? payload.alarmName ?? '',
+    pri: normalizePriority(payload.priorityName),
     src: payload.source ?? '',
-    status: (payload.stateName ?? '').toLowerCase(),
+    status: normalizeStatus(payload.stateName),
     time: formatDisplayTime(payload.time),
     type: 'light',
     typeLabel: payload.type?.trim() || 'Hệ thống',
-    loc: '',
+    loc: payload.location ?? '',
     corr: 0,
+    isNew,
   };
+}
+
+export function normalizeSignalRAlarm(payload: AlarmPayload): Alarm {
+  return toAlarm(payload, true);
+}
+
+export function normalizeApiAlarm(payload: AlarmPayload): Alarm {
+  return toAlarm(payload, false);
 }

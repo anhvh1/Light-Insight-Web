@@ -4,15 +4,23 @@ import { StatusPill, TypeBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 import { useAlarmSignalR } from './useAlarmSignalR';
 
-const PAGE_SIZE = 15;
-
 export function AlarmConsole() {
-  const { alarms, connected } = useAlarmSignalR();
+  const {
+    alarms,
+    connected,
+    loading,
+    currentPage,
+    pageSize,
+    canNextPage,
+    refreshAlarms,
+    nextPage,
+    prevPage,
+    markAlarmAsRead,
+  } = useAlarmSignalR();
 
   const [activeTab, setActiveTab] = useState<string>('all');
   const [filterType, setFilterType] = useState<AlarmType | 'all'>('all');
   const [selectedAlarmId, setSelectedAlarmId] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
 
   const selectedAlarm = useMemo(
     () => alarms.find(a => a.id === selectedAlarmId) ?? null,
@@ -23,7 +31,9 @@ export function AlarmConsole() {
   const filteredAlarms = useMemo(
     () =>
       alarms.filter((alarm) => {
-        const matchesTab = activeTab === 'all' || alarm.status === activeTab;
+        const matchesTab =
+          activeTab === 'all' ||
+          (activeTab === 'new' ? alarm.isNew : alarm.status === activeTab);
         const matchesType = filterType === 'all' || alarm.type === filterType;
         return matchesTab && matchesType;
       }),
@@ -32,9 +42,9 @@ export function AlarmConsole() {
 
   const tabs = ['all', 'new', 'ack', 'prog'];
   const filterTypes: (AlarmType | 'all')[] = ['all', 'ai', 'lpr', 'acs', 'fire', 'bms', 'tech', 'light'];
-  const totalPages = Math.max(1, Math.ceil(filteredAlarms.length / PAGE_SIZE));
-  const startIndex = (currentPage - 1) * PAGE_SIZE;
-  const paginatedAlarms = filteredAlarms.slice(startIndex, startIndex + PAGE_SIZE);
+  const hasRecords = filteredAlarms.length > 0;
+  const startRecord = hasRecords ? (currentPage - 1) * pageSize + 1 : 0;
+  const endRecord = hasRecords ? (currentPage - 1) * pageSize + filteredAlarms.length : 0;
 
   const handleAcknowledge = () => {
     if (!selectedAlarmId) return;
@@ -42,18 +52,12 @@ export function AlarmConsole() {
   };
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [activeTab, filterType]);
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
+    void refreshAlarms();
+  }, [refreshAlarms]);
 
   const renderAlarmTable = () => (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto">
+      <div className="alarm-scrollbar flex-1 overflow-y-auto pr-1">
         <table className="w-full border-collapse text-left">
           <thead>
             <tr>
@@ -68,28 +72,31 @@ export function AlarmConsole() {
             </tr>
           </thead>
           <tbody>
-            {paginatedAlarms.map((alarm) => (
+            {filteredAlarms.map((alarm) => (
               <tr
                 key={alarm.id}
                 className={cn(
                   "cursor-pointer transition-colors hover:bg-bg2 border-b border-border-dim",
                   selectedAlarmId === alarm.id && "bg-[rgba(0,194,255,0.05)]",
                 )}
-                onClick={() => setSelectedAlarmId(alarm.id)}
+                onClick={() => {
+                  setSelectedAlarmId(alarm.id);
+                  markAlarmAsRead(alarm.id);
+                }}
               >
                 <td className="py-2.5 px-3 align-middle text-[12px]"><StatusPill priority={alarm.pri} /></td>
                 <td className="py-2.5 px-3 align-middle text-[12px]"><TypeBadge type={alarm.type} /></td>
                 <td className="py-2.5 px-3 align-middle text-[12px]">
                   {alarm.title}
-                  {alarm.status === 'new' && <span className="ml-1.5 text-[9px] bg-psim-red text-white px-[6px] py-[1px] rounded-[3px] font-mono">NEW</span>}
+                  {alarm.isNew && <span className="ml-1.5 text-[9px] bg-psim-red text-white px-[6px] py-[1px] rounded-[3px] font-mono">NEW</span>}
                   {alarm.corr > 1 && <span className="ml-1.5 text-[9px] bg-[rgba(155,109,255,0.2)] text-purple px-[5px] py-[1px] rounded-[3px] font-mono">+{alarm.corr} corr</span>}
                 </td>
                 <td className="py-2.5 px-3 align-middle text-[11px] text-t-2">{alarm.src}</td>
                 <td className="py-2.5 px-3 align-middle text-[11px] text-t-2">{alarm.loc}</td>
                 <td className="py-2.5 px-3 align-middle text-[12px]">
-                  {alarm.status === 'new' && <span className="px-2 py-0.5 rounded bg-psim-red/15 text-psim-red text-[10px] font-bold">NEW</span>}
-                  {alarm.status === 'ack' && <span className="px-2 py-0.5 rounded bg-psim-accent/15 text-psim-accent text-[10px] font-bold">ACK</span>}
-                  {alarm.status === 'prog' && <span className="px-2 py-0.5 rounded bg-psim-orange/15 text-psim-orange text-[10px] font-bold">IN PROGRESS</span>}
+                  {alarm.isNew && <span className="px-2 py-0.5 rounded bg-psim-red/15 text-psim-red text-[10px] font-bold">NEW</span>}
+                  {!alarm.isNew && alarm.status === 'ack' && <span className="px-2 py-0.5 rounded bg-psim-accent/15 text-psim-accent text-[10px] font-bold">ACK</span>}
+                  {!alarm.isNew && alarm.status === 'prog' && <span className="px-2 py-0.5 rounded bg-psim-orange/15 text-psim-orange text-[10px] font-bold">IN PROGRESS</span>}
                 </td>
                 <td className="py-2.5 px-3 align-middle text-[11px] text-t-2 font-mono">{alarm.time}</td>
                 <td className="py-2.5 px-3 align-middle text-[11px] text-purple font-mono">
@@ -103,18 +110,22 @@ export function AlarmConsole() {
       <div className="flex items-center justify-between gap-3 border-t border-border-dim bg-bg1 px-3 py-2 text-[11px]">
         <button
           className="rounded-md border border-border-dim px-3 py-1 text-t1 transition-colors hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={currentPage === 1}
-          onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+          disabled={loading || currentPage === 1}
+          onClick={() => {
+            void prevPage();
+          }}
         >
           Prev
         </button>
         <div className="font-mono text-t-2">
-          Trang {currentPage} / {totalPages} · {filteredAlarms.length} alarm
+          Bản ghi {startRecord} - {endRecord}
         </div>
         <button
           className="rounded-md border border-border-dim px-3 py-1 text-t1 transition-colors hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={currentPage === totalPages}
-          onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+          disabled={loading || !canNextPage}
+          onClick={() => {
+            void nextPage();
+          }}
         >
           Next
         </button>
@@ -248,13 +259,13 @@ export function AlarmConsole() {
               </div>
               <div className="flex gap-2.5">
                 <div className="flex flex-col items-center">
-                  <div className={cn("w-2 h-2 rounded-full border-2 border-border-brighter shrink-0 mt-0.5", selectedAlarm.status !== 'new' ? 'bg-psim-accent' : 'bg-bg4')} />
+                  <div className={cn("w-2 h-2 rounded-full border-2 border-border-brighter shrink-0 mt-0.5", !selectedAlarm.isNew ? 'bg-psim-accent' : 'bg-bg4')} />
                 </div>
                 <div className="flex-1">
-                  <div className="text-[12px] leading-tight" style={{ color: selectedAlarm.status === 'new' ? 'var(--t2)' : 'var(--t0)' }}>
-                    {selectedAlarm.status === 'new' ? 'Chờ xác nhận...' : 'Operator đã xác nhận'}
+                  <div className="text-[12px] leading-tight" style={{ color: selectedAlarm.isNew ? 'var(--t2)' : 'var(--t0)' }}>
+                    {selectedAlarm.isNew ? 'Chờ xác nhận...' : 'Operator đã xác nhận'}
                   </div>
-                  {selectedAlarm.status !== 'new' && <div className="font-mono text-[10px] text-t-2 mt-0.5">+8s · Operator</div>}
+                  {!selectedAlarm.isNew && <div className="font-mono text-[10px] text-t-2 mt-0.5">+8s · Operator</div>}
                 </div>
               </div>
             </div>

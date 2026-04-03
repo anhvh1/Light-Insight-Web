@@ -5,12 +5,14 @@ using LightInsightBUS.Interfaces.MileStone.General;
 using LightInsightBUS.Service;
 using LightInsightBUS.Service.Login;
 using LightInsightBUS.Service.MileStone.General;
+using LightInsightBUS.Service.MileStone.Alarm;
 using LightInsightService.Sockets.Milestone.Alarms;
 using LightInsightUtiltites;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using LightInsightBUS.Interfaces.Connectors;
 using LightInsightBUS.Service.Connectors;
+using LightInsightBUS.Interfaces.MileStone.Alarm;
 using LightInsightBUS.Interfaces.General;
 using LightInsightBUS.Service.General;
 using LightInsightService.CacheLoader;
@@ -56,6 +58,7 @@ builder.Services.AddScoped<IDMMap, DMMapBUS>();
 
 
 builder.Services.AddSignalR();
+builder.Services.AddScoped<IAlarmService, AlarmServiceBUS>();
 
 // -------------------- CORS --------------------
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
