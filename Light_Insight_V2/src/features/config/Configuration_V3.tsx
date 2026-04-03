@@ -953,7 +953,7 @@ export function Configuration_V3() {
         priority: m.PriorityName.toLowerCase() as Priority,
         priorityId: m.PriorityID
       }))
-    );
+    ).reverse();
 
     return (
       <div className="flex flex-col gap-6 animate-in fade-in duration-500 w-full h-full overflow-hidden">
@@ -977,7 +977,7 @@ export function Configuration_V3() {
                <span className="text-t-2 font-mono text-[11px] uppercase tracking-widest">Đang tải...</span>
             </div>
           ) : (
-            <div className="overflow-auto scrollbar-thin scrollbar-thumb-bg4">
+            <div className="overflow-auto flex-1 scrollbar-thin scrollbar-thumb-psim-accent/30 scrollbar-track-transparent hover:scrollbar-thumb-psim-accent/50">
               <table className="w-full text-left border-collapse">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-[#121929] border-b border-border-dim">
@@ -993,7 +993,7 @@ export function Configuration_V3() {
                       <td className="py-3 px-6 font-mono text-[11px] text-t-2 text-center opacity-50">{index + 1}</td>
                       <td className="py-3 px-2">
                         <div className="font-bold text-[13px] text-t-1 group-hover:text-psim-accent transition-colors uppercase whitespace-nowrap overflow-hidden text-ellipsis">{c.label}</div>
-                        <div className="text-[9px] font-mono text-t-2 mt-1 opacity-40 uppercase tracking-tighter">Mapping ID: #{c.mappingId}</div>
+                        {/* <div className="text-[9px] font-mono text-t-2 mt-1 opacity-40 uppercase tracking-tighter">Mapping ID: #{c.mappingId}</div> */}
                       </td>
                       <td className="py-3 px-4 text-center">
                          <div className="flex justify-center">
@@ -1254,77 +1254,117 @@ export function Configuration_V3() {
       {isDialogOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/95 animate-in fade-in duration-300" onClick={() => setIsDialogOpen(false)} />
-          <div className="relative w-full max-w-6xl bg-[#0d1220] border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="relative w-full max-w-5xl bg-[#0d1220] border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
-              <div>
+              <div className="flex-1">
                 <h3 className="text-[18px] font-bold text-white uppercase tracking-tight flex items-center gap-3">
                   <Sliders className="text-psim-accent" size={20} /> Thiết lập Priority hàng loạt
                 </h3>
                 <p className="text-[11px] text-t-2 mt-1">Chọn loại cảnh báo và áp dụng mức độ ưu tiên chung.</p>
+                
+                {/* Connected Systems List */}
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3">
+                  <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest self-center">Hệ thống:</span>
+                  {isLoadingConnectors ? (
+                    <span className="text-[9px] text-t-2 animate-pulse">Đang tải...</span>
+                  ) : actualConnectors.map((c: any) => (
+                    <div key={c.Id} className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded border border-white/5">
+                      <div className={cn("w-1 h-1 rounded-full", c.Status === 'Connected' ? "bg-psim-green shadow-[0_0_4px_var(--color-psim-green)]" : "bg-psim-orange")} />
+                      <span className="text-[9px] font-bold text-t-1 uppercase">{c.VmsName}</span>
+                    </div>
+                  ))}
+                  {actualConnectors.length === 0 && !isLoadingConnectors && <span className="text-[9px] text-psim-red italic uppercase opacity-50">Chưa có kết nối</span>}
+                </div>
               </div>
-              <button onClick={() => setIsDialogOpen(false)} className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-t-2 hover:text-white transition-colors"><X size={20} /></button>
+              <button onClick={() => setIsDialogOpen(false)} className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-t-2 hover:text-white transition-colors shrink-0"><X size={20} /></button>
             </div>
 
-            <div className="flex h-[550px]">
-              <div className="w-72 border-r border-white/5 bg-black/40 p-6 flex flex-col gap-6">
-                <div className="space-y-3 text-white">
-                  <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest">Tìm kiếm nhanh</label>
-                  <div className="relative">
+            <div className="flex flex-col h-[550px] p-6 gap-6">
+              {/* Top Control Bar (Search & Title) */}
+              <div className="flex flex-col gap-4">
+                <div className="text-center">
+                  <h4 className="text-[13px] font-bold text-white uppercase tracking-[0.2em]">Lựa chọn các Alarms chưa cấu hình</h4>
+                  <div className="h-0.5 w-12 bg-psim-accent mx-auto mt-1 rounded-full opacity-50" />
+                </div>
+
+                <div className="flex justify-center">
+                  <div className="relative w-full max-w-md">
                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-t-2" size={14} />
                     <input 
-                      className="w-full bg-[#121929] border border-white/10 rounded-md h-10 pl-10 pr-3 text-[12px] text-white outline-none focus:border-psim-accent/50"
-                      placeholder="Nhập tên sự kiện..."
+                      className="w-full bg-[#121929] border border-white/10 rounded-lg h-10 pl-10 pr-4 text-[12px] text-white outline-none focus:border-psim-accent/50 transition-all shadow-inner placeholder:text-t-2/50"
+                      placeholder="Tìm kiếm sự kiện AI..."
                       value={modalSearch}
                       onChange={(e) => setModalSearch(e.target.value)}
                     />
                   </div>
                 </div>
-                <div className="mt-auto pt-5 border-t border-white/5 flex flex-col gap-3 overflow-hidden text-white">
-                  <div className="text-[10px] text-t-2 font-bold uppercase flex justify-between"><span>Đã chọn</span><span className="text-psim-accent">{basket.length}</span></div>
-                  <div className="flex flex-wrap gap-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-bg4">
-                    {basket.map(name => (
-                      <span key={name} className="flex items-center gap-2 bg-[#1a2236] border border-white/10 px-2 py-1 rounded text-[9px] text-t-1 font-mono uppercase group">
-                        {name} 
-                        <X size={12} className="cursor-pointer hover:text-psim-red" onClick={() => setBasket(prev => prev.filter(x => x !== name))} />
-                      </span>
-                    ))}
-                    {basket.length === 0 && <span className="text-[10px] text-t-2 italic opacity-30 py-4 text-center w-full uppercase">Chưa chọn alarm nào</span>}
-                  </div>
-                </div>
               </div>
 
-              <div className="flex-1 p-6 bg-white/[0.01] overflow-y-auto scrollbar-thin scrollbar-thumb-bg4">
-                <div className="grid grid-cols-2 gap-3">
-                  {allEvents.filter(a => a.Name.toLowerCase().includes(modalSearch.toLowerCase())).map(event => (
-                    <div 
-                      key={event.ID}
-                      onClick={() => {
-                        if (basket.includes(event.Name)) setBasket(prev => prev.filter(x => x !== event.Name));
-                        else setBasket(prev => [...prev, event.Name]);
-                      }}
-                      className={cn(
-                        "p-4 rounded-lg border transition-all cursor-pointer flex gap-4 items-start group",
-                        basket.includes(event.Name) ? "bg-psim-accent/10 border-psim-accent/50 shadow-xl" : "bg-[#121929] border-white/5 hover:bg-[#1a2236]"
-                      )}
-                    >
-                      <div className={cn("w-5 h-5 rounded border flex items-center justify-center transition-colors mt-0.5 shrink-0", basket.includes(event.Name) ? "bg-psim-accent border-psim-accent text-[#070b14]" : "bg-[#1a2236] border-white/10 group-hover:border-psim-accent/50")}>
-                        {basket.includes(event.Name) && <Plus size={14} strokeWidth={3} className="rotate-45" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-[13px] text-t-1 group-hover:text-white leading-tight uppercase whitespace-nowrap overflow-hidden text-ellipsis">{event.Name}</div>
-                        <div className="text-[9px] font-mono text-t-2 uppercase mt-1 opacity-50 truncate">{event.ID}</div>
-                      </div>
-                    </div>
-                  ))}
+              {/* Alarm Grid Area */}
+              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-psim-accent/20 scrollbar-track-transparent hover:scrollbar-thumb-psim-accent/40 pr-2">
+                <div className="grid grid-cols-3 gap-3">
+                  {(() => {
+                    const configuredEvents = new Set(mappings.flatMap(m => m.AnalyticsEvents));
+                    const unconfiguredEvents = allEvents.filter(a => !configuredEvents.has(a.Name));
+                    
+                    return unconfiguredEvents
+                      .filter((a: any) => a.Name.toLowerCase().includes(modalSearch.toLowerCase()))
+                      .map((event: any) => (
+                        <div 
+                          key={event.ID}
+                          onClick={() => {
+                            if (basket.includes(event.Name)) setBasket(prev => prev.filter(x => x !== event.Name));
+                            else setBasket(prev => [...prev, event.Name]);
+                          }}
+                          className={cn(
+                            "p-3.5 rounded-lg border transition-all cursor-pointer flex gap-3 items-start group relative",
+                            basket.includes(event.Name) 
+                              ? "bg-psim-accent/10 border-psim-accent shadow-[0_0_15px_rgba(0,194,255,0.1)]" 
+                              : "bg-[#121929] border-white/5 hover:bg-[#1a2236] hover:border-white/10"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-4.5 h-4.5 rounded border flex items-center justify-center transition-colors mt-0.5 shrink-0", 
+                            basket.includes(event.Name) 
+                              ? "bg-psim-accent border-psim-accent text-[#070b14]" 
+                              : "bg-[#1a2236] border-white/10 group-hover:border-psim-accent/50"
+                          )}>
+                            {basket.includes(event.Name) && <Check size={12} strokeWidth={4} />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-[12px] text-t-1 group-hover:text-white leading-tight uppercase truncate">{event.Name}</div>
+                          </div>
+                          
+                          {/* Selected Indicator Badge */}
+                          {basket.includes(event.Name) && (
+                            <div className="absolute -top-1.5 -right-1.5 bg-psim-accent text-[#070b14] text-[8px] font-bold px-1.5 py-0.5 rounded shadow-lg uppercase">
+                              Selected
+                            </div>
+                          )}
+                        </div>
+                      ));
+                  })()}
                 </div>
+                
+                {allEvents.filter((a: any) => a.Name.toLowerCase().includes(modalSearch.toLowerCase())).length === 0 && (
+                  <div className="h-full flex flex-col items-center justify-center opacity-20 py-20">
+                    <Search size={48} />
+                    <p className="text-[12px] font-bold uppercase mt-4 tracking-widest">Không tìm thấy alarm nào</p>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="p-8 border-t border-white/5 bg-white/[0.02] flex items-center justify-between">
               <div className="flex flex-col gap-3">
-                <span className="text-[10px] font-bold text-t-2 uppercase tracking-widest text-white">Chọn mức Priority áp dụng chung:</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-t-2 uppercase tracking-widest text-white">Thiết lập Priority:</span>
+                  <span className="bg-psim-accent/20 text-psim-accent text-[9px] font-bold px-2 py-0.5 rounded border border-psim-accent/30 uppercase">
+                    {basket.length} items selected
+                  </span>
+                </div>
                 <div className="flex gap-2">
-                  {priorities.map(p => (
+                  {priorities.map((p: any) => (
                     <button
                       key={p.ID}
                       onClick={() => setSelectedPriorityId(p.ID)}
@@ -1348,7 +1388,7 @@ export function Configuration_V3() {
                   className="px-12 py-3 bg-psim-accent text-bg0 font-bold text-[12px] uppercase tracking-wider rounded shadow-xl shadow-psim-accent/20 disabled:opacity-30 flex items-center gap-2 transition-all hover:scale-[1.02]"
                 >
                   {insertMutation.isPending && <RefreshCcw size={14} className="animate-spin" />}
-                  Lưu cấu hình mới
+                  Lưu cấu hình
                 </button>
               </div>
             </div>
