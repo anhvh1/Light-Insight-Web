@@ -13,6 +13,9 @@ using System.Text;
 using LightInsightBUS.Interfaces.Connectors;
 using LightInsightBUS.Service.Connectors;
 using LightInsightBUS.Interfaces.MileStone.Alarm;
+using LightInsightBUS.Interfaces.General;
+using LightInsightBUS.Service.General;
+using LightInsightService.CacheLoader;
 
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -36,7 +39,7 @@ builder.Services
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = null;
     });
-builder.Services.AddControllersWithViews();
+//builder.Services.AddControllersWithViews();
 
 // 👇 KHÔNG bind IP cụ thể
 //builder.WebHost.UseUrls("http://0.0.0.0:5262");
@@ -45,18 +48,17 @@ builder.Services.AddControllersWithViews();
 
 
 // ADD SCROPED SERVICES
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ICameraService, CameraServiceBUS>();
 builder.Services.AddScoped<IPriority, PriorityBUS>();
 builder.Services.AddScoped<IRegister, RegisterBUS>();
 builder.Services.AddScoped<ILogin, LoginBUS>();
 builder.Services.AddScoped<IConnectors, ConnectorsBUS>();
+builder.Services.AddScoped<IDMMap, DMMapBUS>();
 
 
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IAlarmService, AlarmServiceBUS>();
-
-
-builder.Services.AddSignalR();
 
 // -------------------- CORS --------------------
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
@@ -69,21 +71,9 @@ builder.Services.AddCors(options =>
                   .AllowAnyHeader()
                   .WithExposedHeaders("Content-Disposition");
         });
-    //options.AddPolicy(name: MyAllowSpecificOrigins, policy =>
-    //{
-    //    policy.WithOrigins(
-    //              "http://localhost:8080",       // Dành cho lúc code dưới local (React thường chạy port 3000)
-    //              "http://localhost:5173",       // Dành cho Vite/Vue
-    //              "https://ten-mien-cua-ban.com.vn", // Dành cho lúc đẩy lên server thật
-    //              "http://192.168.100.120:8080"
-    //          )
-    //          .AllowAnyMethod()
-    //          .AllowAnyHeader()
-    //          .AllowCredentials()
-    //          .WithExposedHeaders("Content-Disposition");
-    //});
 });
 builder.Services.AddHostedService<MilestoneAlarmSocketWorker>();
+builder.Services.AddHostedService<CacheLoaderService>();
 
 // -------------------- Swagger --------------------
 builder.Services.AddEndpointsApiExplorer();
@@ -142,12 +132,27 @@ if (string.IsNullOrEmpty(connStr))
 
 SQLHelper.appConnectionStrings = connStr;
 
+// Nạp dữ liệu vào Cache khi khởi động
+
 //if (app.Environment.IsDevelopment())
 //{
 app.UseSwagger();
 app.UseSwaggerUI();
 //}
 app.UseStaticFiles();
+
+// Thêm cấu hình phục vụ thư mục Upload
+string uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "Upload");
+if (!Directory.Exists(uploadPath))
+{
+    Directory.CreateDirectory(uploadPath);
+}
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadPath),
+    RequestPath = "/Upload"
+});
+
 app.UseRouting();
 app.UseCors(MyAllowSpecificOrigins);
 

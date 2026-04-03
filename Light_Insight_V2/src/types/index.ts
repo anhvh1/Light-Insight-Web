@@ -82,3 +82,13 @@ export interface ApiResponse<T> {
   Data: T;
   TotalRow: number;
 }
+
+export interface MapTreeNode {
+  Id: string;
+  Name: string;
+  Code: string;
+  ParentId: string | null;
+  Children: MapTreeNode[];
+  MapImagePath: string | null;
+  CreatedAt: string;
+}

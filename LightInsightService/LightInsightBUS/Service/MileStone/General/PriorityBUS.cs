@@ -2,6 +2,7 @@
 using LightInsightBUS.Interfaces.MileStone.General;
 using LightInsightDAL.Repositories.MileStone.General;
 using LightInsightModel.MileStone.General;
+using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,9 +14,12 @@ namespace LightInsightBUS.Service.MileStone.General
     public class PriorityBUS : IPriority
     {
         private static PriorityDAL instance;
-        public PriorityBUS()
+        private readonly GetAnalyticsEvents _getAnalyticsEvents;
+        private readonly IMemoryCache _cache;
+        public PriorityBUS(IMemoryCache cache)
         {
             instance = new PriorityDAL();
+            _getAnalyticsEvents = new GetAnalyticsEvents(cache);
         }
         public async Task<List<Priority>> GetPrioritiesAsync()
         {
@@ -94,7 +98,7 @@ namespace LightInsightBUS.Service.MileStone.General
             try
             {
                 var result = new BaseResultModel();
-                var data = await new GetAnalyticsEvents().GetSimpleEventsAsync();
+                var data = await _getAnalyticsEvents.GetSimpleEventsAsync();
                 if (data.Any())
                 {
                     result.Status = 1;
