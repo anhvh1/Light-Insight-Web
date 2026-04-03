@@ -20,5 +20,10 @@ export const mapApi = {
   deleteMap: async (id: string) => {
     const response = await apiClient.delete<ApiResponse<null>>(`/DMMap/Delete/${id}`);
     return response.data || { Status: -1, Message: 'Delete failed' };
+  },
+
+  getCameras: async (vmsId: number) => {
+    const response = await apiClient.get<ApiResponse<any[]>>(`/DMMap/GetCamerasAsync?vmsId=${vmsId}`);
+    return response.data || { Data: [], Status: 0, Message: '' };
   }
 };

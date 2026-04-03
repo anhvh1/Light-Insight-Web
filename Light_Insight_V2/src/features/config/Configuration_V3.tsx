@@ -355,8 +355,17 @@ export function Configuration_V3() {
   const [selectedPriorityId, setSelectedPriorityId] = useState<number>(2);
   const [modalSearch, setModalSearch] = useState('');
   const [mapSearch, setMapSearch] = useState('');
+  const [deviceSearch, setDeviceSearch] = useState('');
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
   const [selectedVmsId, setSelectedVmsId] = useState<number | null>(null);
+
+  const { data: camerasResponse, isLoading: isLoadingCameras } = useQuery({
+    queryKey: ['cameras', selectedVmsId],
+    queryFn: () => mapApi.getCameras(selectedVmsId!),
+    enabled: !!selectedVmsId && activeSection === 'map_management'
+  });
+  const cameras = camerasResponse?.Data || [];
+
   const [zoomScale, setZoomScale] = useState(1);
   const [editingMapping, setEditingMapping] = useState<{ id: number; name: string; currentPriorityId: number } | null>(null);
 
@@ -532,18 +541,38 @@ export function Configuration_V3() {
               <input 
                 className="w-full bg-black/20 border border-white/10 rounded-lg h-9 pl-9 pr-4 text-[11px] text-white outline-none focus:border-psim-orange/50 transition-all"
                 placeholder="Tìm theo mã hoặc IP"
+                value={deviceSearch}
+                onChange={(e) => setDeviceSearch(e.target.value)}
               />
             </div>
             <div className="flex flex-col gap-2 overflow-y-auto scrollbar-thin pr-1 flex-1">
-              {[
-                { name: 'Gate 54', ip: '192.168.100.54' },
-                { name: 'Store 20', ip: '192.168.100.20' }
-              ].map((cam, i) => (
-                <div key={i} className="p-2.5 bg-white/5 border border-white/5 rounded-lg hover:border-psim-accent/30 transition-all cursor-move active:scale-95 shrink-0">
-                  <div className="text-[11px] font-bold text-t-1 uppercase tracking-tight">{cam.name}</div>
-                  <div className="text-[9px] text-t-2 font-mono">IP: {cam.ip}</div>
+              {isLoadingCameras ? (
+                <div className="py-10 text-center animate-pulse flex flex-col items-center gap-2">
+                  <RefreshCcw className="animate-spin text-psim-orange" size={16} />
+                  <span className="text-[10px] text-t-2 uppercase tracking-widest font-bold">Đang tải thiết bị...</span>
                 </div>
-              ))}
+              ) : (
+                <>
+                  {cameras
+                    .filter(cam => 
+                      (cam.Name?.toLowerCase().includes(deviceSearch.toLowerCase())) || 
+                      (cam.Ip?.toLowerCase().includes(deviceSearch.toLowerCase()))
+                    )
+                    .map((cam, i) => (
+                      <div key={cam.Id || i} className="p-2.5 bg-white/5 border border-white/5 rounded-lg hover:border-psim-accent/30 transition-all cursor-move active:scale-95 shrink-0 group">
+                        <div className="text-[11px] font-bold text-t-1 uppercase tracking-tight group-hover:text-psim-orange transition-colors">{cam.Name}</div>
+                        <div className="text-[9px] text-t-2 font-mono">IP: {cam.Ip || 'N/A'}</div>
+                      </div>
+                    ))
+                  }
+                  {cameras.length === 0 && selectedVmsId && (
+                    <div className="py-10 text-center opacity-20 text-[10px] uppercase font-bold tracking-widest">Không có thiết bị</div>
+                  )}
+                  {!selectedVmsId && (
+                    <div className="py-10 text-center opacity-20 text-[10px] uppercase font-bold tracking-widest">Chọn hệ thống để xem thiết bị</div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
