@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as signalR from '@microsoft/signalr';
 import type { Alarm } from '@/types';
-import { normalizeAlarm, type SignalRAlarmPayload } from './alarm-mapper';
+import { alarmApi } from '@/lib/alarm-api';
+import { normalizeApiAlarm, normalizeSignalRAlarm, type AlarmPayload } from './alarm-mapper';
 
 const HUB_BASE_URL = import.meta.env.VITE_ALARM_HUB_URL;
 const HUB_URL = HUB_BASE_URL ? `${HUB_BASE_URL.replace(/\/$/, '')}/alarm-hub` : '';
@@ -13,6 +14,10 @@ const MAX_ALARMS = 300;
 type AlarmStreamContextValue = {
   alarms: Alarm[];
   connected: boolean;
+  newCount: number;
+  refreshAlarms: () => Promise<void>;
+  clearNewFlags: () => void;
+  markAlarmAsRead: (alarmId: string) => void;
 };
 
 const AlarmStreamContext = createContext<AlarmStreamContextValue | null>(null);
@@ -21,9 +26,34 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [connected, setConnected] = useState(false);
 
-  const addAlarm = useCallback((payload: SignalRAlarmPayload) => {
-    const alarm = normalizeAlarm(payload);
-    setAlarms(prev => [alarm, ...prev].slice(0, MAX_ALARMS));
+  const clearNewFlags = useCallback(() => {
+    setAlarms((prev) => prev.map((alarm) => ({ ...alarm, isNew: false })));
+  }, []);
+
+  const markAlarmAsRead = useCallback((alarmId: string) => {
+    setAlarms((prev) =>
+      prev.map((alarm) =>
+        alarm.id === alarmId && alarm.isNew ? { ...alarm, isNew: false } : alarm
+      )
+    );
+  }, []);
+
+  const refreshAlarms = useCallback(async () => {
+    try {
+      const rows = await alarmApi.getAll();
+      const nextAlarms = rows.map(normalizeApiAlarm).slice(0, MAX_ALARMS);
+      setAlarms(nextAlarms);
+    } catch (error) {
+      console.error('Failed to load alarm list:', error);
+    }
+  }, []);
+
+  const addAlarm = useCallback((payload: AlarmPayload) => {
+    const alarm = normalizeSignalRAlarm(payload);
+    setAlarms((prev) => {
+      const withoutDuplicate = prev.filter((item) => item.id !== alarm.id);
+      return [alarm, ...withoutDuplicate].slice(0, MAX_ALARMS);
+    });
   }, []);
 
   useEffect(() => {
@@ -37,7 +67,7 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
       .withAutomaticReconnect()
       .build();
 
-    connection.on(HUB_EVENT_NAME, (data: SignalRAlarmPayload) => {
+    connection.on(HUB_EVENT_NAME, (data: AlarmPayload) => {
       addAlarm(data);
     });
 
@@ -56,9 +86,10 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
     };
   }, [addAlarm]);
 
+  const newCount = useMemo(() => alarms.filter((alarm) => alarm.isNew).length, [alarms]);
   const value = useMemo(
-    () => ({ alarms, connected }),
-    [alarms, connected]
+    () => ({ alarms, connected, newCount, refreshAlarms, clearNewFlags, markAlarmAsRead }),
+    [alarms, connected, newCount, refreshAlarms, clearNewFlags, markAlarmAsRead]
   );
 
   return (

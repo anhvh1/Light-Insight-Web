@@ -14,6 +14,7 @@ export interface Alarm {
   status: string;
   time: string;
   corr: number;
+  isNew: boolean;
 }
 
 export interface Incident {
