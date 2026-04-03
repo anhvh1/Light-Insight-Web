@@ -31,6 +31,7 @@ namespace LightInsightModel.Login
         public string PhoneNumber { get; set; }
         public string Status { get; set; }
         public Guid RoleId { get; set; }
+        public string RoleName { get; set; }
     }
     public class LoginRequest
     {

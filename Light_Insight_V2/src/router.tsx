@@ -12,7 +12,10 @@ import { VideoWall } from './features/video/VideoWall';
 import { IncidentManagement } from './features/incidents/IncidentManagement';
 import { Configuration_V3 } from './features/config/Configuration_V3';
 import { LoginPage } from './features/auth/LoginPage';
-import { RegisterPage } from './features/auth/RegisterPage';
+import { AnalyticsPage } from './features/analytics/AnalyticsPage';
+import { ShiftHandoverPage } from './features/shift/ShiftHandoverPage';
+import { SystemHealthPage } from './features/health/SystemHealthPage';
+// import { RegisterPage } from './features/auth/RegisterPage';
 
 // 1. Root Route
 const rootRoute = createRootRoute({
@@ -82,6 +85,24 @@ const incidentRoute = createRoute({
   component: IncidentManagement,
 });
 
+const analyticsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: '/analytics',
+  component: AnalyticsPage,
+});
+
+const shiftRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: '/shift',
+  component: ShiftHandoverPage,
+});
+
+const healthRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: '/health',
+  component: SystemHealthPage,
+});
+
 const configRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: '/config',
@@ -98,6 +119,9 @@ const routeTree = rootRoute.addChildren([
     mapViewRoute,
     videoWallRoute,
     incidentRoute,
+    analyticsRoute,
+    shiftRoute,
+    healthRoute,
     configRoute,
   ]),
 ]);
