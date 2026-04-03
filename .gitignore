@@ -102,3 +102,6 @@ node_modules
 /LightInsightService/LightInsightBUS/obj/Debug/net9.0/LightInsightBUS.GeneratedMSBuildEditorConfig.editorconfig
 /LightInsightService/LightInsightBUS/obj/LightInsightBUS.csproj.nuget.g.props
 /LightInsightService/LightInsightService/obj/Debug/net9.0/LightInsightService.GeneratedMSBuildEditorConfig.editorconfig
+/LightInsightService/LightInsightDAL/obj/Debug/net9.0/LightInsightDAL.GeneratedMSBuildEditorConfig.editorconfig
+/LightInsightService/LightInsightModel/obj/Debug/net9.0/LightInsightModel.assets.cache
+/LightInsightService/LightInsightModel/obj/Debug/net9.0/LightInsightModel.GeneratedMSBuildEditorConfig.editorconfig
