@@ -30,5 +30,7 @@ namespace LightInsightModel.General
         public double PosY { get; set; }
 
         public string? Icon { get; set; }
+        public int VmsId { get; set; }
+        public double Rotation { get; set; }
     }
 }

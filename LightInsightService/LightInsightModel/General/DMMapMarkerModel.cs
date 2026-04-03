@@ -36,6 +36,9 @@ namespace LightInsightModel.General
         [Required]
         [Column("pos_y")]
         public double PosY { get; set; }
+        [Required]
+        [Column("rotation")]
+        public double Rotation { get; set; }
 
         [MaxLength(100)]
         [Column("icon")]
@@ -43,5 +46,8 @@ namespace LightInsightModel.General
 
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.Now;
+        [Required]
+        [Column("vmsid")]
+        public int VmsID { get; set; }
     }
 }
