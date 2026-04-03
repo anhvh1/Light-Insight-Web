@@ -1,12 +1,12 @@
 import { cn } from '@/lib/utils';
-import type { AlarmType, Priority } from '@/types';
+import type { AlarmType } from '@/types';
 import React from 'react';
 
 interface StatusPillProps extends React.HTMLAttributes<HTMLSpanElement> {
-  priority: Priority;
+  priority: string;
 }
 
-const priorityClasses: Record<Priority, string> = {
+const priorityClasses: Record<string, string> = {
   critical: 'bg-psim-red text-white',
   high: 'bg-psim-orange text-white',
   medium: 'bg-psim-yellow text-t-0',
@@ -14,11 +14,12 @@ const priorityClasses: Record<Priority, string> = {
 };
 
 export function StatusPill({ priority, className, ...props }: StatusPillProps) {
+  const key = priority.toLowerCase();
   return (
     <span
       className={cn(
         "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold",
-        priorityClasses[priority],
+        priorityClasses[key] ?? 'bg-bg3 text-t-2',
         className
       )}
       {...props}
@@ -39,6 +40,7 @@ const typeClasses: Record<AlarmType, string> = {
   fire: 'bg-[rgba(255,59,92,0.2)] text-psim-red',
   bms: 'bg-[rgba(255,140,0,0.15)] text-psim-orange',
   tech: 'bg-[rgba(255,255,255,0.08)] text-t-2',
+  light: 'bg-[rgba(255,176,64,0.18)] text-[#ffb040]',
 };
 
 export function TypeBadge({ type, className, ...props }: TypeBadgeProps) {

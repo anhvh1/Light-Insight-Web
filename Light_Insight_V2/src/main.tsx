@@ -4,6 +4,7 @@ import { RouterProvider } from '@tanstack/react-router';
 import './index.css';
 import { router } from './router';
 import { QueryProvider } from './QueryProvider';
+import { AlarmStreamProvider } from './features/alarms/AlarmStreamProvider';
 
 const rootElement = document.getElementById('root');
 if (!rootElement || !rootElement.innerHTML) {
@@ -11,7 +12,9 @@ if (!rootElement || !rootElement.innerHTML) {
   root.render(
     <StrictMode>
       <QueryProvider>
-        <RouterProvider router={router} />
+        <AlarmStreamProvider>
+          <RouterProvider router={router} />
+        </AlarmStreamProvider>
       </QueryProvider>
     </StrictMode>
   );
