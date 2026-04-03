@@ -5,10 +5,12 @@ using LightInsightBUS.Interfaces.MileStone.General;
 using LightInsightBUS.Service;
 using LightInsightBUS.Service.Login;
 using LightInsightBUS.Service.MileStone.General;
+using LightInsightBUS.Service.MileStone.Alarm;
 using LightInsightService.Sockets.Milestone.Alarms;
 using LightInsightUtiltites;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using LightInsightBUS.Interfaces.MileStone.Alarm;
 
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -45,6 +47,7 @@ builder.Services.AddScoped<ICameraService, CameraServiceBUS>();
 builder.Services.AddScoped<IPriority, PriorityBUS>();
 builder.Services.AddScoped<IRegister, RegisterBUS>();
 builder.Services.AddScoped<ILogin, LoginBUS>();
+builder.Services.AddScoped<IAlarmService, AlarmServiceBUS>();
 
 
 builder.Services.AddSignalR();
