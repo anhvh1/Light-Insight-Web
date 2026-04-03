@@ -1,14 +1,14 @@
 import type { Alarm, Incident, Device } from "@/types";
 
 export const MOCK_ALARMS: Alarm[] = [
-  { id: 'ALM-0847', pri: 'critical', type: 'lpr', title: 'Xe không đăng ký — Cổng B1', src: 'Futech LPR', loc: 'B1 · Cổng IN', status: 'new', time: '02:14:33', corr: 3 },
-  { id: 'ALM-0846', pri: 'critical', type: 'ai', title: 'Đỗ xe sai vị trí · CAM-B1-04', src: 'Milestone AI', loc: 'B1 · Ô D22', status: 'new', time: '02:11:05', corr: 2 },
-  { id: 'ALM-0845', pri: 'high', type: 'acs', title: 'Từ chối quẹt thẻ 3 lần · Cửa T2', src: 'BioStar2', loc: 'T2 · Thang máy', status: 'ack', time: '02:08:47', corr: 1 },
-  { id: 'ALM-0844', pri: 'high', type: 'ai', title: 'Chiếm dụng hành lang · Sảnh L1', src: 'Milestone AI', loc: 'L1 · Hành lang A', status: 'prog', time: '01:55:20', corr: 0 },
-  { id: 'ALM-0843', pri: 'medium', type: 'ai', title: 'Xe ngược chiều · CAM-B1-01', src: 'Milestone AI', loc: 'B1 · Làn A', status: 'ack', time: '01:42:10', corr: 2 },
-  { id: 'ALM-0842', pri: 'medium', type: 'lpr', title: 'Biển số không rõ — CAM-LPR-03', src: 'Futech LPR', loc: 'Cổng ra B1', status: 'new', time: '01:38:05', corr: 0 },
-  { id: 'ALM-0841', pri: 'low', type: 'tech', title: 'Camera mất tín hiệu · CAM-L3-07', src: 'Milestone', loc: 'L3 · Hành lang C', status: 'prog', time: '01:20:00', corr: 0 },
-  { id: 'ALM-0840', pri: 'low', type: 'bms', title: 'Mất kết nối BMS 45s · Zone Fire', src: 'BMS Portal', loc: 'Server Room', status: 'ack', time: '00:58:30', corr: 0 },
+  { id: 'ALM-0847', pri: 'critical', type: 'lpr', title: 'Xe không đăng ký — Cổng B1', src: 'Futech LPR', loc: 'B1 · Cổng IN', status: 'new', time: '02:14:33', corr: 3, isNew: true },
+  { id: 'ALM-0846', pri: 'critical', type: 'ai', title: 'Đỗ xe sai vị trí · CAM-B1-04', src: 'Milestone AI', loc: 'B1 · Ô D22', status: 'new', time: '02:11:05', corr: 2, isNew: true },
+  { id: 'ALM-0845', pri: 'high', type: 'acs', title: 'Từ chối quẹt thẻ 3 lần · Cửa T2', src: 'BioStar2', loc: 'T2 · Thang máy', status: 'ack', time: '02:08:47', corr: 1, isNew: false },
+  { id: 'ALM-0844', pri: 'high', type: 'ai', title: 'Chiếm dụng hành lang · Sảnh L1', src: 'Milestone AI', loc: 'L1 · Hành lang A', status: 'prog', time: '01:55:20', corr: 0, isNew: false },
+  { id: 'ALM-0843', pri: 'medium', type: 'ai', title: 'Xe ngược chiều · CAM-B1-01', src: 'Milestone AI', loc: 'B1 · Làn A', status: 'ack', time: '01:42:10', corr: 2, isNew: false },
+  { id: 'ALM-0842', pri: 'medium', type: 'lpr', title: 'Biển số không rõ — CAM-LPR-03', src: 'Futech LPR', loc: 'Cổng ra B1', status: 'new', time: '01:38:05', corr: 0, isNew: true },
+  { id: 'ALM-0841', pri: 'low', type: 'tech', title: 'Camera mất tín hiệu · CAM-L3-07', src: 'Milestone', loc: 'L3 · Hành lang C', status: 'prog', time: '01:20:00', corr: 0, isNew: false },
+  { id: 'ALM-0840', pri: 'low', type: 'bms', title: 'Mất kết nối BMS 45s · Zone Fire', src: 'BMS Portal', loc: 'Server Room', status: 'ack', time: '00:58:30', corr: 0, isNew: false },
 ];
 
 export const MOCK_INCIDENTS: Incident[] = [
