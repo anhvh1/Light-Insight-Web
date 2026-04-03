@@ -45,7 +45,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
             return null;
         }
 
-        public async Task<string> GetTokenAsync()
+        public async Task<string> GetTokenAsync(string admin, string password)
         {
             try
             {
@@ -150,7 +150,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
 
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                token = await GetTokenAsync();
+                token = await GetTokenAsync("admin", "Promise@123");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                 response = await _httpClient.SendAsync(request);
             }
