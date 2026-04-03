@@ -1,7 +1,9 @@
+using LightInsightBUS.ExternalServices.MileStone;
 using LightInsightBUS.Interfaces.General;
 using LightInsightDAL.Repositories.General;
 using LightInsightModel.General;
 using LightInsightModel.MileStone.General;
+using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,10 +15,13 @@ namespace LightInsightBUS.Service.General
     public class DMMapBUS : IDMMap
     {
         private readonly DMMapDAL _dmMapDAL;
-
-        public DMMapBUS()
+        private readonly IMemoryCache _cache;
+        private readonly GetAnalyticsEvents _getAnalyticsEvents;
+        public DMMapBUS(IMemoryCache cache)
         {
             _dmMapDAL = new DMMapDAL();
+            _getAnalyticsEvents = new GetAnalyticsEvents(cache);
+            _cache = cache;
         }
 
         public async Task<BaseResultModel> SaveMarkersAsync(DMMapSaveMarkersModel model)
@@ -36,7 +41,7 @@ namespace LightInsightBUS.Service.General
                 {
                     PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower // Để khớp với logic item->>'camera_id' nếu cần, hoặc mặc định tùy DB
                 });
-                
+
                 // Tuy nhiên, logic trong SQL của bạn đang dùng: item->>'camera_id'
                 // Nên ta cần đảm bảo JSON property name khớp.
                 // Nếu FE gửi camera_id thì serialize mặc định sẽ là CameraId.
@@ -96,7 +101,7 @@ namespace LightInsightBUS.Service.General
             try
             {
                 var allItems = await _dmMapDAL.GetAllMapsAsync();
-                
+
                 // Chuyển đổi sang TreeModel
                 var treeNodes = allItems.Select(item => new DMMapTreeModel
                 {
@@ -263,6 +268,32 @@ namespace LightInsightBUS.Service.General
             }
 
             return rootNodes;
+        }
+        public async Task<BaseResultModel> GetCamerasAsync(int id)
+        {
+            var result = new BaseResultModel();
+
+            try
+            {
+                if (id == 1)
+                {
+                    var cameras = await _getAnalyticsEvents.GetCamerasAsync();
+                    result.Data = cameras;
+                }
+                else
+                {
+                    result.Data = new List<CameraItem>();
+                }
+                result.Status = 1;
+                result.Message = "Lấy danh sách camera thành công.";
+            }
+            catch (Exception ex)
+            {
+                result.Status = -1;
+                result.Message = ex.Message;
+            }
+            return result;
+
         }
     }
 }

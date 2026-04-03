@@ -355,6 +355,9 @@ export function Configuration_V3() {
   const [selectedPriorityId, setSelectedPriorityId] = useState<number>(2);
   const [modalSearch, setModalSearch] = useState('');
   const [mapSearch, setMapSearch] = useState('');
+  const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
+  const [selectedVmsId, setSelectedVmsId] = useState<number | null>(null);
+  const [zoomScale, setZoomScale] = useState(1);
   const [editingMapping, setEditingMapping] = useState<{ id: number; name: string; currentPriorityId: number } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -384,9 +387,10 @@ export function Configuration_V3() {
 
   // --- RENDER MAP MANAGEMENT (Based on image.png) ---
   const renderMapManagement = () => (
-    <div className="flex flex-col h-full animate-in fade-in duration-500 w-full overflow-hidden -mt-2">
+    <div className="flex flex-col h-full animate-in fade-in duration-500 w-full overflow-hidden">
       {/* Top Header */}
-      <div className="flex items-center justify-between mb-3">
+
+      <div className="flex items-center justify-between mb-3 shrink-0">
         <div>
           <h2 className="text-[18px] font-heading font-bold text-t0 uppercase tracking-tight">Bố cục bản đồ</h2>
           <p className="text-[11px] text-t-2">Tạo bản đồ và đặt camera để theo dõi.</p>
@@ -399,12 +403,12 @@ export function Configuration_V3() {
         </button>
       </div>
 
-      <div className="flex gap-4 flex-1 overflow-hidden pb-2">
+      <div className="flex gap-4 flex-1 overflow-hidden">
         {/* Left Sidebar: Maps & Cameras */}
-        <div className="w-72 flex flex-col gap-4 shrink-0 overflow-hidden">
+        <div className="w-72 flex flex-col gap-4 shrink-0 overflow-hidden h-full">
           {/* Section: Bản đồ */}
-          <div className="bg-bg1 border border-border-dim rounded-xl p-4 flex flex-col gap-3 flex-1 overflow-hidden">
-            <div className="flex items-center justify-between">
+          <div className="bg-bg1 border border-border-dim rounded-xl p-4 flex flex-col gap-3 flex-1 overflow-hidden min-h-0">
+            <div className="flex items-center justify-between shrink-0">
               <h3 className="text-[12px] font-bold text-white uppercase tracking-wider">Bản đồ</h3>
               <button 
                 onClick={() => queryClient.invalidateQueries({ queryKey: ['map-tree'] })}
@@ -413,7 +417,7 @@ export function Configuration_V3() {
                 <RefreshCcw size={12} className={isLoadingMapTree ? "animate-spin" : ""} />
               </button>
             </div>
-            <div className="relative">
+            <div className="relative shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-t-2" size={13} />
               <input 
                 className="w-full bg-black/20 border border-white/10 rounded-lg h-9 pl-9 pr-4 text-[11px] text-white outline-none focus:border-psim-orange/50 transition-all"
@@ -422,23 +426,47 @@ export function Configuration_V3() {
                 onChange={(e) => setMapSearch(e.target.value)}
               />
             </div>
-            <div className="flex flex-col gap-2 overflow-y-auto scrollbar-thin pr-1">
+            <div className="flex flex-col gap-2 overflow-y-auto scrollbar-thin pr-1 flex-1">
               {flatMaps.filter(m => m.name.toLowerCase().includes(mapSearch.toLowerCase())).map((map, i) => (
-                <div key={map.id} className="p-3 bg-white/5 border border-white/5 rounded-lg hover:border-psim-orange/30 transition-all group cursor-pointer">
+                <div 
+                  key={map.id} 
+                  onClick={() => {
+                    setSelectedMapId(map.id);
+                    // Find node in tree to get MapImagePath
+                    const findNode = (nodes: MapTreeNode[], id: string): MapTreeNode | null => {
+                      for (const node of nodes) {
+                        if (node.Id === id) return node;
+                        if (node.Children) {
+                          const found = findNode(node.Children, id);
+                          if (found) return found;
+                        }
+                      }
+                      return null;
+                    };
+                    const node = findNode(mapTree, map.id);
+                    if (node && node.MapImagePath) {
+                      setMapImage(node.MapImagePath);
+                    } else {
+                      setMapImage(null);
+                    }
+                  }}
+                  className={cn(
+                    "p-3 bg-white/5 border rounded-lg transition-all group cursor-pointer shrink-0",
+                    selectedMapId === map.id ? "border-psim-orange shadow-lg shadow-psim-orange/10 bg-psim-orange/5" : "border-white/5 hover:border-psim-orange/30"
+                  )}
+                >
                   <div className="flex justify-between items-center">
                     <div style={{ paddingLeft: `${map.depth * 12}px` }}>
-                      <div className="text-[12px] font-bold text-t-1 group-hover:text-white transition-colors">{map.name}</div>
+                      <div className={cn(
+                        "text-[12px] font-bold transition-colors",
+                        selectedMapId === map.id ? "text-psim-orange" : "text-t-1 group-hover:text-white"
+                      )}>{map.name}</div>
                       <div className="text-[9px] text-t-2 font-mono uppercase">Level {map.depth + 1}</div>
                     </div>
                     <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Find original node to get the code (it's in the tree, we need a way to find it or we can just use name/id for now if tree is not flat)
-                          // For simplicity, we search in the flat list if it had more info, but for now we'll just use the data we have.
-                          const originalMap = mapTreeResponse?.Data.find(m => m.Id === map.id) || null; // This only works for root maps
-                          
-                          // Helper to find node in tree
                           const findNode = (nodes: MapTreeNode[], id: string): MapTreeNode | null => {
                             for (const node of nodes) {
                               if (node.Id === id) return node;
@@ -449,7 +477,6 @@ export function Configuration_V3() {
                             }
                             return null;
                           };
-                          
                           const node = findNode(mapTree, map.id);
                           if (node) {
                             setEditingMapData({
@@ -484,21 +511,35 @@ export function Configuration_V3() {
           </div>
 
           {/* Section: Camera */}
-          <div className="bg-bg1 border border-border-dim rounded-xl p-4 flex flex-col gap-3 h-[40%]">
-            <h3 className="text-[12px] font-bold text-white uppercase tracking-wider">Camera</h3>
-            <div className="relative">
+          <div className="bg-bg1 border border-border-dim rounded-xl p-4 flex flex-col gap-3 h-[200px] shrink-0 overflow-hidden">
+            <div className="flex items-center justify-between shrink-0">
+              <h3 className="text-[12px] font-bold text-white uppercase tracking-wider">Thiết bị</h3>
+              <select 
+                className="bg-black/40 border border-white/10 rounded h-7 px-2 text-[10px] text-white outline-none focus:border-psim-orange/50 transition-all cursor-pointer min-w-[100px]"
+                value={selectedVmsId || ''}
+                onChange={(e) => setSelectedVmsId(e.target.value ? parseInt(e.target.value) : null)}
+              >
+                <option value="" className="bg-[#161b2e]">-- Hệ thống --</option>
+                {vmsList.map((vms) => (
+                  <option key={vms.VmsId} value={vms.VmsId} className="bg-[#161b2e]">
+                    {vms.VmsName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="relative shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-t-2" size={13} />
               <input 
                 className="w-full bg-black/20 border border-white/10 rounded-lg h-9 pl-9 pr-4 text-[11px] text-white outline-none focus:border-psim-orange/50 transition-all"
                 placeholder="Tìm theo mã hoặc IP"
               />
             </div>
-            <div className="flex flex-col gap-2 overflow-y-auto scrollbar-thin pr-1">
+            <div className="flex flex-col gap-2 overflow-y-auto scrollbar-thin pr-1 flex-1">
               {[
                 { name: 'Gate 54', ip: '192.168.100.54' },
                 { name: 'Store 20', ip: '192.168.100.20' }
               ].map((cam, i) => (
-                <div key={i} className="p-2.5 bg-white/5 border border-white/5 rounded-lg hover:border-psim-accent/30 transition-all cursor-move active:scale-95">
+                <div key={i} className="p-2.5 bg-white/5 border border-white/5 rounded-lg hover:border-psim-accent/30 transition-all cursor-move active:scale-95 shrink-0">
                   <div className="text-[11px] font-bold text-t-1 uppercase tracking-tight">{cam.name}</div>
                   <div className="text-[9px] text-t-2 font-mono">IP: {cam.ip}</div>
                 </div>
@@ -508,16 +549,39 @@ export function Configuration_V3() {
         </div>
 
         {/* Right Main Area: Map Canvas */}
-        <div className="flex-1 bg-bg1 border border-border-dim rounded-xl flex flex-col overflow-hidden relative shadow-inner">
+        <div className="flex-1 bg-bg1 border border-border-dim rounded-xl flex flex-col overflow-hidden relative shadow-inner h-full">
           <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between shrink-0">
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
-                <span className="text-[14px] font-bold text-white uppercase tracking-tight">Cổng</span>
-                <span className="bg-psim-orange/20 text-psim-orange text-[9px] font-bold px-1.5 py-0.5 rounded border border-psim-orange/30">ẢNH</span>
+                <span className="text-[14px] font-bold text-white uppercase tracking-tight truncate max-w-[200px]">
+                  {flatMaps.find(m => m.id === selectedMapId)?.name || 'Chưa chọn bản đồ'}
+                </span>
+                <span className="bg-psim-orange/20 text-psim-orange text-[9px] font-bold px-1.5 py-0.5 rounded border border-psim-orange/30 shrink-0">ẢNH</span>
               </div>
-              <span className="text-[10px] text-t-2 mt-0.5">Bản đồ ảnh với kéo thả.</span>
+              <span className="text-[10px] text-t-2 mt-0.5">Bản đồ ảnh với thu phóng.</span>
             </div>
             <div className="flex gap-2">
+              {mapImage && (
+                <div className="flex border border-white/10 rounded overflow-hidden mr-2">
+                  <button 
+                    onClick={() => setZoomScale(prev => Math.max(0.1, prev - 0.1))}
+                    className="w-8 h-8 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center border-r border-white/10"
+                    title="Thu nhỏ"
+                  >
+                    -
+                  </button>
+                  <div className="px-2 h-8 bg-black/20 flex items-center justify-center text-[10px] font-mono text-white min-w-[50px]">
+                    {Math.round(zoomScale * 100)}%
+                  </div>
+                  <button 
+                    onClick={() => setZoomScale(prev => Math.min(5, prev + 0.1))}
+                    className="w-8 h-8 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center"
+                    title="Phóng to"
+                  >
+                    +
+                  </button>
+                </div>
+              )}
               <input 
                 type="file" 
                 ref={fileInputRef} 
@@ -538,15 +602,25 @@ export function Configuration_V3() {
           </div>
 
           <div 
-            className="flex-1 flex flex-col items-center justify-center bg-black/40 relative group cursor-pointer overflow-hidden"
-            onClick={() => !mapImage && fileInputRef.current?.click()}
+            className="flex-1 flex flex-col items-center justify-center bg-black/40 relative group overflow-hidden"
+            onWheel={(e) => {
+              if (mapImage) {
+                if (e.deltaY < 0) setZoomScale(prev => Math.min(5, prev + 0.1));
+                else setZoomScale(prev => Math.max(0.1, prev - 0.1));
+              }
+            }}
           >
             {mapImage ? (
-              <img src={mapImage} alt="Map Floorplan" className="w-full h-full object-contain animate-in fade-in zoom-in-95 duration-500" />
+              <div 
+                className="w-full h-full flex items-center justify-center transition-transform duration-200"
+                style={{ transform: `scale(${zoomScale})` }}
+              >
+                <img src={mapImage} alt="Map Floorplan" className="max-w-full max-h-full object-contain animate-in fade-in zoom-in-95 duration-500" />
+              </div>
             ) : (
               <div className="flex flex-col items-center gap-3 opacity-20 group-hover:opacity-40 transition-all">
                 <MapIcon size={48} strokeWidth={1} className="text-white" />
-                <p className="text-[11px] text-white font-medium uppercase tracking-widest">Upload floorplan</p>
+                <p className="text-[11px] text-white font-medium uppercase tracking-widest">Chưa có ảnh bản đồ</p>
               </div>
             )}
             
@@ -980,8 +1054,11 @@ export function Configuration_V3() {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-8 bg-bg0/10 scrollbar-thin scrollbar-thumb-bg4">
-          <div className="w-full">
+        <div className={cn(
+          "flex-1 bg-bg0/10 scrollbar-thin scrollbar-thumb-bg4",
+          activeSection === 'map_management' ? "overflow-hidden p-6" : "overflow-y-auto p-8"
+        )}>
+          <div className="w-full h-full">
             {activeSection === 'roles' && renderRoles()}
             {activeSection === 'priority' && renderPriorityTable()}
             {activeSection === 'connectors' && renderConnectors()}
