@@ -11,5 +11,6 @@ namespace LightInsightBUS.Interfaces.Login
     {
         Task<BaseResultModel> Login(string username, string password);
         Task<BaseResultModel> GetUsers(string? search, int? page, int? pageSize);
+        Task<BaseResultModel> GetRoles();
     }
 }

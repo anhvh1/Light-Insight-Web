@@ -13,9 +13,6 @@ export function Topbar() {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    user ? console.log(user) : null;
-  }, [user]);
   const formattedTime = time.toTimeString().slice(0, 8);
   const formattedDate = time.toLocaleDateString('vi-VN', {
     weekday: 'long',

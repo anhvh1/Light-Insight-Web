@@ -26,11 +26,11 @@ namespace LightInsightDAL.Repositories.Login
             cmd.Parameters.AddWithValue("e", req.Email ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("ph", req.PhoneNumber ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("r", req.RoleId);
-            cmd.Parameters.AddWithValue("s", "Active");
+            cmd.Parameters.AddWithValue("s", req.Status ?? "Active");
 
             var result = await cmd.ExecuteScalarAsync();
 
-            return result?.ToString();
+            return result?.ToString() ?? "OK";
         }
         public async Task<bool> CheckUsernameExists(string username)
         {

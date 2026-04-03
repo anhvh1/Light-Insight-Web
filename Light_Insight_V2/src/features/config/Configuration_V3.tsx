@@ -107,54 +107,6 @@ const ROLES_DATA = [
   },
 ];
 
-const CONNECTORS = [
-  {
-    name: 'Milestone XProtect',
-    desc: 'Corporate v2024.1 · REST + MIP SDK',
-    latency: '18ms',
-    stats: '47 / 52 Cameras',
-    load: 142,
-    status: 'ONLINE',
-    health: 90,
-    color: 'text-psim-green',
-    borderColor: 'border-psim-green/20'
-  },
-  {
-    name: 'BioStar2 ACS',
-    desc: 'Suprema · REST API · :443',
-    latency: '32ms',
-    stats: '24 / 24 Doors',
-    load: 18,
-    status: 'ONLINE',
-    health: 100,
-    color: 'text-psim-accent',
-    borderColor: 'border-psim-accent/20'
-  },
-  {
-    name: 'Futech LPR',
-    desc: 'Parking · REST API · :8080',
-    latency: '87ms',
-    stats: '2 / 2 Barriers',
-    load: 6,
-    status: 'SLOW',
-    health: 65,
-    color: 'text-psim-orange',
-    borderColor: 'border-psim-orange/20',
-    warn: true
-  },
-  {
-    name: 'BMS Portal',
-    desc: 'REST API · Webhook · :443',
-    latency: '45ms',
-    stats: '8 / 8 Zones',
-    load: 4,
-    status: 'ONLINE',
-    health: 100,
-    color: 'text-purple',
-    borderColor: 'border-purple/20'
-  }
-];
-
 export function Configuration_V3() {
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState<ConfigSection>('roles');
@@ -167,6 +119,7 @@ export function Configuration_V3() {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // --- API DATA FETCHING ---
   const { data: usersResponse, isLoading: isLoadingUsers } = useQuery({
@@ -174,14 +127,20 @@ export function Configuration_V3() {
     queryFn: () => authApi.getUsers(userSearch, userPage, userPageSize),
   });
 
+  const { data: rolesResponse } = useQuery({
+    queryKey: ['roles-list'],
+    queryFn: () => authApi.getRoles(),
+  });
+  const allRoles = rolesResponse?.Data || [];
+
   const allUsers = usersResponse?.Data || [];
   const totalUsers = usersResponse?.TotalRow || 0;
 
-  // Lọc local cho Role và Status (vì API hiện chưa hỗ trợ lọc này trực tiếp qua param)
+  // Lọc local cho Role và Status
   const filteredUsers = useMemo(() => {
     return allUsers.filter(u => {
-      const matchRole = !roleFilter || u.RoleName.toLowerCase() === roleFilter.toLowerCase();
-      const matchStatus = !statusFilter || u.Status.toLowerCase() === statusFilter.toLowerCase();
+      const matchRole = !roleFilter || u.RoleName?.toLowerCase() === roleFilter.toLowerCase();
+      const matchStatus = !statusFilter || u.Status?.toLowerCase() === statusFilter.toLowerCase();
       return matchRole && matchStatus;
     });
   }, [allUsers, roleFilter, statusFilter]);
@@ -210,6 +169,38 @@ export function Configuration_V3() {
   const mappings = mappingsResponse?.Data || [];
 
   // --- API MUTATIONS ---
+  const registerMutation = useMutation({
+    mutationFn: authApi.register,
+    onSuccess: (res) => {
+      setResponseModal({
+        isOpen: true,
+        status: res.Status,
+        message: res.Message || (res.Status === 1 ? 'Đăng ký thành công.' : 'Có lỗi xảy ra')
+      });
+      
+      if (res.Status === 1) {
+        queryClient.invalidateQueries({ queryKey: ['users-list'] });
+        setIsAddUserDialogOpen(false);
+        setNewUserData({
+          username: '',
+          password: '',
+          name: '',
+          email: '',
+          phone: '',
+          roleId: '',
+          status: 'Active'
+        });
+      }
+    },
+    onError: (err: any) => {
+      setResponseModal({
+        isOpen: true,
+        status: -1,
+        message: err.response?.data?.Message || 'Lỗi kết nối hệ thống'
+      });
+    }
+  });
+
   const insertMutation = useMutation({
     mutationFn: priorityApi.insertMapping,
     onSuccess: (res) => {
@@ -367,7 +358,6 @@ export function Configuration_V3() {
   });
 
   const [isConnectorDialogOpen, setIsConnectorDialogOpen] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [newConnector, setNewConnector] = useState({
     name: '',
     vmsId: 0,
@@ -693,7 +683,7 @@ export function Configuration_V3() {
   };
 
   const getUserGradient = (name: string) => {
-    const chars = name.split(' ').map(n => n[0]).join('');
+    const chars = (name || 'US').split(' ').map(n => n[0]).join('');
     const sum = chars.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
     const grads = [
       'from-psim-accent2 to-blue-600',
@@ -705,11 +695,27 @@ export function Configuration_V3() {
     return grads[sum % grads.length];
   };
 
+  const handleRegisterUser = () => {
+    if (!newUserData.username || !newUserData.password || !newUserData.roleId) {
+      alert('Vui lòng điền đầy đủ các trường bắt buộc (*)');
+      return;
+    }
+    registerMutation.mutate({
+      Username: newUserData.username,
+      Password: newUserData.password,
+      Name: newUserData.name,
+      Email: newUserData.email,
+      PhoneNumber: newUserData.phone,
+      Status: newUserData.status,
+      RoleId: newUserData.roleId
+    });
+  };
+
   // --- RENDER ROLES & USERS (4.1) ---
   const renderRoles = () => (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-500 w-full">
+    <div className="flex flex-col gap-5 animate-in fade-in duration-500 w-full h-full max-h-full overflow-hidden">
       {/* Header Section */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
           <h2 className="text-[14px] font-heading font-bold text-t0 uppercase">User & Role Management (4.1)</h2>
           <div className="h-3 w-[1px] bg-border-dim mx-1"></div>
@@ -722,8 +728,8 @@ export function Configuration_V3() {
         </button>
       </div>
 
-      {/* Role Grid - 2x2 Columns based on POC */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Role Grid */}
+      <div className="grid grid-cols-2 gap-3 shrink-0">
         {ROLES_DATA.map(role => (
           <div key={role.id} className={cn("bg-bg-2 border rounded-lg p-4 flex flex-col gap-3 shadow-sm hover:border-white/10 transition-all", role.borderColor)}>
             <div className="flex justify-between items-start">
@@ -745,34 +751,34 @@ export function Configuration_V3() {
       </div>
 
       {/* User Section Header */}
-      <div className="mt-4 flex items-center justify-between border-b border-border-dim pb-3">
-        <h3 className="text-[13px] font-bold text-t0 uppercase tracking-widest font-heading">Danh sách Users</h3>
+      <div className="mt-2 flex items-center justify-between border-b border-border-dim pb-2 shrink-0">
+        <h3 className="text-[12px] font-bold text-t0 uppercase tracking-widest font-heading">Danh sách Users</h3>
         <div className="flex gap-2 relative">
            <div className="relative">
               <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 text-t-2" size={13} />
               <input 
-                className="bg-bg2 border border-border-dim rounded h-8 pl-8 pr-3 text-[11px] text-t-1 w-56 focus:border-psim-accent2/50 outline-none transition-all" 
+                className="bg-bg2 border border-border-dim rounded h-7 pl-8 pr-3 text-[10px] text-t-1 w-56 focus:border-psim-accent2/50 outline-none transition-all" 
                 placeholder="Tìm tên" 
                 value={userSearch}
                 onChange={(e) => {
                   setUserSearch(e.target.value);
-                  setUserPage(1); // Reset page khi search
+                  setUserPage(1);
                 }}
               />
            </div>
            <button 
             onClick={() => setShowFilterMenu(!showFilterMenu)}
             className={cn(
-              "h-8 w-8 rounded bg-bg2 border border-border-dim flex items-center justify-center transition-colors",
+              "h-7 w-7 rounded bg-bg2 border border-border-dim flex items-center justify-center transition-colors",
               (roleFilter || statusFilter) ? "text-psim-accent2 border-psim-accent2/30" : "text-t-2 hover:text-t-1"
             )}
            >
-            <Filter size={14} />
+            <Filter size={13} />
            </button>
 
            {/* Filter Menu */}
            {showFilterMenu && (
-             <div className="absolute top-10 right-0 w-56 bg-[#161b2e] border border-white/10 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[100] p-4 animate-in fade-in slide-in-from-top-2 duration-200">
+             <div className="absolute top-9 right-0 w-56 bg-[#161b2e] border border-white/10 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[100] p-4 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-1">
                     <span className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -789,10 +795,9 @@ export function Configuration_V3() {
                       onChange={(e) => setRoleFilter(e.target.value || null)}
                     >
                       <option value="" className="bg-[#161b2e]">Tất cả Role</option>
-                      <option value="Admin" className="bg-[#161b2e]">Admin</option>
-                      <option value="Supervisor" className="bg-[#161b2e]">Supervisor</option>
-                      <option value="Operator" className="bg-[#161b2e]">Operator</option>
-                      <option value="Viewer" className="bg-[#161b2e]">Viewer</option>
+                      {allRoles.map((r: any) => (
+                        <option key={r.Id} value={r.Name} className="bg-[#161b2e]">{r.Name}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -812,16 +817,10 @@ export function Configuration_V3() {
                   <div className="pt-2 border-t border-white/5 mt-1 flex items-center justify-between">
                     <button 
                       onClick={() => { setRoleFilter(null); setStatusFilter(null); }}
-                      className="text-[10px] font-bold text-psim-red hover:text-red-400 transition-colors uppercase tracking-tight"
+                      className="text-[10px] px-4 py-1.5 font-bold bg-psim-red rounded-md hover:bg-red-400 transition-all uppercase tracking-tight"
                     >
                       Xóa bộ lọc
                     </button>
-                    {/* <button 
-                      onClick={() => setShowFilterMenu(false)}
-                      className="px-4 py-1.5 bg-psim-accent2 text-white text-[10px] font-bold rounded-md uppercase hover:scale-105 transition-all shadow-lg shadow-psim-accent2/20"
-                    >
-                      Áp dụng
-                    </button> */}
                   </div>
                 </div>
              </div>
@@ -829,117 +828,116 @@ export function Configuration_V3() {
         </div>
       </div>
 
-      {/* User Table - Slim, No Rounded, bg0 Rows */}
-      <div className="bg-transparent border border-border-dim shadow-sm overflow-hidden rounded-lg">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-[#121929] border-b border-border-dim">
-              <th className="py-2.5 px-6 text-[10px] font-mono text-t-2 uppercase tracking-widest">Tên / Username</th>
-              <th className="py-2.5 px-4 text-[10px] font-mono text-t-2 uppercase tracking-widest">Email / Phone</th>
-              <th className="py-2.5 px-4 text-[10px] font-mono text-t-2 uppercase tracking-widest w-32 text-center">Role</th>
-              <th className="py-2.5 px-4 text-[10px] font-mono text-t-2 uppercase tracking-widest w-32 text-center">Trạng thái</th>
-              <th className="py-2.5 px-4 text-[10px] font-mono text-t-2 uppercase tracking-widest w-48 text-center whitespace-nowrap">Đăng nhập gần nhất</th>
-              {/* <th className="py-2.5 px-4 text-[10px] font-mono text-t-2 uppercase tracking-widest w-16 text-center">SSO</th> */}
-              <th className="py-2.5 px-6 text-[10px] font-mono text-t-2 uppercase tracking-widest w-28 text-right">Hành động</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border-dim/30">
-            {isLoadingUsers ? (
-              <tr>
-                <td colSpan={6} className="py-20 text-center">
-                  <RefreshCcw className="animate-spin text-psim-accent2 mx-auto mb-3" />
-                  <span className="text-[11px] text-t-2 font-mono uppercase">Đang tải dữ liệu người dùng...</span>
-                </td>
+      {/* User Table - Fixed Header, Scrollable Body */}
+      <div className="flex-1 flex flex-col min-h-0 bg-transparent border border-border-dim shadow-sm rounded-lg overflow-hidden">
+        <div className="overflow-x-auto overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-bg4 scrollbar-track-transparent">
+          <table className="w-full text-left border-collapse table-fixed min-w-[800px]">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-[#121929] border-b border-border-dim">
+                <th className="py-2 px-6 text-[9px] font-mono text-t-2 uppercase tracking-widest w-[25%]">Tên / Username</th>
+                <th className="py-2 px-4 text-[9px] font-mono text-t-2 uppercase tracking-widest w-[20%]">Email / Phone</th>
+                <th className="py-2 px-4 text-[9px] font-mono text-t-2 uppercase tracking-widest w-[12%] text-center">Role</th>
+                <th className="py-2 px-4 text-[9px] font-mono text-t-2 uppercase tracking-widest w-[12%] text-center">Trạng thái</th>
+                <th className="py-2 px-4 text-[9px] font-mono text-t-2 uppercase tracking-widest w-[20%] text-center whitespace-nowrap">Đăng nhập</th>
+                <th className="py-2 px-6 text-[9px] font-mono text-t-2 uppercase tracking-widest w-[11%] text-right">Action</th>
               </tr>
-            ) : filteredUsers.map((u, i) => (
-              <tr key={i} className="hover:bg-psim-accent2/[0.03] transition-colors group h-11 bg-bg0">
-                <td className="py-1 px-6">
-                  <div className="flex items-center gap-2">
-                    <div className={cn(
-                      "w-7 h-7 rounded flex items-center justify-center text-[9px] font-bold text-white shadow-md shrink-0 uppercase bg-gradient-to-br",
-                      getUserGradient(u.Name || u.Username)
-                    )}>
-                      {(u.Name || u.Username).slice(0, 2)}
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <div className="font-bold text-[12px] text-t-1 group-hover:text-psim-accent2 transition-colors uppercase truncate leading-tight">
-                        {u.Name || u.Username}
+            </thead>
+            <tbody className="divide-y divide-border-dim/30">
+              {isLoadingUsers ? (
+                <tr>
+                  <td colSpan={6} className="py-20 text-center">
+                    <RefreshCcw className="animate-spin text-psim-accent2 mx-auto mb-3" />
+                    <span className="text-[10px] text-t-2 font-mono uppercase">Đang tải...</span>
+                  </td>
+                </tr>
+              ) : filteredUsers.map((u, i) => (
+                <tr key={i} className="hover:bg-psim-accent2/[0.03] transition-colors group h-10 bg-bg0">
+                  <td className="py-1 px-6">
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "w-6 h-6 rounded flex items-center justify-center text-[8px] font-bold text-white shadow-md shrink-0 uppercase bg-gradient-to-br",
+                        getUserGradient(u.Name || u.Username)
+                      )}>
+                        {(u.Name || u.Username || 'US').slice(0, 2)}
                       </div>
-                      <div className="text-[9px] text-t-2 font-mono opacity-50 truncate">@{u.Username}</div>
+                      <div className="flex flex-col min-w-0">
+                        <div className="font-bold text-[11px] text-t-1 group-hover:text-psim-accent2 transition-colors uppercase truncate leading-tight">
+                          {u.Name || u.Username}
+                        </div>
+                        <div className="text-[8px] text-t-2 font-mono opacity-50 truncate">@{u.Username}</div>
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td className="py-1 px-4">
-                  <div className="flex flex-col">
-                    <div className="text-[11px] text-t-2 font-mono truncate lowercase">{u.Email || 'No email'}</div>
-                    <div className="text-[9px] text-t-2 font-mono opacity-50">{u.PhoneNumber || '--'}</div>
-                  </div>
-                </td>
-                <td className="py-1 px-4 text-center">
-                  <span className={cn(
-                    "px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-tight border",
-                    u.RoleName === 'Admin' ? "bg-psim-red/10 text-psim-red border-psim-red/20" :
-                    u.RoleName === 'Supervisor' ? "bg-psim-orange/10 text-psim-orange border-psim-orange/20" :
-                    u.RoleName === 'Operator' ? "bg-psim-accent2/10 text-psim-accent2 border-psim-accent2/20" :
-                    "bg-bg3 text-t-2 border-border-dim"
-                  )}>
-                    {u.RoleName}
-                  </span>
-                </td>
-                <td className="py-1 px-4 text-center">
-                  <span className={cn(
-                    "inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest",
-                    u.Status.toLowerCase() === 'active' ? "text-psim-green" : "text-psim-orange"
-                  )}>
-                    <span className={cn("w-1 h-1 rounded-full", u.Status.toLowerCase() === 'active' ? "bg-psim-green animate-pulse shadow-[0_0_6px_var(--color-psim-green)]" : "bg-psim-orange")} />
-                    {u.Status}
-                  </span>
-                </td>
-                <td className="py-1 px-4 text-[10px] font-mono text-t-2 uppercase text-center whitespace-nowrap">
-                  {u.LastLogin ? new Date(u.LastLogin).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--/--'}
-                </td>
-                {/* <td className="py-1 px-4 text-center">
-                  <span className={cn("bg-bg-4 text-t-2", "border border-border-dim text-[9px] font-bold px-1.5 py-0.5 rounded")}>
-                    Local
-                  </span>
-                </td> */}
-                <td className="py-1 px-6 text-right whitespace-nowrap">
-                  <button className="px-3 py-1 bg-bg-4 border border-border-dim rounded text-[10px] font-bold text-t-1 uppercase hover:bg-bg3 hover:text-psim-accent2 transition-all shadow-sm">
-                    Edit
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!isLoadingUsers && filteredUsers.length === 0 && (
-              <tr>
-                <td colSpan={6} className="py-20 text-center opacity-30">
-                  <UserPlus size={40} className="mx-auto mb-4" />
-                  <p className="text-[12px] uppercase font-bold tracking-widest">Không tìm thấy người dùng nào</p>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                  </td>
+                  <td className="py-1 px-4">
+                    <div className="flex flex-col min-w-0">
+                      <div className="text-[10px] text-t-2 font-mono truncate lowercase">{u.Email || 'No email'}</div>
+                      <div className="text-[8px] text-t-2 font-mono opacity-50">{u.PhoneNumber || '--'}</div>
+                    </div>
+                  </td>
+                  <td className="py-1 px-4 text-center">
+                    <span className={cn(
+                      "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-tight border",
+                      u.RoleName === 'Admin' ? "bg-psim-red/10 text-psim-red border-psim-red/20" :
+                      u.RoleName === 'Supervisor' ? "bg-psim-orange/10 text-psim-orange border-psim-orange/20" :
+                      u.RoleName === 'Operator' ? "bg-psim-accent2/10 text-psim-accent2 border-psim-accent2/20" :
+                      "bg-bg3 text-t-2 border-border-dim"
+                    )}>
+                      {u.RoleName}
+                    </span>
+                  </td>
+                  <td className="py-1 px-4 text-center">
+                    <span className={cn(
+                      "inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest",
+                      u.Status?.toLowerCase() === 'active' ? "text-psim-green" : "text-psim-orange"
+                    )}>
+                      <span className={cn("w-1 h-1 rounded-full", u.Status?.toLowerCase() === 'active' ? "bg-psim-green animate-pulse shadow-[0_0_6px_var(--color-psim-green)]" : "bg-psim-orange")} />
+                      {u.Status}
+                    </span>
+                  </td>
+                  <td className="py-1 px-4 text-[9px] font-mono text-t-2 uppercase text-center whitespace-nowrap">
+                    {u.LastLogin ? new Date(u.LastLogin).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--/--'}
+                  </td>
+                  <td className="py-1 px-6 text-right whitespace-nowrap">
+                    <button className="px-2 py-0.5 bg-bg-4 border border-border-dim rounded text-[9px] font-bold text-t-1 uppercase hover:bg-bg3 hover:text-psim-accent2 transition-all shadow-sm">
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!isLoadingUsers && filteredUsers.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-20 text-center opacity-30">
+                    <UserPlus size={40} className="mx-auto mb-4" />
+                    <p className="text-[12px] uppercase font-bold tracking-widest">Không tìm thấy người dùng nào</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-        {/* Pagination bar */}
-        <div className="bg-[#121929]/50 border-t border-border-dim px-6 py-3 flex items-center justify-between">
-            <div className="text-[11px] text-t-2 font-mono">
-              Hiển thị <span className="text-t-1">{(userPage-1)*userPageSize + 1}</span> - <span className="text-t-1">{Math.min(userPage*userPageSize, totalUsers)}</span> trong tổng số <span className="text-psim-accent2">{totalUsers}</span> users
+        {/* Pagination bar - Slimmer */}
+        <div className="bg-[#121929]/50 border-t border-border-dim px-6 py-2 flex items-center justify-between shrink-0">
+            <div className="text-[10px] text-t-2 font-mono">
+              Hiển thị <span className="text-t-1">{(userPage-1)*userPageSize + 1}</span> - <span className="text-t-1">{Math.min(userPage*userPageSize, totalUsers)}</span> / <span className="text-psim-accent2">{totalUsers}</span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
                <button 
                 disabled={userPage === 1}
                 onClick={() => setUserPage(p => p - 1)}
-                className="w-8 h-8 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-t-1 disabled:opacity-30 disabled:hover:text-t-2"
+                className="w-6 h-6 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-t-1 disabled:opacity-30 disabled:hover:text-t-2 transition-colors"
                >
-                 <ChevronLeft size={16} />
+                 <ChevronLeft size={14} />
                </button>
+               <div className="flex items-center px-2 text-[10px] font-bold text-white bg-bg3 border border-border-dim rounded min-w-[24px] justify-center">
+                  {userPage}
+               </div>
                <button 
                 disabled={userPage * userPageSize >= totalUsers}
                 onClick={() => setUserPage(p => p + 1)}
-                className="w-8 h-8 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-t-1 disabled:opacity-30 disabled:hover:text-t-2"
+                className="w-6 h-6 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-t-1 disabled:opacity-30 disabled:hover:text-t-2 transition-colors"
                >
-                 <ChevronRight size={16} />
+                 <ChevronRight size={14} />
                </button>
             </div>
         </div>
@@ -958,8 +956,8 @@ export function Configuration_V3() {
     );
 
     return (
-      <div className="flex flex-col gap-6 animate-in fade-in duration-500 w-full">
-        <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-6 animate-in fade-in duration-500 w-full h-full overflow-hidden">
+        <div className="flex items-center justify-between shrink-0">
           <div>
             <h2 className="text-[18px] font-heading font-bold text-t0 text-white uppercase tracking-tight">Alarm Priority Management (Live API)</h2>
             <p className="text-[12px] text-t-2 mt-1">Quản lý các quy tắc phân loại mức độ nghiêm trọng cho từng sự kiện AI</p>
@@ -972,67 +970,69 @@ export function Configuration_V3() {
           </button>
         </div>
 
-        <div className="bg-[#0d1220] border border-border-dim rounded-lg overflow-hidden shadow-sm">
+        <div className="flex-1 min-h-0 bg-[#0d1220] border border-border-dim rounded-lg overflow-hidden shadow-sm flex flex-col">
           {isLoadingMappings ? (
-            <div className="py-24 text-center animate-pulse flex flex-col items-center gap-3">
+            <div className="flex-1 flex flex-col items-center justify-center gap-3">
                <RefreshCcw className="animate-spin text-psim-accent" />
-               <span className="text-t-2 font-mono text-[11px] uppercase tracking-widest">Đang đồng bộ dữ liệu API...</span>
+               <span className="text-t-2 font-mono text-[11px] uppercase tracking-widest">Đang tải...</span>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-[#121929] border-b border-border-dim">
-                  <th className="py-4 px-6 text-[10px] font-mono text-t-2 uppercase tracking-widest w-16 text-center">STT</th>
-                  <th className="py-4 px-2 text-[10px] font-mono text-t-2 uppercase tracking-widest">Analytics Event Name</th>
-                  <th className="py-4 px-4 text-[10px] font-mono text-t-2 uppercase tracking-widest w-48 text-center">Assigned Priority</th>
-                  <th className="py-4 px-6 text-[10px] font-mono text-t-2 uppercase tracking-widest w-24 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-dim/30">
-                {tableData.map((c, index) => (
-                  <tr key={`${c.mappingId}-${index}`} className="hover:bg-psim-accent/[0.02] transition-colors group h-16 bg-[#0d1220]">
-                    <td className="py-3 px-6 font-mono text-[11px] text-t-2 text-center opacity-50">{index + 1}</td>
-                    <td className="py-3 px-2">
-                      <div className="font-bold text-[13px] text-t-1 group-hover:text-psim-accent transition-colors uppercase whitespace-nowrap overflow-hidden text-ellipsis">{c.label}</div>
-                      <div className="text-[9px] font-mono text-t-2 mt-1 opacity-40 uppercase tracking-tighter">Mapping ID: #{c.mappingId}</div>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                       <div className="flex justify-center">
-                          <StatusPill priority={c.priority} className="w-32 shadow-lg uppercase" />
-                       </div>
-                    </td>
-                    <td className="py-3 px-6 text-right">
-                       <div className="flex justify-end gap-1.5 opacity-20 group-hover:opacity-100 transition-all transform group-hover:translate-x-0 translate-x-2">
-                          <button 
-                            className="w-9 h-9 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-psim-accent transition-colors shadow-sm"
-                            onClick={() => setEditingMapping({ id: c.mappingId, name: c.label, currentPriorityId: c.priorityId })}
-                            title="Đổi Priority"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          <button 
-                            className="w-9 h-9 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-psim-red transition-colors"
-                            onClick={() => handleDeleteMapping(c.mappingId)}
-                            title="Xóa"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                       </div>
-                    </td>
+            <div className="overflow-auto scrollbar-thin scrollbar-thumb-bg4">
+              <table className="w-full text-left border-collapse">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-[#121929] border-b border-border-dim">
+                    <th className="py-4 px-6 text-[10px] font-mono text-t-2 uppercase tracking-widest w-16 text-center">STT</th>
+                    <th className="py-4 px-2 text-[10px] font-mono text-t-2 uppercase tracking-widest">Analytics Event Name</th>
+                    <th className="py-4 px-4 text-[10px] font-mono text-t-2 uppercase tracking-widest w-48 text-center">Assigned Priority</th>
+                    <th className="py-4 px-6 text-[10px] font-mono text-t-2 uppercase tracking-widest w-24 text-right">Action</th>
                   </tr>
-                ))}
-                {tableData.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-32 text-center">
-                       <div className="flex flex-col items-center gap-4 opacity-20">
-                          <Zap size={48} />
-                          <span className="text-[12px] uppercase font-bold tracking-[0.2em]">Hệ thống chưa có cấu hình nào</span>
-                       </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border-dim/30">
+                  {tableData.map((c, index) => (
+                    <tr key={`${c.mappingId}-${index}`} className="hover:bg-psim-accent/[0.02] transition-colors group h-16 bg-[#0d1220]">
+                      <td className="py-3 px-6 font-mono text-[11px] text-t-2 text-center opacity-50">{index + 1}</td>
+                      <td className="py-3 px-2">
+                        <div className="font-bold text-[13px] text-t-1 group-hover:text-psim-accent transition-colors uppercase whitespace-nowrap overflow-hidden text-ellipsis">{c.label}</div>
+                        <div className="text-[9px] font-mono text-t-2 mt-1 opacity-40 uppercase tracking-tighter">Mapping ID: #{c.mappingId}</div>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                         <div className="flex justify-center">
+                            <StatusPill priority={c.priority} className="w-32 shadow-lg uppercase" />
+                         </div>
+                      </td>
+                      <td className="py-3 px-6 text-right">
+                         <div className="flex justify-end gap-1.5 opacity-20 group-hover:opacity-100 transition-all transform group-hover:translate-x-0 translate-x-2">
+                            <button 
+                              className="w-9 h-9 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-psim-accent transition-colors shadow-sm"
+                              onClick={() => setEditingMapping({ id: c.mappingId, name: c.label, currentPriorityId: c.priorityId })}
+                              title="Đổi Priority"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button 
+                              className="w-9 h-9 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-psim-red transition-colors"
+                              onClick={() => handleDeleteMapping(c.mappingId)}
+                              title="Xóa"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                         </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {tableData.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-32 text-center">
+                         <div className="flex flex-col items-center gap-4 opacity-20">
+                            <Zap size={48} />
+                            <span className="text-[12px] uppercase font-bold tracking-[0.2em]">Chưa có cấu hình nào</span>
+                         </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
@@ -1082,8 +1082,8 @@ export function Configuration_V3() {
   };
 
   const renderConnectors = () => (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-500 w-full">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500 w-full h-full overflow-hidden">
+      <div className="flex items-center justify-between shrink-0">
         <div>
           <h2 className="text-[18px] font-heading font-bold text-t0 uppercase tracking-tight">VMS & Device Connectors (4.3)</h2>
           <p className="text-[12px] text-t-2 mt-1">Trạng thái kết nối API tới các hệ thống ngoại vi</p>
@@ -1098,66 +1098,68 @@ export function Configuration_V3() {
         </div>
       </div>
 
-      {isLoadingConnectors ? (
-        <div className="py-24 text-center animate-pulse flex flex-col items-center gap-3">
-           <RefreshCcw className="animate-spin text-psim-accent" />
-           <span className="text-t-2 font-mono text-[11px] uppercase tracking-widest">Đang tải danh sách connectors...</span>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-4">
-          {actualConnectors.map((c: any, i: number) => (
-            <div key={c.Id || i} className="bg-bg1 border border-border-dim rounded-xl p-5 flex flex-col gap-4 shadow-sm hover:border-psim-accent/30 transition-all border-psim-accent/10">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-[14px] font-bold tracking-tight text-white">{c.VmsName}</h3>
-                  <p className="text-[10px] font-mono mt-1 opacity-60 uppercase text-t-2">
-                    {c.IpServer}:{c.Port} · {c.Username}
-                  </p>
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-bg4">
+        {isLoadingConnectors ? (
+          <div className="py-24 text-center animate-pulse flex flex-col items-center gap-3">
+             <RefreshCcw className="animate-spin text-psim-accent" />
+             <span className="text-t-2 font-mono text-[11px] uppercase tracking-widest">Đang tải...</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 pb-6">
+            {actualConnectors.map((c: any, i: number) => (
+              <div key={c.Id || i} className="bg-bg1 border border-border-dim rounded-xl p-5 flex flex-col gap-4 shadow-sm hover:border-psim-accent/30 transition-all border-psim-accent/10">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-[14px] font-bold tracking-tight text-white">{c.VmsName}</h3>
+                    <p className="text-[10px] font-mono mt-1 opacity-60 uppercase text-t-2">
+                      {c.IpServer}:{c.Port} · {c.Username}
+                    </p>
+                  </div>
+                  <span className={cn(
+                    "text-[9px] font-bold px-2 py-0.5 rounded border uppercase",
+                    c.Status === 'Connected' ? "bg-psim-green/10 text-psim-green border-psim-green/30" : "bg-psim-orange/10 text-psim-orange border-psim-orange/30"
+                  )}>
+                    {c.Status}
+                  </span>
                 </div>
-                <span className={cn(
-                  "text-[9px] font-bold px-2 py-0.5 rounded border uppercase",
-                  c.Status === 'Connected' ? "bg-psim-green/10 text-psim-green border-psim-green/30" : "bg-psim-orange/10 text-psim-orange border-psim-orange/30"
-                )}>
-                  {c.Status}
-                </span>
-              </div>
-              <div className="pt-2">
-                <div className="flex justify-between mb-1.5 font-mono">
-                    <span className="text-[9px] font-bold text-t-2 uppercase">Hệ thống</span>
-                    <span className="text-[9px] font-bold text-t-1">{c.VmsName}</span>
+                <div className="pt-2">
+                  <div className="flex justify-between mb-1.5 font-mono">
+                      <span className="text-[9px] font-bold text-t-2 uppercase">Hệ thống</span>
+                      <span className="text-[9px] font-bold text-t-1">{c.VmsName}</span>
+                  </div>
+                  <Progress value={c.Status === 'Connected' ? 100 : 0} className="h-1 bg-bg3" indicatorClassName={c.Status === 'Connected' ? "bg-psim-green" : "bg-psim-orange"} />
                 </div>
-                <Progress value={c.Status === 'Connected' ? 100 : 0} className="h-1 bg-bg3" indicatorClassName={c.Status === 'Connected' ? "bg-psim-green" : "bg-psim-orange"} />
+                <div className="flex gap-2 mt-2">
+                  <button 
+                    onClick={() => handleOpenDetails(c)}
+                    className="flex-1 h-8 rounded bg-bg2 border border-border-dim text-[10px] font-bold uppercase hover:bg-bg3 transition-colors text-t-1"
+                  >
+                    Chi tiết
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setDeleteConfirmModal({
+                        isOpen: true,
+                        id: c.Id,
+                        name: c.VmsName
+                      });
+                    }}
+                    className="flex-1 h-8 rounded bg-bg2 border border-red-900/30 text-[10px] font-bold uppercase hover:bg-psim-red/10 hover:text-psim-red transition-colors text-t-2"
+                  >
+                    Xóa
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-2 mt-2">
-                <button 
-                  onClick={() => handleOpenDetails(c)}
-                  className="flex-1 h-8 rounded bg-bg2 border border-border-dim text-[10px] font-bold uppercase hover:bg-bg3 transition-colors text-t-1"
-                >
-                  Chi tiết
-                </button>
-                <button 
-                  onClick={() => {
-                    setDeleteConfirmModal({
-                      isOpen: true,
-                      id: c.Id,
-                      name: c.VmsName
-                    });
-                  }}
-                  className="flex-1 h-8 rounded bg-bg2 border border-red-900/30 text-[10px] font-bold uppercase hover:bg-psim-red/10 hover:text-psim-red transition-colors text-t-2"
-                >
-                  Xóa
-                </button>
+            ))}
+            {actualConnectors.length === 0 && (
+              <div className="col-span-2 py-20 text-center opacity-30 border-2 border-dashed border-white/5 rounded-xl">
+                 <Plug2 size={40} className="mx-auto mb-4" />
+                 <p className="text-[12px] uppercase font-bold tracking-widest">Chưa có kết nối nào</p>
               </div>
-            </div>
-          ))}
-          {actualConnectors.length === 0 && (
-            <div className="col-span-2 py-20 text-center opacity-30 border-2 border-dashed border-white/5 rounded-xl">
-               <Plug2 size={40} className="mx-auto mb-4" />
-               <p className="text-[12px] uppercase font-bold tracking-widest">Chưa có kết nối nào được thiết lập</p>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -1494,7 +1496,7 @@ export function Configuration_V3() {
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t-2" size={16} />
                   <input 
                     type={showPassword ? "text" : "password"}
-                    className="w-full bg-black/20 border border-white/10 rounded-lg h-11 pl-11 pr-11 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all"
+                    className="w-full bg-black/20 border border-white/10 rounded-lg h-11 pl-11 pr-11 text-[13px] text-white outline-none focus:border-psim-accent2/50 transition-all"
                     placeholder="••••••••"
                     value={newConnector.password}
                     onChange={(e) => setNewConnector({...newConnector, password: e.target.value})}
@@ -1539,7 +1541,7 @@ export function Configuration_V3() {
       {deleteConfirmModal.isOpen && (
         <div className="fixed inset-0 z-[11000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setDeleteConfirmModal(prev => ({ ...prev, isOpen: false }))} />
-          <div className="relative w-full max-w-sm bg-[#161b2e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="relative w-full max-sm bg-[#161b2e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-8 flex flex-col items-center text-center">
               <div className="w-20 h-20 rounded-full bg-psim-red/20 text-psim-red flex items-center justify-center mb-6 shadow-lg shadow-psim-red/10 animate-pulse">
                 <Trash2 size={40} />
@@ -1550,7 +1552,7 @@ export function Configuration_V3() {
               </h3>
               
               <p className="text-[13px] text-t-2 leading-relaxed mb-8 px-4">
-                Bạn có chắc chắn muốn gỡ bỏ connector <span className="text-white font-bold">"{deleteConfirmModal.name}"</span>? Hành động này không thể hoàn tác.
+                Bạn có chắc chắn muốn gỡ bỏ connector <span className="text-white font-bold">"{deleteConfirmModal.name}"</span>?
               </p>
               
               <div className="w-full flex gap-3">
@@ -1566,7 +1568,7 @@ export function Configuration_V3() {
                   className="flex-[2] h-12 bg-psim-red text-white rounded-xl text-[12px] font-bold uppercase tracking-widest shadow-lg shadow-psim-red/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {deleteConnectorMutation.isPending && <RefreshCcw size={14} className="animate-spin" />}
-                  Xác nhận xóa
+                  Xác nhận
                 </button>
               </div>
             </div>
@@ -1804,7 +1806,7 @@ export function Configuration_V3() {
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Tài khoản (Username)</label>
+                  <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Tài khoản (Username) <span className="text-psim-red">*</span></label>
                   <div className="relative">
                     <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t-2" size={16} />
                     <input 
@@ -1816,7 +1818,7 @@ export function Configuration_V3() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Mật khẩu</label>
+                  <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Mật khẩu <span className="text-psim-red">*</span></label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t-2" size={16} />
                     <input 
@@ -1874,32 +1876,52 @@ export function Configuration_V3() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Vai trò (Role)</label>
+                  <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Vai trò (Role) <span className="text-psim-red">*</span></label>
                   <select 
                     className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-[13px] text-white outline-none focus:border-psim-accent2/50 transition-all appearance-none cursor-pointer"
                     value={newUserData.roleId}
                     onChange={(e) => setNewUserData({...newUserData, roleId: e.target.value})}
                   >
                     <option value="" disabled className="bg-[#161b2e]">-- Chọn vai trò --</option>
-                    <option value="admin" className="bg-[#161b2e]">Admin</option>
-                    <option value="supervisor" className="bg-[#161b2e]">Supervisor</option>
-                    <option value="operator" className="bg-[#161b2e]">Operator</option>
-                    <option value="viewer" className="bg-[#161b2e]">Viewer</option>
+                    {allRoles.map((r: any) => (
+                      <option key={r.Id} value={r.Id} className="bg-[#161b2e]">{r.Name}</option>
+                    ))}
                   </select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Trạng thái</label>
+                <div className="flex gap-4 p-1">
+                  <button 
+                    onClick={() => setNewUserData({...newUserData, status: 'Active'})}
+                    className={cn("flex items-center gap-2 px-4 py-2 rounded-lg border text-[11px] font-bold transition-all", newUserData.status === 'Active' ? "bg-psim-green/20 border-psim-green text-psim-green" : "bg-black/20 border-white/10 text-t-2")}
+                  >
+                    <div className={cn("w-2 h-2 rounded-full", newUserData.status === 'Active' ? "bg-psim-green" : "bg-t2")} /> Active
+                  </button>
+                  <button 
+                    onClick={() => setNewUserData({...newUserData, status: 'Inactive'})}
+                    className={cn("flex items-center gap-2 px-4 py-2 rounded-lg border text-[11px] font-bold transition-all", newUserData.status === 'Inactive' ? "bg-psim-red/20 border-psim-red text-psim-red" : "bg-black/20 border-white/10 text-t-2")}
+                  >
+                    <div className={cn("w-2 h-2 rounded-full", newUserData.status === 'Inactive' ? "bg-psim-red" : "bg-t2")} /> Inactive
+                  </button>
                 </div>
               </div>
             </div>
 
-            <div className="mt-10 flex gap-3">
+            <div className="mt-8 flex gap-3 border-t border-white/5 pt-8">
               <button 
                 onClick={() => setIsAddUserDialogOpen(false)}
-                className="flex-1 h-10 rounded-lg text-[11px] font-bold text-t-2 uppercase border border-white/10 hover:bg-white/5 transition-all"
+                className="flex-1 h-11 rounded-xl text-[11px] font-bold text-t-2 uppercase border border-white/10 hover:bg-white/5 transition-all"
               >
                 Hủy bỏ
               </button>
               <button 
-                className="flex-[2] h-10 bg-psim-accent2 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider shadow-lg shadow-psim-accent2/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                onClick={handleRegisterUser}
+                disabled={registerMutation.isPending}
+                className="flex-[2] h-11 bg-psim-accent2 text-white rounded-xl text-[11px] font-bold uppercase tracking-wider shadow-lg shadow-psim-accent2/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
+                {registerMutation.isPending && <RefreshCcw size={14} className="animate-spin" />}
                 Tạo người dùng
               </button>
             </div>
