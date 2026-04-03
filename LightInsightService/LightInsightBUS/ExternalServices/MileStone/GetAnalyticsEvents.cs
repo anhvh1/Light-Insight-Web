@@ -24,7 +24,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
             _cache = cache;
         }
 
-        private ConnectorsModel GetVmsConfig(int vmsid = 1)
+        public ConnectorsModel GetVmsConfig(int vmsid = 1)
         {
             string cacheKey = $"VMS_{vmsid}";
             if (_cache.TryGetValue(cacheKey, out object cacheObj))

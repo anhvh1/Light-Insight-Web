@@ -6,6 +6,10 @@ using LightInsightBUS.ExternalServices.MileStone;
 using LightInsightBUS.Interfaces.MileStone.Alarm;
 using LightInsightModel.MileStone.General;
 using LightInsightModel.MileStone.Alarm;
+using Microsoft.Extensions.Caching.Memory;
+using LightInsightDAL.Repositories.MileStone.General;
+using LightInsightModel.Connectors;
+using static Org.BouncyCastle.Math.EC.ECCurve;
 
 namespace LightInsightBUS.Service.MileStone.Alarm
 {
@@ -14,18 +18,30 @@ namespace LightInsightBUS.Service.MileStone.Alarm
         // Lưu ý: Các biến này cần được khởi tạo (new) trước khi dùng để tránh lỗi NullReferenceException
         private static GetAlarms alarm = new GetAlarms();
         private static GetCameras camera = new GetCameras();
-        private static GetAnalyticsEvents tocken = new GetAnalyticsEvents(); // Chú ý: class tên là tocken?
-        private const string baseUrl = "http://192.168.100.10:80/";
+        private readonly GetAnalyticsEvents tocken;
+        private readonly IMemoryCache _cache;
 
-        public async Task<List<AlarmData>> GetAlarmData()
+        public AlarmServiceBUS(IMemoryCache cache)
+        {
+            tocken = new GetAnalyticsEvents(cache);
+        }
+
+        public async Task<List<AlarmData>> GetAlarmData(int page, int pageSize)
         {
             var resultList = new List<AlarmData>();
 
             // 1. Lấy Token
             var accessToken = await tocken.GetTokenAsync();
 
+            var config = tocken.GetVmsConfig(1);
+            var baseUrl = $"http://{config.IpServer}:{config.Port}";
+
+            // Xử lý logic trang: Frontend gửi lên 1, 2, 3... nhưng API Milestone đếm từ 0, 1, 2...
+            int milestonePageIndex = page - 1;
+            if (milestonePageIndex < 0) milestonePageIndex = 0;
+
             // 2. Lấy dữ liệu raw (chuỗi JSON) từ API Alarm
-            string rawAlarmJson = alarm.GetAlarmsList(baseUrl, accessToken);
+            string rawAlarmJson = alarm.GetAlarmsList(baseUrl, accessToken, milestonePageIndex, pageSize);
 
             if (string.IsNullOrEmpty(rawAlarmJson))
             {

@@ -10,7 +10,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
         /// <summary>
         /// Hàm lấy dữ liệu Alarms dùng HttpClient có sẵn của .NET
         /// </summary>
-        public string GetAlarmsList(string baseUrl, string token)
+        public string GetAlarmsList(string baseUrl, string token, int pageIndex, int pageSize)
         {
             string result = string.Empty;
 
@@ -35,7 +35,8 @@ namespace LightInsightBUS.ExternalServices.MileStone
 
                     // Thực hiện gọi API (Phương thức GET)
                     // Lưu ý: HttpClient mặc định là bất đồng bộ (async), dùng .Result để ép nó chạy đồng bộ cho giống hàm gốc của bạn
-                    HttpResponseMessage response = client.GetAsync("api/rest/v1/alarms").Result;
+                    string endpoint = $"/api/rest/v1/alarms?page={pageIndex}&size={pageSize}";
+                    HttpResponseMessage response = client.GetAsync(endpoint).Result;
 
                     if (response.IsSuccessStatusCode)
                     {

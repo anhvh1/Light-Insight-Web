@@ -29,7 +29,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
                     client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
                     // Ghép tham số cameraId vào đường dẫn API
-                    string endpoint = $"api/rest/v1/cameras/{cameraId}";
+                    string endpoint = $"/api/rest/v1/cameras/{cameraId}";
 
                     // Thực hiện gọi API (Sử dụng .Result để ép chạy đồng bộ giống code cũ của bạn)
                     HttpResponseMessage response = client.GetAsync(endpoint).Result;

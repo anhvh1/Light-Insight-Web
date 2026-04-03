@@ -9,6 +9,6 @@ namespace LightInsightBUS.Interfaces.MileStone.Alarm
 {
     public interface IAlarmService
     {
-        Task<List<AlarmData>> GetAlarmData();
+        Task<List<AlarmData>> GetAlarmData(int page, int pageSize);
     }
 }
