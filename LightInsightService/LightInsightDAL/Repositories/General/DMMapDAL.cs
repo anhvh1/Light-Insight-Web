@@ -187,7 +187,9 @@ namespace LightInsightDAL.Repositories.General
                         PosX = reader.GetDouble(4),
                         PosY = reader.GetDouble(5),
                         Icon = reader.IsDBNull(6) ? null : reader.GetString(6),
-                        CreatedAt = reader.GetDateTime(7)
+                        CreatedAt = reader.GetDateTime(7),
+                        VmsID = reader.GetInt32(8),
+                        Rotation = reader.GetDouble(9)
                     });
                 }
                 return list;
