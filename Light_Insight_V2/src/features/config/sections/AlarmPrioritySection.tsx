@@ -114,7 +114,7 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
         </div>
         <button 
           onClick={() => { setBasket([]); setIsDialogOpen(true); }}
-          className="bg-psim-accent text-bg0 font-bold text-[11px] uppercase tracking-wider gap-2 h-10 px-6 rounded-md flex items-center shadow-lg shadow-psim-accent/20 hover:scale-[1.02] transition-all"
+          className="bg-psim-accent2 text-bg0 font-bold text-[11px] uppercase tracking-wider gap-2 h-10 px-6 rounded-md flex items-center shadow-lg shadow-psim-accent/20 hover:scale-[1.02] transition-all"
         >
           <Plus size={16} /> Tạo cấu hình mới
         </button>
@@ -217,9 +217,20 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
               <div className="flex flex-col gap-3">
                 <span className="text-[10px] font-bold text-t-2 uppercase tracking-widest text-white">Thiết lập Priority: <span className="text-psim-accent ml-2">{basket.length} items</span></span>
                 <div className="flex gap-2">
-                  {priorities.map(p => (
-                    <button key={p.ID} onClick={() => setSelectedPriorityId(p.ID)} className={cn("px-4 py-2 rounded text-[11px] font-bold border transition-all", selectedPriorityId === p.ID ? "bg-psim-accent text-bg0 border-transparent scale-105" : "bg-[#121929] text-t-2 border-white/5")}>● {p.PriorityName}</button>
-                  ))}
+                   {priorities.map((p: any) => (
+                     <button
+                       key={p.ID}
+                       onClick={() => setSelectedPriorityId(p.ID)}
+                       className={cn(
+                         "px-4 py-2 rounded text-[11px] font-bold border transition-all flex items-center gap-2",
+                         selectedPriorityId === p.ID 
+                           ? `${p.PriorityName === 'CRITICAL' ? 'bg-psim-red text-white border-transparent' : p.PriorityName === 'HIGH' ? 'bg-psim-orange text-white border-transparent' : p.PriorityName === 'MEDIUM' ? 'bg-psim-yellow text-bg0 border-transparent' : 'bg-bg4 text-t-1 border-white/20'} scale-105 shadow-xl` 
+                           : "bg-[#121929] text-t-2 border-white/5 hover:border-white/20"
+                       )}
+                     >
+                       ● {p.PriorityName}
+                     </button>
+                   ))}
                 </div>
               </div>
               <div className="flex gap-4">
