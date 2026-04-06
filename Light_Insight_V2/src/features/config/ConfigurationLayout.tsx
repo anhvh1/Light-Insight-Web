@@ -79,18 +79,6 @@ export function ConfigurationLayout() {
               ))}
             </div>
           </div>
-
-          <div className="mt-auto p-4 bg-bg2/50 border border-border-dim rounded-lg">
-             <div className="flex items-center gap-2 mb-2">
-                <Database size={14} className="text-psim-accent" />
-                <span className="text-[10px] font-bold uppercase tracking-tight text-t-1">System Storage</span>
-             </div>
-             <div className="flex justify-between mb-1 text-[9px] font-mono">
-                <span className="text-t-2">48TB / 64TB</span>
-                <span className="text-psim-orange">75%</span>
-             </div>
-             <Progress value={75} className="h-1 bg-bg3" indicatorClassName="bg-psim-orange" />
-          </div>
         </div>
 
         {/* Content Area - Where sub-pages render */}
