@@ -10,12 +10,16 @@ import { AlarmConsole } from './features/alarms/AlarmConsole';
 import { MapView } from './features/map/MapView';
 import { VideoWall } from './features/video/VideoWall';
 import { IncidentManagement } from './features/incidents/IncidentManagement';
-import { Configuration_V3 } from './features/config/Configuration_V3';
+import { ConfigurationLayout } from './features/config/ConfigurationLayout';
+import { UsersRolesSection } from './features/config/sections/UsersRolesSection';
+import { AlarmPrioritySection } from './features/config/sections/AlarmPrioritySection';
+import { MapManagementSection } from './features/config/sections/MapManagementSection';
+import { ConnectorsSection } from './features/config/sections/ConnectorsSection';
+import { RuleAlarmConfigSection } from './features/config/sections/RuleAlarmConfigSection';
 import { LoginPage } from './features/auth/LoginPage';
 import { AnalyticsPage } from './features/analytics/AnalyticsPage';
 import { ShiftHandoverPage } from './features/shift/ShiftHandoverPage';
 import { SystemHealthPage } from './features/health/SystemHealthPage';
-// import { RegisterPage } from './features/auth/RegisterPage';
 
 // 1. Root Route
 const rootRoute = createRootRoute({
@@ -35,13 +39,7 @@ const loginRoute = createRoute({
   }
 });
 
-// const registerRoute = createRoute({
-//   getParentRoute: () => rootRoute,
-//   path: '/register',
-//   component: RegisterPage,
-// });
-
-// 3. Authenticated Layout Route - Bọc các trang chính bằng MainLayout
+// 3. Authenticated Layout Route
 const authLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'layout',
@@ -54,65 +52,69 @@ const authLayoutRoute = createRoute({
   }
 });
 
-// 4. Các trang con nằm trong MainLayout
-const indexRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: '/',
-  component: AlarmConsole,
-});
+// 4. Các trang con
+const indexRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/', component: AlarmConsole });
+const alarmRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/alarm', component: AlarmConsole });
+const mapViewRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/map', component: MapView });
+const videoWallRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/wall', component: VideoWall });
+const incidentRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/incident', component: IncidentManagement });
+const analyticsRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/analytics', component: AnalyticsPage });
+const shiftRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/shift', component: ShiftHandoverPage });
+const healthRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/health', component: SystemHealthPage });
 
-const alarmRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: '/alarm',
-  component: AlarmConsole,
-});
-
-const mapViewRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: '/map',
-  component: MapView,
-});
-
-const videoWallRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: '/wall',
-  component: VideoWall,
-});
-
-const incidentRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: '/incident',
-  component: IncidentManagement,
-});
-
-const analyticsRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: '/analytics',
-  component: AnalyticsPage,
-});
-
-const shiftRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: '/shift',
-  component: ShiftHandoverPage,
-});
-
-const healthRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: '/health',
-  component: SystemHealthPage,
-});
-
+// Config Layout Route
 const configRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: '/config',
-  component: Configuration_V3,
+  component: ConfigurationLayout,
+});
+
+// Nested routes for Configuration
+const configUsersRolesRoute = createRoute({
+  getParentRoute: () => configRoute,
+  path: 'users-roles',
+  component: () => <UsersRolesSection getUserGradient={(name: string) => {
+    const chars = (name || 'US').split(' ').map((n: any) => n[0]).join('');
+    const sum = chars.split('').reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0);
+    const grads = ['from-psim-accent2 to-blue-600', 'from-psim-orange to-psim-red', 'from-psim-red to-purple-600', 'from-psim-green to-teal-600', 'from-purple-500 to-indigo-600'];
+    return grads[sum % grads.length];
+  }} />
+});
+
+const configPriorityRoute = createRoute({
+  getParentRoute: () => configRoute,
+  path: 'priority',
+  component: () => <AlarmPrioritySection actualConnectors={[]} isLoadingConnectors={false} />
+});
+
+const configMapRoute = createRoute({
+  getParentRoute: () => configRoute,
+  path: 'map',
+  component: () => <MapManagementSection actualConnectors={[]} />
+});
+
+const configConnectorsRoute = createRoute({
+  getParentRoute: () => configRoute,
+  path: 'connectors',
+  component: ConnectorsSection
+});
+
+const configRulesRoute = createRoute({
+  getParentRoute: () => configRoute,
+  path: 'rules',
+  component: RuleAlarmConfigSection
+});
+
+// Root Page Redirect
+const configIndexRoute = createRoute({
+  getParentRoute: () => configRoute,
+  path: '/',
+  beforeLoad: () => { throw redirect({ to: '/config/users-roles' }); }
 });
 
 // 5. Tạo cây Route
 const routeTree = rootRoute.addChildren([
   loginRoute,
-  // registerRoute,
   authLayoutRoute.addChildren([
     indexRoute,
     alarmRoute,
@@ -122,11 +124,17 @@ const routeTree = rootRoute.addChildren([
     analyticsRoute,
     shiftRoute,
     healthRoute,
-    configRoute,
+    configRoute.addChildren([
+      configIndexRoute,
+      configUsersRolesRoute,
+      configPriorityRoute,
+      configMapRoute,
+      configConnectorsRoute,
+      configRulesRoute
+    ]),
   ]),
 ]);
 
-// 6. Khởi tạo Router
 export const router = createRouter({
   routeTree,
   defaultPreload: 'intent',

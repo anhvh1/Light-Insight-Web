@@ -13,9 +13,6 @@ export function Topbar() {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    user ? console.log(user) : null;
-  }, [user]);
   const formattedTime = time.toTimeString().slice(0, 8);
   const formattedDate = time.toLocaleDateString('vi-VN', {
     weekday: 'long',
@@ -33,7 +30,7 @@ export function Topbar() {
   return (
     <header className="h-12 bg-bg-1 border-b border-border flex items-center px-4 gap-3 z-100 shrink-0">
       <div className="font-heading text-[15px] font-bold text-psim-accent flex items-center gap-2 whitespace-nowrap">
-        <img src="lightjsc.png" className="max-h-6" alt="Logo"/>
+        <img src="/public/lightjsc.png" className="max-h-6" alt="Logo"/>
       </div>
       
       <span className="text-[11px] text-t-2 font-mono px-2.5 py-1 bg-bg-2 rounded border border-border">

@@ -119,5 +119,28 @@ namespace LightInsightDAL.Repositories.Login
 
             return (result, total);
         }
+
+        public List<Role> GetRoles()
+        {
+            var result = new List<Role>();
+            using (var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings))
+            {
+                conn.Open();
+                using (var cmd = new NpgsqlCommand("SELECT * FROM fn_get_roles()", conn))
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        result.Add(new Role
+                        {
+                            Id = reader.GetGuid(0),
+                            Name = reader.GetString(1),
+                            Description = reader.IsDBNull(2) ? "" : reader.GetString(2)
+                        });
+                    }
+                }
+            }
+            return result;
+        }
     }
 }

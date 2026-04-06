@@ -44,6 +44,11 @@ export const authApi = {
     return response.data || { Data: [], Status: 0, Message: '' };
   },
 
+  getRoles: async () => {
+    const response = await apiClient.get<ApiResponse<any[]>>('/Login/Roles');
+    return response.data || { Data: [], Status: 0, Message: '' };
+  },
+
   getUserFromToken: () => {
     const token = localStorage.getItem('auth_token');
     if (!token) return null;

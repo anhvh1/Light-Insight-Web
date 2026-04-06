@@ -1,8 +1,7 @@
-﻿using LightInsightBUS.Interfaces.Login;
+using LightInsightBUS.Interfaces.Login;
 using LightInsightDAL.Repositories.Login;
 using LightInsightModel.Login;
 using LightInsightModel.MileStone.General;
-using MySqlX.XDevAPI.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,14 +12,14 @@ namespace LightInsightBUS.Service.Login
 {
     public class LoginBUS : ILogin
     {
-        private static LoginDAL instance;
+        private readonly LoginDAL _loginDAL;
         public LoginBUS()
         {
-            instance = new LoginDAL();
+            _loginDAL = new LoginDAL();
         }
         public async Task<BaseResultModel> Login(string username, string password)
         {
-            var user = await instance.Login(username, password);
+            var user = await _loginDAL.Login(username, password);
             if (user == null)
             {
                 return new BaseResultModel
@@ -43,7 +42,7 @@ namespace LightInsightBUS.Service.Login
                 {
                     Status = 1,
                     Message = "Đăng nhập thành công.",
-                    Data = instance.GenerateToken(user)
+                    Data = _loginDAL.GenerateToken(user)
                 };
             }
 
@@ -52,32 +51,45 @@ namespace LightInsightBUS.Service.Login
         {
             try
             {
-                var result = new BaseResultModel();
-                var data = await instance.GetUsers(search, page, pageSize);
-                if (data.Item1.Any())
+                var data = await _loginDAL.GetUsers(search, page, pageSize);
+                return new BaseResultModel
                 {
-                    result.Status = 1;
-                    result.Message = "Get users successfully.";
-                    result.Data = data.Item1;
-                    result.TotalRow = data.Item2;
-                }
-                else
-                {
-                    result.Status = 1;
-                    result.Message = "No users found.";
-                    result.Data = data.Item1;
-                    result.TotalRow = 0;
-                }
-                return result;
+                    Status = 1,
+                    Message = "Get users successfully.",
+                    Data = data.Item1,
+                    TotalRow = data.Item2
+                };
             }
             catch (Exception ex)
             {
-                var result = new BaseResultModel();
-                result.Status = -1;
-                result.Message = ex.Message;
-                return result;
+                return new BaseResultModel
+                {
+                    Status = -1,
+                    Message = "Backend Error: " + ex.Message
+                };
             }
             
+        }
+        public async Task<BaseResultModel> GetRoles()
+        {
+            try
+            {
+                var roles = _loginDAL.GetRoles();
+                return new BaseResultModel
+                {
+                    Status = 1,
+                    Message = "Get roles successfully.",
+                    Data = roles
+                };
+            }
+            catch (Exception ex)
+            {
+                return new BaseResultModel
+                {
+                    Status = -1,
+                    Message = "Backend Error: " + ex.Message
+                };
+            }
         }
     }
 }

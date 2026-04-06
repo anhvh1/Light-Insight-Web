@@ -37,6 +37,13 @@ namespace LightInsightService.Controllers.Login
             var result = await _service.GetUsers(req.Search,req.Page,req.PageSize);
             return Ok(result);
         }
+
+        [HttpGet("Roles")]
+        public async Task<IActionResult> GetRoles()
+        {
+            var result = await _service.GetRoles();
+            return Ok(result);
+        }
     }
 
     
