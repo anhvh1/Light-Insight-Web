@@ -4,14 +4,12 @@ import { cn } from '@/lib/utils';
 import { 
   Plus, 
   RefreshCcw, 
-  Zap, 
   Sliders, 
   X, 
   SearchIcon, 
   Edit2, 
   Trash2,
   Check,
-  Search
 } from 'lucide-react';
 import { priorityApi } from '@/lib/priority-api';
 import { StatusPill } from '@/components/ui/status-badge';
@@ -127,7 +125,7 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
              <span className="text-t-2 font-mono text-[11px] uppercase tracking-widest">Đang tải...</span>
           </div>
         ) : (
-          <div className="overflow-auto flex-1 scrollbar-thin scrollbar-thumb-psim-accent/30 scrollbar-track-transparent hover:scrollbar-thumb-psim-accent/50">
+          <div className="overflow-auto flex-1">
             <table className="w-full text-left border-collapse">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-[#121929] border-b border-border-dim">
@@ -195,7 +193,7 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
                   <input className="w-full bg-[#121929] border border-white/10 rounded-lg h-10 pl-10 pr-4 text-[12px] text-white outline-none" placeholder="Tìm kiếm sự kiện AI..." value={modalSearch} onChange={(e) => setModalSearch(e.target.value)} />
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-psim-accent/20 scrollbar-track-transparent">
+              <div className="flex-1 overflow-y-auto ">
                 <div className="grid grid-cols-3 gap-3">
                   {(() => {
                     const configuredEvents = new Set(mappings.flatMap(m => m.AnalyticsEvents));
