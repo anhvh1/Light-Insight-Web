@@ -26,10 +26,10 @@ const navItems: NavItem[] = [
   { id: 'map', icon: MapIcon, tip: 'Situational Map', path: '/map' },
   { id: 'wall', icon: MonitorPlay, tip: 'Video Wall', path: '/wall' },
   { id: 'inc', icon: Siren, tip: 'Incident Mgmt', badge: 10, path: '/incident' },
-  { type: 'sep' },
+  // { type: 'sep' }, // seperator
   { id: 'ana', icon: BarChart3, tip: 'Analytics', path: '/analytics' },
   { id: 'shift', icon: ClipboardList, tip: 'Shift Handover', path: '/shift' },
-  { type: 'sep' },
+  // { type: 'sep' }, // seperator
   { id: 'health', icon: Plug2, tip: 'System Health', path: '/health' },
   { id: 'config', icon: Settings, tip: 'Config & Admin', path: '/config' },
 ];
@@ -38,7 +38,7 @@ export function Sidebar() {
   const { newCount, refreshAlarms } = useAlarmSignalR();
 
   return (
-    <nav className="w-14.5 bg-bg-1 border-r border-border-dim flex flex-col items-center py-2 gap-0.5 overflow-hidden shrink-0 h-full">
+    <nav className="w-14.5 bg-bg-1 border-r border-border-dim flex flex-col items-center py-2 gap-0.5 shrink-0 h-full z-[1000] overflow-visible">
       {navItems.map((item, idx) => {
         if (item.type === 'sep') {
           return <div key={`sep-${idx}`} className="w-7.5 h-px bg-border-dim my-1" />;
@@ -65,9 +65,11 @@ export function Sidebar() {
             <Icon size={18} />
             
             {/* Tooltip */}
-            <span className="absolute left-13 bg-bg3 text-t0 text-[11px] px-2.5 py-1 rounded-md whitespace-nowrap border border-border-brighter pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-999 shadow-xl">
+            <div className="absolute left-full ml-2 px-2.5 py-1.5 bg-[#161b2e] text-white text-[11px] font-bold rounded-md whitespace-nowrap border border-white/10 pointer-events-none opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all z-[9999] shadow-2xl uppercase tracking-wider">
               {item.tip}
-            </span>
+              {/* Tooltip Arrow */}
+              <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-[#161b2e] border-l border-b border-white/10 rotate-45" />
+            </div>
 
             {/* Badge */}
             {badge ? (
