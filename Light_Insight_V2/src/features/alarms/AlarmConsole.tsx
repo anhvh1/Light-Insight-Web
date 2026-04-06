@@ -61,7 +61,7 @@ export function AlarmConsole() {
 
   const renderAlarmTable = () => (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="alarm-scrollbar flex-1 overflow-y-auto pr-1">
+      <div className="flex-1 overflow-y-auto pr-1">
         <table className="w-full border-collapse text-left">
           <thead>
             <tr>

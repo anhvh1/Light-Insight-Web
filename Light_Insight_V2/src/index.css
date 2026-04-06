@@ -165,27 +165,3 @@
   color: var(--t0);
 }
 
-.alarm-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(94, 110, 138, 0.55) rgba(255, 255, 255, 0.04);
-}
-
-.alarm-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.alarm-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 9999px;
-}
-
-.alarm-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(94, 110, 138, 0.6);
-  border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.alarm-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(168, 180, 204, 0.75);
-}
