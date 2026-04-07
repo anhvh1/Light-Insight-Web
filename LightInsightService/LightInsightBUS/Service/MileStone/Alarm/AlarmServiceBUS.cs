@@ -26,7 +26,7 @@ namespace LightInsightBUS.Service.MileStone.Alarm
             tocken = new GetAnalyticsEvents(cache);
         }
 
-        public async Task<List<AlarmData>> GetAlarmData(int page, int pageSize)
+        public async Task<List<AlarmData>> GetAlarmData(int page, int pageSize, AlarmFilter filter = null)
         {
             var resultList = new List<AlarmData>();
 
@@ -40,8 +40,11 @@ namespace LightInsightBUS.Service.MileStone.Alarm
             int milestonePageIndex = page - 1;
             if (milestonePageIndex < 0) milestonePageIndex = 0;
 
+            // Chuyển đổi Object Filter thành chuỗi Query String
+            string filterQuery = BuildMilestoneFilterQuery(filter);
+
             // 2. Lấy dữ liệu raw (chuỗi JSON) từ API Alarm
-            string rawAlarmJson = alarm.GetAlarmsList(baseUrl, accessToken, milestonePageIndex, pageSize);
+            string rawAlarmJson = alarm.GetAlarmsList(baseUrl, accessToken, milestonePageIndex, pageSize, filterQuery);
 
             if (string.IsNullOrEmpty(rawAlarmJson))
             {
@@ -115,6 +118,64 @@ namespace LightInsightBUS.Service.MileStone.Alarm
             }
 
             return resultList;
+        }
+
+        // =========================================================================
+        // HÀM HELPER: BIẾN OBJECT THÀNH CHUỖI QUERY CHO MILESTONE
+        // =========================================================================
+        private string BuildMilestoneFilterQuery(AlarmFilter filter)
+        {
+            if (filter == null) return string.Empty;
+
+            var queryParts = new List<string>();
+
+            if (!string.IsNullOrEmpty(filter.priorityName))
+                queryParts.Add($"priority.name='{EscapeString(filter.priorityName)}'");
+
+            if (!string.IsNullOrEmpty(filter.message))
+                queryParts.Add($"message='{EscapeString(filter.message)}'");
+
+            if (!string.IsNullOrEmpty(filter.source))
+                queryParts.Add($"cameraId='{EscapeString(filter.source)}'");
+
+            //if (filter.ExcludeClosedAlarms)
+            //{
+            //    queryParts.Add("state.name=notEquals:'Closed'");
+            //}
+            //else if (!string.IsNullOrEmpty(filter.StateName))
+            //{
+            //    queryParts.Add($"state.name='{EscapeString(filter.StateName)}'");
+            //}
+
+            if (!string.IsNullOrEmpty(filter.stateName))
+            {
+                queryParts.Add($"state.name='{EscapeString(filter.stateName)}'");
+            }
+
+            var timeFilters = new List<string>();
+            if (filter.fromTime.HasValue)
+            {
+                string fromStr = filter.fromTime.Value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+                timeFilters.Add($"gt:'{fromStr}'");
+            }
+
+            if (filter.toTime.HasValue)
+            {
+                string toStr = filter.toTime.Value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+                timeFilters.Add($"lt:'{toStr}'");
+            }
+
+            if (timeFilters.Count > 0)
+            {
+                queryParts.Add($"time={string.Join(",", timeFilters)}");
+            }
+
+            return queryParts.Count > 0 ? string.Join("&", queryParts) : string.Empty;
+        }
+
+        private string EscapeString(string input)
+        {
+            return input?.Replace("'", "''");
         }
     }
 }
