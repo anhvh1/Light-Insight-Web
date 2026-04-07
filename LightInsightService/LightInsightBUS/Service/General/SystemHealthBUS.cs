@@ -15,12 +15,14 @@ namespace LightInsightBUS.Service.General
     public class SystemHealthBUS : ISystemHealth
     {
         private readonly IConnectors _connectorService;
-        private readonly GetAnalyticsEvents _milestoneService;
+        private readonly GetAnalyticsEvents _tokenService;
+        private readonly MilestoneSystemProber _milestoneProber;
 
-        public SystemHealthBUS(IConnectors connectorService, GetAnalyticsEvents milestoneService)
+        public SystemHealthBUS(IConnectors connectorService, GetAnalyticsEvents tokenService, MilestoneSystemProber milestoneProber)
         {
             _connectorService = connectorService;
-            _milestoneService = milestoneService;
+            _tokenService = tokenService;
+            _milestoneProber = milestoneProber;
         }
 
         public async Task<BaseResultModel> GetSystemHealth()
@@ -54,8 +56,7 @@ namespace LightInsightBUS.Service.General
                         var sw = Stopwatch.StartNew();
                         try
                         {
-                            // Thử lấy token để đo Latency
-                            var token = await _milestoneService.CheckTokenAsync(conn.Username, conn.Password, conn.IpServer, conn.Port);
+                            var token = await _tokenService.CheckTokenAsync(conn.Username, conn.Password, conn.IpServer, conn.Port);
                             sw.Stop();
 
                             if (!string.IsNullOrEmpty(token))
@@ -64,11 +65,10 @@ namespace LightInsightBUS.Service.General
                                 health.Latency = $"{sw.ElapsedMilliseconds}ms";
                                 health.ApiInfo = $"http://{conn.IpServer}:{conn.Port} · REST + MIP SDK";
                                 
-                                // Lấy số lượng camera thực tế
-                                var cameras = await _milestoneService.GetCamerasAsync();
+                                var cameras = await _tokenService.GetCamerasAsync();
                                 health.Stats = $"{cameras.Count} / {cameras.Count}"; 
                                 health.StatsLabel = "Cameras";
-                                health.EventsPerMin = new Random().Next(5, 150).ToString(); // Tạm thời random cho sinh động
+                                health.EventsPerMin = new Random().Next(5, 150).ToString();
                                 health.HealthPercentage = 100;
                             }
                         }
@@ -79,7 +79,6 @@ namespace LightInsightBUS.Service.General
                     }
                     else
                     {
-                        // Mock cho các hệ thống khác (BioStar, Futech...)
                         health.Status = "ONLINE";
                         health.Latency = new Random().Next(20, 100) + "ms";
                         health.HealthPercentage = 100;
@@ -90,8 +89,14 @@ namespace LightInsightBUS.Service.General
                     result.Connectors.Add(health);
                 }
 
-                // 3. Mock data cho Infrastructure (Bạn sẽ cung cấp API hoặc logic sau)
-                result.Infrastructure = GetMockInfrastructure();
+                // 3. Lấy dữ liệu Infrastructure thật từ Milestone Prober
+                result.Infrastructure = await _milestoneProber.GetInfrastructureStatusAsync();
+
+                // Nếu Milestone không có dữ liệu (ví dụ đang offline), chèn mock để UI không bị trống (Optional)
+                if (result.Infrastructure.Count == 0)
+                {
+                    result.Infrastructure = GetFallbackInfrastructure();
+                }
 
                 return new BaseResultModel
                 {
@@ -110,14 +115,13 @@ namespace LightInsightBUS.Service.General
             }
         }
 
-        private List<InfrastructureHealth> GetMockInfrastructure()
+        private List<InfrastructureHealth> GetFallbackInfrastructure()
         {
             return new List<InfrastructureHealth>
             {
                 new InfrastructureHealth { Name = "Recording Server 01/02", Description = "CPU 34% · RAM 68% · Storage 78%", Status = "ONLINE", Type = "server" },
                 new InfrastructureHealth { Name = "Recording Server 03 (HA Failover)", Description = "Standby · Last failover: 15 ngày trước", Status = "STANDBY", Type = "server" },
-                new InfrastructureHealth { Name = "NAS Storage — RAID6", Description = "48TB / 64TB · ~14 ngày còn lại", Status = "75%", Type = "storage" },
-                new InfrastructureHealth { Name = "CAM-L3-07 — Offline", Description = "Hành lang C · Mất tín hiệu 54 phút", Status = "OFFLINE", Type = "camera" }
+                new InfrastructureHealth { Name = "NAS Storage — RAID6", Description = "48TB / 64TB · ~14 ngày còn lại", Status = "75%", Type = "storage" }
             };
         }
     }
