@@ -26,6 +26,33 @@ namespace LightInsightBUS.Service.MileStone.Alarm
             tocken = new GetAnalyticsEvents(cache);
         }
 
+        public async Task<List<string>> GetAlarmMessageDropdownAsync()
+        {
+            // Lấy Token và cấu hình
+            var accessToken = await tocken.GetTokenAsync();
+            var config = tocken.GetVmsConfig(1);
+            var baseUrl = $"http://{config.IpServer}:{config.Port}";
+
+            // Gọi API của Milestone
+            string rawJson = alarm.GetAllAlarmMessages(baseUrl, accessToken);
+
+            if (string.IsNullOrEmpty(rawJson))
+            {
+                return new List<string>(); // Trả về list rỗng nếu lỗi
+            }
+
+            // Ép kiểu JSON
+            var responseData = JsonConvert.DeserializeObject<MilestoneAlarmMessageResponse>(rawJson);
+
+            // Bốc nguyên cái mảng chuỗi ném thẳng cho Frontend, không cần foreach gì hết!
+            if (responseData?.array != null)
+            {
+                return responseData.array;
+            }
+
+            return new List<string>();
+        }
+
         public async Task<List<AlarmData>> GetAlarmData(int page, int pageSize, AlarmFilter filter = null)
         {
             var resultList = new List<AlarmData>();

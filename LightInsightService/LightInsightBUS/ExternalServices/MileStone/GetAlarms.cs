@@ -7,9 +7,6 @@ namespace LightInsightBUS.ExternalServices.MileStone
 {
     class GetAlarms
     {
-        /// <summary>
-        /// Hàm lấy dữ liệu Alarms dùng HttpClient có sẵn của .NET
-        /// </summary>
         public string GetAlarmsList(string baseUrl, string token, int pageIndex, int pageSize, string filterQuery = "")
         {
             string result = string.Empty;
@@ -59,6 +56,39 @@ namespace LightInsightBUS.ExternalServices.MileStone
                 Console.WriteLine("Error fetching alarms: " + ex.Message);
             }
 
+            return result;
+        }
+
+        public string GetAllAlarmMessages(string baseUrl, string token)
+        {
+            string result = string.Empty;
+            try
+            {
+                var handler = new HttpClientHandler();
+                handler.ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
+
+                using (var client = new HttpClient(handler))
+                {
+                    client.BaseAddress = new Uri(baseUrl);
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+                    // Endpoint của Milestone lấy Alarm Messages
+                    string endpoint = "/api/rest/v1/alarmMessages";
+
+                    HttpResponseMessage response = client.GetAsync(endpoint).Result;
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        result = response.Content.ReadAsStringAsync().Result;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error fetching alarm messages: " + ex.Message);
+            }
             return result;
         }
     }
