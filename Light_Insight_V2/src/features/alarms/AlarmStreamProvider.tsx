@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as signalR from '@microsoft/signalr';
 import type { Alarm } from '@/types';
-import { alarmApi } from '@/lib/alarm-api';
+import { alarmApi, type AlarmFilters } from '@/lib/alarm-api';
 import { normalizeApiAlarm, normalizeSignalRAlarm, type AlarmPayload } from './alarm-mapper';
 
 const HUB_BASE_URL = import.meta.env.VITE_ALARM_HUB_URL;
@@ -20,7 +20,8 @@ type AlarmStreamContextValue = {
   pageSize: number;
   canNextPage: boolean;
   newCount: number;
-  refreshAlarms: () => Promise<void>;
+  filters: AlarmFilters;
+  refreshAlarms: (nextFilters?: AlarmFilters) => Promise<void>;
   nextPage: () => Promise<void>;
   prevPage: () => Promise<void>;
   clearNewFlags: () => void;
@@ -35,6 +36,7 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [canNextPage, setCanNextPage] = useState(true);
+  const [filters, setFilters] = useState<AlarmFilters>({});
 
   const clearNewFlags = useCallback(() => {
     setAlarms((prev) => prev.map((alarm) => ({ ...alarm, isNew: false })));
@@ -48,10 +50,14 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const fetchPage = useCallback(async (page: number) => {
+  const fetchPage = useCallback(async (page: number, activeFilters: AlarmFilters) => {
     setLoading(true);
     try {
-      const rows = await alarmApi.getAll({ page, pageSize: SERVER_PAGE_SIZE });
+      const rows = await alarmApi.getAll({
+        page,
+        pageSize: SERVER_PAGE_SIZE,
+        ...activeFilters,
+      });
       const nextAlarms = rows.map(normalizeApiAlarm).slice(0, MAX_ALARMS);
       setAlarms(nextAlarms);
       setCurrentPage(page);
@@ -65,21 +71,29 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const refreshAlarms = useCallback(async () => {
-    await fetchPage(1);
-  }, [fetchPage]);
+  const refreshAlarms = useCallback(
+    async (nextFilters?: AlarmFilters) => {
+      let merged: AlarmFilters = {};
+      setFilters((prev) => {
+        merged = { ...prev, ...(nextFilters ?? {}) };
+        return merged;
+      });
+      await fetchPage(1, merged);
+    },
+    [fetchPage],
+  );
 
   const nextPage = useCallback(async () => {
     if (loading || !canNextPage) return;
     const targetPage = currentPage + 1;
-    const ok = await fetchPage(targetPage);
+    const ok = await fetchPage(targetPage, filters);
     if (!ok) return;
-  }, [canNextPage, currentPage, fetchPage, loading]);
+  }, [canNextPage, currentPage, fetchPage, filters, loading]);
 
   const prevPage = useCallback(async () => {
     if (loading || currentPage <= 1) return;
-    await fetchPage(currentPage - 1);
-  }, [currentPage, fetchPage, loading]);
+    await fetchPage(currentPage - 1, filters);
+  }, [currentPage, fetchPage, filters, loading]);
 
   const addAlarm = useCallback((payload: AlarmPayload) => {
     const alarm = normalizeSignalRAlarm(payload);
@@ -129,6 +143,7 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
       pageSize: SERVER_PAGE_SIZE,
       canNextPage,
       newCount,
+      filters,
       refreshAlarms,
       nextPage,
       prevPage,
@@ -142,7 +157,7 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
       currentPage,
       canNextPage,
       newCount,
-      refreshAlarms,
+      filters,
       nextPage,
       prevPage,
       clearNewFlags,

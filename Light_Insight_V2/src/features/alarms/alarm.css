@@ -1,0 +1,95 @@
+.alarm-tab {
+  padding: 4px 12px;
+  border-radius: 5px;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--t2);
+  transition: all 0.15s;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.alarm-tab:hover,
+.alarm-tab.on {
+  background: var(--bg4);
+  color: var(--t0);
+}
+
+.alarm-filter-control {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)), var(--bg2);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--t0);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.alarm-filter-control:hover {
+  border-color: var(--border-brighter);
+}
+
+.alarm-filter-control:focus {
+  border-color: rgba(0, 194, 255, 0.75);
+  box-shadow: 0 0 0 1px rgba(0, 194, 255, 0.2);
+}
+
+.alarm-filter-control:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.alarm-filter-control::-webkit-calendar-picker-indicator {
+  filter: brightness(0) invert(1) opacity(0.9);
+  cursor: pointer;
+}
+
+.alarm-filter-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid rgba(165, 220, 255, 0.85);
+  background: linear-gradient(180deg, rgba(27, 36, 56, 0.95), rgba(16, 24, 40, 0.95));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  display: inline-grid;
+  place-content: center;
+  vertical-align: middle;
+}
+
+.alarm-filter-check:hover {
+  border-color: rgba(0, 194, 255, 0.8);
+}
+
+.alarm-filter-check:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 194, 255, 0.25);
+}
+
+.alarm-filter-check:checked {
+  border-color: rgba(0, 194, 255, 0.95);
+  background: linear-gradient(180deg, rgba(18, 126, 173, 0.95), rgba(8, 73, 116, 0.95));
+  box-shadow: 0 0 0 1px rgba(0, 194, 255, 0.25);
+}
+
+.alarm-filter-check::before {
+  content: "";
+  width: 6px;
+  height: 3px;
+  border-left: 1.5px solid #eaf7ff;
+  border-bottom: 1.5px solid #eaf7ff;
+  transform: rotate(-45deg) scale(0);
+  transform-origin: center;
+  transition: transform 0.12s ease-in-out;
+}
+
+.alarm-filter-check:checked::before {
+  transform: rotate(-45deg) scale(1);
+}
+

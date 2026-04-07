@@ -146,22 +146,3 @@
   }
 }
 
-.alarm-tab {
-  padding: 4px 12px;
-  border-radius: 5px;
-  font-size: 11px;
-  cursor: pointer;
-  color: var(--t2);
-  transition: all 0.15s;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  white-space: nowrap;
-}
-
-.alarm-tab:hover,
-.alarm-tab.on {
-  background: var(--bg4);
-  color: var(--t0);
-}
-
