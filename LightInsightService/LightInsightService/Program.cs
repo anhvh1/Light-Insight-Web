@@ -16,6 +16,7 @@ using LightInsightBUS.Interfaces.MileStone.Alarm;
 using LightInsightBUS.Interfaces.General;
 using LightInsightBUS.Service.General;
 using LightInsightService.CacheLoader;
+using LightInsightBUS.ExternalServices.MileStone;
 
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -55,6 +56,8 @@ builder.Services.AddScoped<IRegister, RegisterBUS>();
 builder.Services.AddScoped<ILogin, LoginBUS>();
 builder.Services.AddScoped<IConnectors, ConnectorsBUS>();
 builder.Services.AddScoped<IDMMap, DMMapBUS>();
+builder.Services.AddScoped<ISystemHealth, SystemHealthBUS>();
+builder.Services.AddScoped<GetAnalyticsEvents>();
 
 
 builder.Services.AddSignalR();
