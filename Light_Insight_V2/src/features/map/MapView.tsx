@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { MOCK_ALARMS } from '@/lib/mock-data';
 // import type { Device } from '@/types';
 import { cn } from '@/lib/utils';
-import { MapPin, ChevronRight } from 'lucide-react';
+import { MapPin, ChevronRight, GripVertical, ChevronUp, ChevronDown, Layers } from 'lucide-react';
 
 const STATS = [
   { label: 'CAMERA ACTIVE', val: '47', sub: '/ 52 total', color: 'text-psim-green' },
@@ -14,11 +14,70 @@ const STATS = [
 
 export function MapView() {
   const [activeFloor, setActiveFloor] = useState('B1');
-  // const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const floors = ['L5', 'L4', 'L3', 'L2', 'L1', 'B1', 'B2'];
 
+  // Draggable Toolbar States
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 150 }); // Initial position from right/top
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ mouseX: 0, mouseY: 0, startX: 0, startY: 0 });
+  
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !mapContainerRef.current || !toolbarRef.current) return;
+      
+      const containerRect = mapContainerRef.current.getBoundingClientRect();
+      const toolbarRect = toolbarRef.current.getBoundingClientRect();
+      
+      const dx = e.clientX - dragStartRef.current.mouseX;
+      const dy = e.clientY - dragStartRef.current.mouseY;
+      
+      // Calculate new raw positions
+      let newRight = dragStartRef.current.startX - dx;
+      let newTop = dragStartRef.current.startY + dy;
+
+      // BOUNDARY CONSTRAINTS
+      // 1. Horizontal (Right)
+      const minRight = 8; // Margin from right edge
+      const maxRight = containerRect.width - toolbarRect.width - 8;
+      newRight = Math.max(minRight, Math.min(maxRight, newRight));
+
+      // 2. Vertical (Top)
+      const minTop = 8; // Margin from top edge
+      const maxTop = containerRect.height - toolbarRect.height - 8;
+      newTop = Math.max(minTop, Math.min(maxTop, newTop));
+      
+      setToolbarPos({ x: newRight, y: newTop });
+    };
+
+    const handleGlobalMouseUp = () => setIsDragging(false);
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleGlobalMouseMove);
+      window.addEventListener('mouseup', handleGlobalMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isDragging]);
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startX: toolbarPos.x,
+      startY: toolbarPos.y
+    };
+  };
+
   return (
-    <div className="flex flex-col h-full bg-bg0 text-t0">
+    <div className="flex flex-col h-full bg-bg0 text-t0 select-none">
       {/* Header & Stats Bar */}
       <div className="px-4 py-3 border-b border-border-dim bg-bg0/50">
         <div className="flex items-center justify-between mb-4">
@@ -60,7 +119,7 @@ export function MapView() {
         </div>
 
         {/* Map Canvas */}
-        <div className="flex-1 relative bg-bg1 overflow-hidden flex items-center justify-center group/map">
+        <div ref={mapContainerRef} className="flex-1 relative bg-bg1 overflow-hidden flex items-center justify-center group/map">
           {/* Legend (Bottom Left) */}
           <div className="absolute bottom-4 left-4 bg-bg0/80 backdrop-blur-md border border-border-dim rounded-lg p-2.5 z-20 flex flex-col gap-1.5 shadow-2xl">
             <div className="flex items-center gap-2 text-[9px] font-bold"><span className="w-2 h-2 rounded-full bg-psim-red shadow-[0_0_5px_var(--red)]" /> CRITICAL ALARM</div>
@@ -124,20 +183,62 @@ export function MapView() {
             <Marker x={480} y={485} num="05" status="online" />
           </div>
 
-          {/* Floating Floor Selector (Right side of Map) */}
-          <div className="absolute right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-1 bg-bg0/60 backdrop-blur-md border border-border-dim rounded-lg shadow-xl z-30 font-mono">
-            {floors.map(f => (
-              <button 
-                key={f}
-                onClick={() => setActiveFloor(f)}
-                className={cn(
-                  "w-8 h-8 flex items-center justify-center text-[10px] font-bold rounded transition-all",
-                  activeFloor === f ? "bg-psim-accent text-bg0 shadow-[0_0_10px_var(--accent)]" : "text-t2 hover:bg-bg3 hover:text-t1"
-                )}
+          {/* Floating Floor Selector (Now Draggable & Collapsible) */}
+          <div 
+            ref={toolbarRef}
+            style={{ 
+              right: `${toolbarPos.x}px`, 
+              top: `${toolbarPos.y}px`,
+              transition: isDragging ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+            }}
+            className="absolute z-50 flex flex-col bg-bg0/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden min-w-[44px]"
+          >
+            {/* Drag Handle & Toggle Header */}
+            <div className="flex items-center justify-between p-2 border-b border-white/5 bg-white/5">
+              <div 
+                onMouseDown={handleDragStart}
+                className="cursor-grab active:cursor-grabbing p-1 hover:bg-white/10 rounded transition-colors text-t2"
               >
-                {f}
+                <GripVertical size={14} />
+              </div>
+              <button 
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="p-1 hover:bg-white/10 rounded transition-colors text-psim-orange"
+              >
+                {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </button>
-            ))}
+            </div>
+
+            {/* Floor List */}
+            <div className={cn(
+              "flex flex-col gap-1 p-1.5 transition-all duration-300",
+              isExpanded ? "max-h-[400px] opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+            )}>
+              <div className="flex items-center justify-center py-1 mb-1 text-[9px] font-black text-t3 uppercase tracking-widest border-b border-white/5">
+                <Layers size={10} className="mr-1" /> Floors
+              </div>
+              {floors.map(f => (
+                <button 
+                  key={f}
+                  onClick={() => setActiveFloor(f)}
+                  className={cn(
+                    "w-8 h-8 flex items-center justify-center text-[10px] font-bold rounded-lg transition-all",
+                    activeFloor === f 
+                      ? "bg-psim-orange text-white shadow-lg shadow-psim-orange/20" 
+                      : "text-t2 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+
+            {/* Collapsed State Icon */}
+            {!isExpanded && (
+              <div className="flex items-center justify-center py-3 text-psim-orange animate-pulse">
+                <div className="w-1.5 h-1.5 rounded-full bg-current" />
+              </div>
+            )}
           </div>
         </div>
 
