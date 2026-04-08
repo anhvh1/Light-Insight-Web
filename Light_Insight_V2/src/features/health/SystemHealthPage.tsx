@@ -140,10 +140,10 @@ export function SystemHealthPage() {
                           <span className="text-t-2">{c.StatsLabel}</span>
                           <span className="font-semibold text-t1">{c.Stats}</span>
                         </div>
-                        <div className="flex justify-between text-[11px]">
+                        {/* <div className="flex justify-between text-[11px]">
                           <span className="text-t2">Events/min</span>
                           <span className="font-semibold text-t1">{c.EventsPerMin}</span>
-                        </div>
+                        </div> */}
                         <div className="flex justify-between text-[11px] items-center">
                           <span className="text-t-2">Status</span>
                           <StatusText status={c.Status} />

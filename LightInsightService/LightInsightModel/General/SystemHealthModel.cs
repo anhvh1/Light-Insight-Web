@@ -19,6 +19,7 @@ namespace LightInsightModel.General
         public string EventsPerMin { get; set; }
         public string Status { get; set; }
         public int HealthPercentage { get; set; }
+        public string Description { get; set;}
     }
 
     public class InfrastructureHealth

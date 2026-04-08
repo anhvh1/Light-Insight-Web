@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 
 namespace LightInsightBUS.Service.General
@@ -31,98 +32,90 @@ namespace LightInsightBUS.Service.General
             
             try
             {
-                // 1. Lấy danh sách Connectors từ DB/Cache
                 var connectorsRes = await _connectorService.GetAllConnectorsAsync();
                 var connectorList = connectorsRes.Data as List<ConnectorListModel> ?? new List<ConnectorListModel>();
 
-                // 2. Kiểm tra Health cho từng Connector
-                foreach (var conn in connectorList)
-                {
-                    var health = new ConnectorHealth
-                    {
-                        Name = conn.VmsName,
-                        ApiInfo = $"http://{conn.IpServer}:{conn.Port} · REST API",
-                        StatsLabel = "Devices",
-                        Status = "OFFLINE",
-                        Latency = "0ms",
-                        HealthPercentage = 0,
-                        EventsPerMin = "0",
-                        Stats = "0/0"
-                    };
-
-                    // Logic riêng cho Milestone
-                    if (conn.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var sw = Stopwatch.StartNew();
-                        try
-                        {
-                            var token = await _tokenService.CheckTokenAsync(conn.Username, conn.Password, conn.IpServer, conn.Port);
-                            sw.Stop();
-
-                            if (!string.IsNullOrEmpty(token))
-                            {
-                                health.Status = sw.ElapsedMilliseconds > 500 ? "SLOW" : "ONLINE";
-                                health.Latency = $"{sw.ElapsedMilliseconds}ms";
-                                health.ApiInfo = $"http://{conn.IpServer}:{conn.Port} · REST + MIP SDK";
-                                
-                                var cameras = await _tokenService.GetCamerasAsync();
-                                health.Stats = $"{cameras.Count} / {cameras.Count}"; 
-                                health.StatsLabel = "Cameras";
-                                health.EventsPerMin = new Random().Next(5, 150).ToString();
-                                health.HealthPercentage = 100;
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            health.Status = "OFFLINE";
-                        }
-                    }
-                    else
-                    {
-                        health.Status = "ONLINE";
-                        health.Latency = new Random().Next(20, 100) + "ms";
-                        health.HealthPercentage = 100;
-                        health.Stats = "OK";
-                        health.EventsPerMin = "12";
-                    }
-
-                    result.Connectors.Add(health);
-                }
-
-                // 3. Lấy dữ liệu Infrastructure thật từ Milestone Prober
+                var probeTasks = connectorList.Select(conn => ProbeConnectorAsync(conn)).ToList();
+                var connectorResults = await Task.WhenAll(probeTasks);
+                
+                result.Connectors.AddRange(connectorResults.Where(r => r != null));
                 result.Infrastructure = await _milestoneProber.GetInfrastructureStatusAsync();
 
-                // Nếu Milestone không có dữ liệu (ví dụ đang offline), chèn mock để UI không bị trống (Optional)
-                if (result.Infrastructure.Count == 0)
-                {
-                    result.Infrastructure = GetFallbackInfrastructure();
-                }
-
-                return new BaseResultModel
-                {
-                    Status = 1,
-                    Message = "Get system health successfully.",
-                    Data = result
-                };
+                return new BaseResultModel { Status = 1, Message = "Success", Data = result };
             }
             catch (Exception ex)
             {
-                return new BaseResultModel
-                {
-                    Status = -1,
-                    Message = "Backend Error: " + ex.Message
-                };
+                return new BaseResultModel { Status = -1, Message = "Error: " + ex.Message };
             }
         }
 
-        private List<InfrastructureHealth> GetFallbackInfrastructure()
+        private async Task<ConnectorHealth> ProbeConnectorAsync(ConnectorListModel conn)
         {
-            return new List<InfrastructureHealth>
+            var health = new ConnectorHealth
             {
-                new InfrastructureHealth { Name = "Recording Server 01/02", Description = "CPU 34% · RAM 68% · Storage 78%", Status = "ONLINE", Type = "server" },
-                new InfrastructureHealth { Name = "Recording Server 03 (HA Failover)", Description = "Standby · Last failover: 15 ngày trước", Status = "STANDBY", Type = "server" },
-                new InfrastructureHealth { Name = "NAS Storage — RAID6", Description = "48TB / 64TB · ~14 ngày còn lại", Status = "75%", Type = "storage" }
+                Name = conn.VmsName,
+                ApiInfo = $"{conn.IpServer}:{conn.Port}",
+                StatsLabel = "Status",
+                Status = "OFFLINE",
+                Latency = "0ms",
+                HealthPercentage = 0,
+                EventsPerMin = "0", // Mặc định là 0, không random
+                Stats = "Disconnected",
+                Description = "Pending network check"
             };
+
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                bool isReachable = await CheckConnectivityAsync(conn.IpServer, (int)conn.Port);
+                sw.Stop();
+
+                if (isReachable)
+                {
+                    health.Status = sw.ElapsedMilliseconds > 500 ? "SLOW" : "ONLINE";
+                    health.Latency = $"{sw.ElapsedMilliseconds}ms";
+                    health.HealthPercentage = 100;
+                    health.Stats = "Connected";
+                    health.Description = "System reachable";
+
+                    if (conn.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var token = await _tokenService.GetTokenAsync();
+                        if (!string.IsNullOrEmpty(token))
+                        {
+                            var cameras = await _tokenService.GetCamerasAsync();
+                            health.Stats = $"{cameras.Count} / {cameras.Count}";
+                            health.StatsLabel = "Cameras";
+                            health.EventsPerMin = "0"; // Milestone API không trả về trực tiếp, tạm để 0
+                        }
+                    }
+                }
+            }
+            catch 
+            { 
+                health.Status = "OFFLINE"; 
+            }
+
+            return health;
+        }
+
+        private async Task<bool> CheckConnectivityAsync(string ip, int port)
+        {
+            try
+            {
+                using var client = new TcpClient();
+                var task = client.ConnectAsync(ip, port);
+                if (await Task.WhenAny(task, Task.Delay(1500)) == task)
+                {
+                    await task;
+                    return client.Connected;
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

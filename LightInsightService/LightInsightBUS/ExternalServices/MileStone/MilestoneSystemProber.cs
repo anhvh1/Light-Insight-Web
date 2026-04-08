@@ -1,12 +1,7 @@
 using LightInsightBUS.ExternalServices.MileStone;
-using LightInsightBUS.Interfaces.Connectors;
-using LightInsightBUS.Interfaces.General;
-using LightInsightModel.Connectors;
 using LightInsightModel.General;
-using LightInsightModel.MileStone.General;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -22,6 +17,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
         public MilestoneSystemProber(GetAnalyticsEvents tokenService)
         {
             _httpClient = new HttpClient();
+            _httpClient.Timeout = TimeSpan.FromSeconds(5); // Tối ưu: Timeout 5s để không treo UI
             _tokenService = tokenService;
         }
 
@@ -36,21 +32,21 @@ namespace LightInsightBUS.ExternalServices.MileStone
 
                 string baseUrl = $"http://{config.IpServer}:{config.Port}/API/rest/v1";
 
-                // 1. Get Recording Servers
-                var servers = await GetRecordingServers(baseUrl, token);
-                result.AddRange(servers);
+                // Kỹ thuật 1: Chạy song song cả 3 yêu cầu tới Milestone
+                var serversTask = GetRecordingServers(baseUrl, token);
+                var storageTask = GetOverallStorage(baseUrl, token);
+                var camerasTask = GetOfflineCameras(baseUrl, token);
 
-                // 2. Get Storage Info (Simplified for first implementation)
-                var storage = await GetOverallStorage(baseUrl, token);
+                await Task.WhenAll(serversTask, storageTask, camerasTask);
+
+                result.AddRange(await serversTask);
+                var storage = await storageTask;
                 if (storage != null) result.Add(storage);
-
-                // 3. Get Offline Cameras
-                var offlineCams = await GetOfflineCameras(baseUrl, token);
-                result.AddRange(offlineCams);
+                result.AddRange(await camerasTask);
             }
             catch (Exception ex)
             {
-                Console.WriteLine("MilestoneProber Error: " + ex.Message);
+                Console.WriteLine("MilestoneProber Optimized Error: " + ex.Message);
             }
             return result;
         }
@@ -73,11 +69,10 @@ namespace LightInsightBUS.ExternalServices.MileStone
                         foreach (var item in array.EnumerateArray())
                         {
                             bool isRunning = item.GetProperty("status").GetString() == "Running";
-                            string name = item.GetProperty("name").GetString();
                             list.Add(new InfrastructureHealth
                             {
-                                Name = name,
-                                Description = $"ID: {item.GetProperty("id").GetString().Substring(0, 8)}... · Milestone Recording Server",
+                                Name = item.GetProperty("name").GetString(),
+                                Description = "Milestone Recording Server",
                                 Status = isRunning ? "ONLINE" : "OFFLINE",
                                 Type = "server"
                             });
@@ -91,8 +86,6 @@ namespace LightInsightBUS.ExternalServices.MileStone
 
         private async Task<InfrastructureHealth> GetOverallStorage(string baseUrl, string token)
         {
-            // Milestone API requires server ID to get storage. 
-            // This is a simplified version that returns a general status for now.
             return new InfrastructureHealth
             {
                 Name = "Milestone Video Repository",
@@ -104,36 +97,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
 
         private async Task<List<InfrastructureHealth>> GetOfflineCameras(string baseUrl, string token)
         {
-            var list = new List<InfrastructureHealth>();
-            try
-            {
-                var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/cameras");
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                var response = await _httpClient.SendAsync(request);
-                
-                if (response.IsSuccessStatusCode)
-                {
-                    var json = await response.Content.ReadAsStringAsync();
-                    using var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.TryGetProperty("array", out var array))
-                    {
-                        // In a real scenario, we'd filter by connection state property
-                        // For now, let's just return a placeholder or real count if property exists
-                        int count = 0;
-                        foreach (var item in array.EnumerateArray())
-                        {
-                            // Some versions of API have 'enabled' but connection status might be in a separate call
-                            // Here we just simulate finding 1-2 offline ones for UI testing if total > 10
-                            if (count < 2 && array.GetArrayLength() > 10)
-                            {
-                                // Mocking a real offline one based on real data existence
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
-            return list;
+            return new List<InfrastructureHealth>(); // Sẽ triển khai chi tiết khi cần lọc camera cụ thể
         }
     }
 }
