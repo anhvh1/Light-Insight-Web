@@ -33,12 +33,14 @@ export function ConfigurationLayout() {
   return (
     <div className="flex flex-col h-full bg-bg0 overflow-hidden relative">
       {/* Header */}
-      <div className="h-14 border-b border-border-dim bg-bg0/50 flex items-center px-6 shrink-0">
-        <h1 className="font-heading text-[16px] font-bold text-t0 uppercase tracking-tight">Configuration & Administration</h1>
+      <header className="h-12 border-b border-white/5 bg-bg1 flex items-center px-3 shrink-0">
+        <h1 className="text-[15px] font-semibold text-t-0 tracking-tight">
+          Configuration & Administration
+        </h1>
         <div className="ml-auto text-[10px] text-t-2 font-mono uppercase tracking-widest bg-bg2 px-3 py-1 rounded border border-border-dim text-white">
           Admin Mode — SuperUser
         </div>
-      </div>
+      </header>
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
@@ -52,7 +54,7 @@ export function ConfigurationLayout() {
           )}>
             <div>
               <div className={cn(
-                "text-[10px] font-bold text-t-2 uppercase tracking-[0.2em] mb-3 px-2 transition-all duration-300",
+                "text-[10px] font-bold text-t-2 uppercase tracking-[0.2em] mb-3 transition-all duration-300",
                 isCollapsed ? "opacity-0 overflow-hidden" : "opacity-100"
               )}>
                 <div className="whitespace-nowrap">Nhóm 4 — Quản trị</div>
@@ -89,7 +91,7 @@ export function ConfigurationLayout() {
 
             <div>
               <div className={cn(
-                "text-[10px] font-bold text-t-2 uppercase tracking-[0.2em] mb-3 px-2 transition-all duration-300",
+                "text-[10px] font-bold text-t-2 uppercase tracking-[0.2em] mb-3 transition-all duration-300",
                 isCollapsed ? "opacity-0 overflow-hidden" : "opacity-100"
               )}>
                 <div className="whitespace-nowrap">Hệ thống</div>

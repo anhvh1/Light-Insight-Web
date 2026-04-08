@@ -8,17 +8,17 @@ import {
 import { systemHealthApi } from '@/lib/system-health-api';
 
 // --- AUDIT LOGS (Tạm thời giữ mock vì chưa có API Audit) ---
-const AUDIT_LOGS = [
-  { time: '02:14:41', user: 'Trần Hùng', action: 'Acknowledged alarm', ctx: 'ALM-0847 · Xe không đăng ký B1' },
-  { time: '02:14:36', user: 'SYSTEM', action: 'Correlation matched', ctx: '3 nguồn khớp → INC-0847 tạo tự động' },
-  { time: '02:11:10', user: 'Trần Hùng', action: 'Viewed camera live', ctx: 'CAM-B1-04 · Đỗ xe sai' },
-  { time: '02:08:50', user: 'Nguyễn Minh', action: 'Dispatched guard task', ctx: 'Bảo vệ → Cửa T2 · Kiểm tra thẻ' },
-  { time: '01:55:25', user: 'SYSTEM', action: 'SOP auto-assigned', ctx: 'SOP-Chiếm dụng hành lang → INC-0844' },
-  { time: '01:20:05', user: 'SYSTEM', action: 'Device offline alert', ctx: 'CAM-L3-07 · Video loss detected' },
-  { time: '01:05:44', user: 'Nguyễn Minh', action: 'Resolved incident', ctx: 'INC-0835 · Báo cháy T4 — False alarm' },
-  { time: '00:58:35', user: 'SYSTEM', action: 'Connector reconnected', ctx: 'BMS Portal · 45s downtime' },
-  { time: '22:00:00', user: 'Trần Hùng', action: 'Login', ctx: 'Operator · Ca đêm 22:00–06:00' },
-];
+// const AUDIT_LOGS = [ 
+//   { time: '02:14:41', user: 'Trần Hùng', action: 'Acknowledged alarm', ctx: 'ALM-0847 · Xe không đăng ký B1' },
+//   { time: '02:14:36', user: 'SYSTEM', action: 'Correlation matched', ctx: '3 nguồn khớp → INC-0847 tạo tự động' },
+//   { time: '02:11:10', user: 'Trần Hùng', action: 'Viewed camera live', ctx: 'CAM-B1-04 · Đỗ xe sai' },
+//   { time: '02:08:50', user: 'Nguyễn Minh', action: 'Dispatched guard task', ctx: 'Bảo vệ → Cửa T2 · Kiểm tra thẻ' },
+//   { time: '01:55:25', user: 'SYSTEM', action: 'SOP auto-assigned', ctx: 'SOP-Chiếm dụng hành lang → INC-0844' },
+//   { time: '01:20:05', user: 'SYSTEM', action: 'Device offline alert', ctx: 'CAM-L3-07 · Video loss detected' },
+//   { time: '01:05:44', user: 'Nguyễn Minh', action: 'Resolved incident', ctx: 'INC-0835 · Báo cháy T4 — False alarm' },
+//   { time: '00:58:35', user: 'SYSTEM', action: 'Connector reconnected', ctx: 'BMS Portal · 45s downtime' },
+//   { time: '22:00:00', user: 'Trần Hùng', action: 'Login', ctx: 'Operator · Ca đêm 22:00–06:00' },
+// ];
 
 export function SystemHealthPage() {
   const { data: healthResponse, isLoading, refetch, isRefetching } = useQuery({
@@ -215,7 +215,7 @@ export function SystemHealthPage() {
           
           <div className="flex-1 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-psim-accent/20">
             <div className="flex flex-col">
-              {AUDIT_LOGS.map((log, i) => (
+              {/* {AUDIT_LOGS.map((log, i) => (
                 <div key={i} className="px-4 py-2.5 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors flex gap-3 items-start group">
                   <div className="text-[10px] font-mono text-t-2 w-14 shrink-0 pt-0.5 group-hover:text-t1 transition-colors">
                     {log.time}
@@ -230,7 +230,7 @@ export function SystemHealthPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+              ))} */}
             </div>
           </div>
         </div>

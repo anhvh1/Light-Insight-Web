@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace LightInsightBUS.Service.General
@@ -33,22 +34,15 @@ namespace LightInsightBUS.Service.General
             
             try
             {
-                // 1. Lấy thông số App Server (CPU/RAM/Disk thật)
+                // 1. CHỈ HIỂN THỊ MANAGEMENT SERVER (Dữ liệu thật từ máy chủ)
                 result.Infrastructure.Add(await GetLocalServerHealth());
 
-                // 2. Quét Connectors song song
+                // 2. QUÉT CONNECTORS (Giữ nguyên vì phần này đang ổn định)
                 var connectorsRes = await _connectorService.GetAllConnectorsAsync();
                 var connectorList = connectorsRes.Data as List<ConnectorListModel> ?? new List<ConnectorListModel>();
                 var probeTasks = connectorList.Select(conn => ProbeConnectorAsync(conn)).ToList();
                 var connectorResults = await Task.WhenAll(probeTasks);
                 result.Connectors.AddRange(connectorResults.Where(r => r != null));
-
-                // 3. Lấy dữ liệu hạ tầng Milestone (Servers, Storages...)
-                var realInfra = await _milestoneProber.GetInfrastructureStatusAsync();
-                if (realInfra != null && realInfra.Count > 0)
-                {
-                    result.Infrastructure.AddRange(realInfra);
-                }
 
                 return new BaseResultModel { Status = 1, Message = "Success", Data = result };
             }
@@ -60,18 +54,18 @@ namespace LightInsightBUS.Service.General
 
         private async Task<InfrastructureHealth> GetLocalServerHealth()
         {
-            string cpu = "N/A";
+            string cpu = $"{_milestoneProber.GetCurrentCpuUsage()}%";
             string ram = "N/A";
             string disk = "N/A";
-            try {
-                // Lấy CPU thật từ Prober
-                cpu = $"{_milestoneProber.GetCurrentCpuUsage()}%";
 
+            try {
+                // RAM
                 var memStatus = GC.GetGCMemoryInfo();
                 if (memStatus.TotalAvailableMemoryBytes > 0)
                     ram = $"{(memStatus.MemoryLoadBytes * 100) / memStatus.TotalAvailableMemoryBytes}%";
 
-                if (OperatingSystem.IsWindows()) {
+                // DISK (Ổ cài đặt)
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
                     var driveC = new DriveInfo("C");
                     if (driveC.IsReady)
                         disk = $"{(int)((driveC.TotalSize - driveC.AvailableFreeSpace) * 100 / driveC.TotalSize)}%";
@@ -80,7 +74,7 @@ namespace LightInsightBUS.Service.General
 
             return new InfrastructureHealth { 
                 Name = "Management Server", 
-                Description = $"CPU {cpu} · RAM {ram} · SysDisk {disk} (Customer App Node)", 
+                Description = $"CPU {cpu} · RAM {ram} · Disk {disk}", 
                 Status = "ONLINE", 
                 Type = "server" 
             };
@@ -88,8 +82,7 @@ namespace LightInsightBUS.Service.General
 
         private async Task<ConnectorHealth> ProbeConnectorAsync(ConnectorListModel conn)
         {
-            var health = new ConnectorHealth
-            {
+            var health = new ConnectorHealth {
                 Name = conn.VmsName,
                 ApiInfo = $"{conn.IpServer}:{conn.Port}",
                 StatsLabel = "Status",
@@ -101,49 +94,40 @@ namespace LightInsightBUS.Service.General
             };
 
             var sw = Stopwatch.StartNew();
-            try
-            {
+            try {
                 bool isReachable = await CheckConnectivityAsync(conn.IpServer, (int)conn.Port);
                 sw.Stop();
 
-                if (isReachable)
-                {
+                if (isReachable) {
                     health.Status = sw.ElapsedMilliseconds > 500 ? "SLOW" : "ONLINE";
                     health.Latency = $"{sw.ElapsedMilliseconds}ms";
                     health.HealthPercentage = 100;
                     health.Stats = "Connected";
 
-                    if (conn.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase))
-                    {
+                    if (conn.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase)) {
                         var token = await _tokenService.GetTokenAsync();
-                        if (!string.IsNullOrEmpty(token))
-                        {
+                        if (!string.IsNullOrEmpty(token)) {
                             var cameras = await _tokenService.GetCamerasAsync();
                             health.Stats = $"{cameras.Count} / {cameras.Count}";
                             health.StatsLabel = "Cameras";
                         }
                     }
                 }
-            }
-            catch { health.Status = "OFFLINE"; }
-
+            } catch { health.Status = "OFFLINE"; }
             return health;
         }
 
         private async Task<bool> CheckConnectivityAsync(string ip, int port)
         {
-            try
-            {
+            try {
                 using var client = new TcpClient();
                 var task = client.ConnectAsync(ip, port);
-                if (await Task.WhenAny(task, Task.Delay(1500)) == task)
-                {
+                if (await Task.WhenAny(task, Task.Delay(1000)) == task) {
                     await task;
                     return client.Connected;
                 }
                 return false;
-            }
-            catch { return false; }
+            } catch { return false; }
         }
     }
 }
