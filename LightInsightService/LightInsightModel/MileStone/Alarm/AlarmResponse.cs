@@ -10,6 +10,12 @@ namespace LightInsightModel.MileStone.Alarm
     {
         public List<MilestoneAlarmItem> array { get; set; }
     }
+
+    public class MilestoneAlarmMessageResponse
+    {
+        public List<string> array { get; set; }
+    }
+
     public class MilestoneAlarmItem
     {
         public string id { get; set; }

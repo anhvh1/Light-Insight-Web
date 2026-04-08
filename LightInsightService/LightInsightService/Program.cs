@@ -16,6 +16,8 @@ using LightInsightBUS.Interfaces.MileStone.Alarm;
 using LightInsightBUS.Interfaces.General;
 using LightInsightBUS.Service.General;
 using LightInsightService.CacheLoader;
+using LightInsightBUS.Interfaces.MileStone.Camera;
+using LightInsightBUS.Service.MileStone.Camera;
 using LightInsightBUS.ExternalServices.MileStone;
 
 
@@ -43,7 +45,7 @@ builder.Services
 //builder.Services.AddControllersWithViews();
 
 // 👇 KHÔNG bind IP cụ thể
-//builder.WebHost.UseUrls("http://0.0.0.0:5262");
+//builder.WebHost.UseUrls("http://0.0.0.0:8386");
 
 
 
@@ -51,6 +53,7 @@ builder.Services
 // ADD SCROPED SERVICES
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ICameraService, CameraServiceBUS>();
+builder.Services.AddScoped<ICameraDropDown, CameraDropdownBUS>();
 builder.Services.AddScoped<IPriority, PriorityBUS>();
 builder.Services.AddScoped<IRegister, RegisterBUS>();
 builder.Services.AddScoped<ILogin, LoginBUS>();

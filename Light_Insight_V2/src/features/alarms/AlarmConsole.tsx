@@ -1,8 +1,37 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AlarmType } from '@/types';
 import { StatusPill, TypeBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 import { useAlarmSignalR } from './useAlarmSignalR';
+import { AlarmSearchPanel } from './AlarmSearchPanel';
+import { alarmApi, type AlarmFilters } from '@/lib/alarm-api';
+import './alarm.css';
+
+const EMPTY_FILTERS: AlarmFilters = {
+  priorityName: undefined,
+  stateName: undefined,
+  message: undefined,
+  source: undefined,
+  fromTime: undefined,
+  toTime: undefined,
+};
+
+function getTodayStartString() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T00:00:00`;
+}
+
+function getDefaultFilterValues(): AlarmFilters {
+  const todayStart = getTodayStartString();
+  return {
+    ...EMPTY_FILTERS,
+    fromTime: todayStart,
+    toTime: todayStart,
+  };
+}
 
 export function AlarmConsole() {
   const {
@@ -12,6 +41,7 @@ export function AlarmConsole() {
     currentPage,
     pageSize,
     canNextPage,
+    filters,
     refreshAlarms,
     nextPage,
     prevPage,
@@ -21,6 +51,14 @@ export function AlarmConsole() {
   const [activeTab, setActiveTab] = useState<string>('all');
   const [filterType, setFilterType] = useState<AlarmType | 'all'>('all');
   const [selectedAlarmId, setSelectedAlarmId] = useState<string | null>(null);
+  const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
+  const [localFilters, setLocalFilters] = useState<AlarmFilters>(getDefaultFilterValues());
+  const [useFromTime, setUseFromTime] = useState(false);
+  const [useToTime, setUseToTime] = useState(false);
+  const [messages, setMessages] = useState<string[]>([]);
+  const [sources, setSources] = useState<Array<{ id: string; name: string }>>([]);
+  const [loadingDicts, setLoadingDicts] = useState(false);
+  const [dictLoaded, setDictLoaded] = useState(false);
 
   const selectedAlarm = useMemo(
     () => alarms.find(a => a.id === selectedAlarmId) ?? null,
@@ -31,16 +69,20 @@ export function AlarmConsole() {
   const filteredAlarms = useMemo(
     () =>
       alarms.filter((alarm) => {
-        const matchesTab =
-          activeTab === 'all' ||
-          (activeTab === 'new' ? alarm.isNew : alarm.status === activeTab);
+        const matchesTab = activeTab === 'all' || alarm.status === activeTab;
         const matchesType = filterType === 'all' || alarm.type === filterType;
         return matchesTab && matchesType;
       }),
     [activeTab, alarms, filterType]
   );
 
-  const tabs = ['all', 'new', 'ack', 'prog'];
+  const tabs: Array<{ value: string; label: string }> = [
+    { value: 'all', label: 'Tất cả' },
+    { value: 'new', label: 'New' },
+    { value: 'in progress', label: 'In progress' },
+    { value: 'on hold', label: 'On hold' },
+    { value: 'close', label: 'Close' },
+  ];
   const filterTypes: (AlarmType | 'all')[] = ['all', 'ai', 'lpr', 'acs', 'fire', 'bms', 'tech', 'light'];
   const hasRecords = filteredAlarms.length > 0;
   const startRecord = hasRecords ? (currentPage - 1) * pageSize + 1 : 0;
@@ -51,24 +93,98 @@ export function AlarmConsole() {
     setSelectedAlarmId(null);
   };
 
+  const mapTabToStateName = (tabValue: string): AlarmFilters['stateName'] | undefined => {
+    if (tabValue === 'new') return 'New';
+    if (tabValue === 'in progress') return 'In progress';
+    if (tabValue === 'on hold') return 'On hold';
+    if (tabValue === 'close') return 'Closed';
+    return undefined;
+  };
+
+  const handleStatusTabClick = async (tabValue: string) => {
+    setActiveTab(tabValue);
+    const stateName = mapTabToStateName(tabValue);
+    setLocalFilters((prev) => ({
+      ...prev,
+      stateName,
+    }));
+    await refreshAlarms({
+      stateName,
+    });
+  };
+
   useEffect(() => {
     void refreshAlarms();
   }, [refreshAlarms]);
 
+  useEffect(() => {
+    const defaultValues = getDefaultFilterValues();
+    setLocalFilters({
+      ...defaultValues,
+      ...filters,
+      fromTime: filters.fromTime ?? defaultValues.fromTime,
+      toTime: filters.toTime ?? defaultValues.toTime,
+    });
+  }, [filters]);
+
+  const loadDictionaries = useCallback(async () => {
+    if (dictLoaded || loadingDicts) return;
+    setLoadingDicts(true);
+    try {
+      const [msg, src] = await Promise.all([
+        alarmApi.getMessages(),
+        alarmApi.getSources(),
+      ]);
+      setMessages(msg);
+      setSources(src);
+      setDictLoaded(true);
+    } finally {
+      setLoadingDicts(false);
+    }
+  }, [dictLoaded, loadingDicts]);
+
+  const handleToggleAdvancedFilter = () => {
+    setShowAdvancedFilter((prev) => {
+      const next = !prev;
+      if (next) {
+        void loadDictionaries();
+      }
+      return next;
+    });
+  };
+
+  const handleApplyFilters = async () => {
+    const payload: AlarmFilters = {
+      ...localFilters,
+      fromTime: useFromTime ? localFilters.fromTime : undefined,
+      toTime: useToTime ? localFilters.toTime : undefined,
+    };
+    await refreshAlarms(payload);
+  };
+
+  const handleClearFilters = async () => {
+    setLocalFilters(getDefaultFilterValues());
+    setUseFromTime(false);
+    setUseToTime(false);
+    await refreshAlarms(EMPTY_FILTERS);
+    setShowAdvancedFilter(false);
+  };
+
   const renderAlarmTable = () => (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="alarm-scrollbar flex-1 overflow-y-auto pr-1">
+      <div className="flex-1 overflow-y-auto pr-1">
         <table className="w-full border-collapse text-left">
           <thead>
             <tr>
-              <th className="py-2 px-3 text-[10px] font-mono text-t-2 uppercase tracking-wider border-b border-border-dim bg-bg1 sticky top-0 z-10 whitespace-nowrap">Priority</th>
-              <th className="py-2 px-3 text-[10px] font-mono text-t-2 uppercase tracking-wider border-b border-border-dim bg-bg1 sticky top-0 z-10 whitespace-nowrap">Loại</th>
-              <th className="py-2 px-3 text-[10px] font-mono text-t-2 uppercase tracking-wider border-b border-border-dim bg-bg1 sticky top-0 z-10 whitespace-nowrap">Mô tả</th>
-              <th className="py-2 px-3 text-[10px] font-mono text-t-2 uppercase tracking-wider border-b border-border-dim bg-bg1 sticky top-0 z-10 whitespace-nowrap">Nguồn</th>
-              <th className="py-2 px-3 text-[10px] font-mono text-t-2 uppercase tracking-wider border-b border-border-dim bg-bg1 sticky top-0 z-10 whitespace-nowrap">Vị trí</th>
-              <th className="py-2 px-3 text-[10px] font-mono text-t-2 uppercase tracking-wider border-b border-border-dim bg-bg1 sticky top-0 z-10 whitespace-nowrap">Trạng thái</th>
-              <th className="py-2 px-3 text-[10px] font-mono text-t-2 uppercase tracking-wider border-b border-border-dim bg-bg1 sticky top-0 z-10 whitespace-nowrap">Thời gian</th>
-              <th className="py-2 px-3 text-[10px] font-mono text-t-2 uppercase tracking-wider border-b border-border-dim bg-bg1 sticky top-0 z-10 whitespace-nowrap">Tương quan</th>
+              {['Mức độ ưu tiên', 'Loại', 'Mô tả', 'Nguồn', 'Vị trí', 'Trạng thái', 'Thời gian', 'Tương quan'].map((col) => (
+                <th
+                  key={col}
+                  className="py-2 px-3 text-[10px] font-mono uppercase tracking-wider border-b border-border-dim sticky top-0 z-10 whitespace-nowrap"
+                  style={{ background: 'var(--bg1)', color: 'var(--t2)' }}
+                >
+                  {col}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -94,9 +210,15 @@ export function AlarmConsole() {
                 <td className="py-2.5 px-3 align-middle text-[11px] text-t-2">{alarm.src}</td>
                 <td className="py-2.5 px-3 align-middle text-[11px] text-t-2">{alarm.loc}</td>
                 <td className="py-2.5 px-3 align-middle text-[12px]">
-                  {alarm.isNew && <span className="px-2 py-0.5 rounded bg-psim-red/15 text-psim-red text-[10px] font-bold">NEW</span>}
-                  {!alarm.isNew && alarm.status === 'ack' && <span className="px-2 py-0.5 rounded bg-psim-accent/15 text-psim-accent text-[10px] font-bold">ACK</span>}
-                  {!alarm.isNew && alarm.status === 'prog' && <span className="px-2 py-0.5 rounded bg-psim-orange/15 text-psim-orange text-[10px] font-bold">IN PROGRESS</span>}
+                  {alarm.status === 'new' && <span className="px-2 py-0.5 rounded bg-psim-red/15 text-psim-red text-[10px] font-bold">{alarm.statusLabel ?? 'New'}</span>}
+                  {alarm.status === 'in progress' && <span className="px-2 py-0.5 rounded bg-psim-orange/15 text-psim-orange text-[10px] font-bold">{alarm.statusLabel ?? 'In progress'}</span>}
+                  {alarm.status === 'on hold' && <span className="px-2 py-0.5 rounded bg-psim-yellow/20 text-psim-yellow text-[10px] font-bold">{alarm.statusLabel ?? 'On hold'}</span>}
+                  {alarm.status === 'close' && <span className="px-2 py-0.5 rounded bg-psim-green/20 text-psim-green text-[10px] font-bold">{alarm.statusLabel ?? 'Close'}</span>}
+                  {!['new', 'in progress', 'on hold', 'close'].includes(alarm.status) && (
+                    <span className="px-2 py-0.5 rounded bg-bg3 text-t1 text-[10px] font-bold">
+                      {alarm.statusLabel ?? alarm.status}
+                    </span>
+                  )}
                 </td>
                 <td className="py-2.5 px-3 align-middle text-[11px] text-t-2 font-mono">{alarm.time}</td>
                 <td className="py-2.5 px-3 align-middle text-[11px] text-purple font-mono">
@@ -115,7 +237,7 @@ export function AlarmConsole() {
             void prevPage();
           }}
         >
-          Prev
+          Trang trước
         </button>
         <div className="font-mono text-t-2">
           Bản ghi {startRecord} - {endRecord}
@@ -127,7 +249,7 @@ export function AlarmConsole() {
             void nextPage();
           }}
         >
-          Next
+          Trang sau
         </button>
       </div>
     </div>
@@ -259,13 +381,13 @@ export function AlarmConsole() {
               </div>
               <div className="flex gap-2.5">
                 <div className="flex flex-col items-center">
-                  <div className={cn("w-2 h-2 rounded-full border-2 border-border-brighter shrink-0 mt-0.5", !selectedAlarm.isNew ? 'bg-psim-accent' : 'bg-bg4')} />
+                  <div className={cn("w-2 h-2 rounded-full border-2 border-border-brighter shrink-0 mt-0.5", selectedAlarm.status !== 'new' ? 'bg-psim-accent' : 'bg-bg4')} />
                 </div>
                 <div className="flex-1">
-                  <div className="text-[12px] leading-tight" style={{ color: selectedAlarm.isNew ? 'var(--t2)' : 'var(--t0)' }}>
-                    {selectedAlarm.isNew ? 'Chờ xác nhận...' : 'Operator đã xác nhận'}
+                  <div className="text-[12px] leading-tight" style={{ color: selectedAlarm.status === 'new' ? 'var(--t2)' : 'var(--t0)' }}>
+                    {selectedAlarm.status === 'new' ? 'Chờ xác nhận...' : 'Operator đã xác nhận'}
                   </div>
-                  {!selectedAlarm.isNew && <div className="font-mono text-[10px] text-t-2 mt-0.5">+8s · Operator</div>}
+                  {selectedAlarm.status !== 'new' && <div className="font-mono text-[10px] text-t-2 mt-0.5">+8s · Operator</div>}
                 </div>
               </div>
             </div>
@@ -283,17 +405,16 @@ export function AlarmConsole() {
           "w-2 h-2 rounded-full",
           connected ? 'bg-psim-green' : 'bg-psim-red'
         )} title={connected ? 'SignalR connected' : 'SignalR disconnected'} />
-        <div className="flex gap-0.5 bg-bg2 rounded-md p-0.5">
-          {tabs.map(tab => (
+        <div style={{ display: 'flex', gap: '2px', background: 'var(--bg2)', borderRadius: '7px', padding: '3px' }}>
+          {tabs.map((tab) => (
             <button
-              key={tab}
-              className={cn(
-                "px-3 py-1 text-[11px] rounded-md cursor-pointer transition-colors",
-                activeTab === tab ? 'bg-bg4 text-t0' : 'text-t2 hover:bg-bg3 hover:text-t1'
-              )}
-              onClick={() => setActiveTab(tab)}
+              key={tab.value}
+              className={`alarm-tab${activeTab === tab.value ? ' on' : ''}`}
+              onClick={() => {
+                void handleStatusTabClick(tab.value);
+              }}
             >
-              {tab === 'all' ? 'Tất cả' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -306,9 +427,24 @@ export function AlarmConsole() {
         {/* Left: Alarm Table */}
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="p-2.5 flex gap-2 items-center border-b border-border-dim shrink-0 flex-wrap bg-bg0">
-            <input 
-              className="w-52 bg-bg2 border border-border-dim rounded-md px-3 py-1.5 text-t0 text-[12px] outline-none focus:border-psim-accent transition-colors" 
-              placeholder="🔍  Tìm alarm..." 
+            <AlarmSearchPanel
+              isOpen={showAdvancedFilter}
+              onToggle={handleToggleAdvancedFilter}
+              filters={localFilters}
+              onChangeFilters={(patch) =>
+                setLocalFilters((prev) => ({ ...prev, ...patch }))
+              }
+              onApply={handleApplyFilters}
+              onClear={handleClearFilters}
+              loading={loading || loadingDicts}
+              messages={messages}
+              sources={sources}
+              useFromTime={useFromTime}
+              useToTime={useToTime}
+              onToggleUseFromTime={() => setUseFromTime((v) => !v)}
+              onToggleUseToTime={() => setUseToTime((v) => !v)}
+              showTrigger
+              renderPanel={false}
             />
             <div className="flex gap-1">
               {filterTypes.map(type => (
@@ -327,6 +463,30 @@ export function AlarmConsole() {
             <button className="ml-auto px-3 py-1.5 text-[11px] font-medium rounded-md bg-psim-red/15 text-psim-red border border-psim-red/30 hover:bg-psim-red/25 transition-colors">🔕 Mute All</button>
             <button className="px-3 py-1.5 text-[11px] font-medium rounded-md bg-bg3 text-t1 border border-border-dim hover:bg-bg4 transition-colors">⬇ Export</button>
           </div>
+          {showAdvancedFilter && (
+            <div className="px-2.5 pb-2 border-b border-border-dim bg-bg0">
+              <div className="w-full">
+                <AlarmSearchPanel
+                  isOpen={showAdvancedFilter}
+                  onToggle={handleToggleAdvancedFilter}
+                  filters={localFilters}
+                  onChangeFilters={(patch) =>
+                    setLocalFilters((prev) => ({ ...prev, ...patch }))
+                  }
+                  onApply={handleApplyFilters}
+                  onClear={handleClearFilters}
+                  loading={loading || loadingDicts}
+                  messages={messages}
+                  sources={sources}
+                  useFromTime={useFromTime}
+                  useToTime={useToTime}
+                  onToggleUseFromTime={() => setUseFromTime((v) => !v)}
+                  onToggleUseToTime={() => setUseToTime((v) => !v)}
+                  showTrigger={false}
+                />
+              </div>
+            </div>
+          )}
           
           {renderAlarmTable()}
           
