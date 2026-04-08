@@ -18,12 +18,12 @@ export function MapView() {
   const floors = ['L5', 'L4', 'L3', 'L2', 'L1', 'B1', 'B2'];
 
   return (
-    <div className="flex flex-col h-full bg-bg0 text-t0">
+    <div className="flex flex-col h-full overflow-hidden font-sans">
       {/* Header & Stats Bar */}
-      <div className="px-4 py-3 border-b border-border-dim bg-bg0/50">
+      <div className="px-3 py-3 border-b border-border-dim bg-bg0/50">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <h1 className="font-heading text-[16px] font-semibold uppercase tracking-tight">Situational Map</h1>
+            <h1 className="text-[15px] font-semibold text-t-0 tracking-tight">Situational Map</h1>
             <div className="flex gap-1 bg-bg2 p-0.5 rounded border border-border-dim text-[10px] font-bold">
               <button className="px-2 py-0.5 bg-bg4 rounded shadow-sm text-t0">B1 — Hầm xe</button>
               <button className="px-2 py-0.5 text-t2 hover:text-t1 transition-colors">L1 — Sảnh</button>

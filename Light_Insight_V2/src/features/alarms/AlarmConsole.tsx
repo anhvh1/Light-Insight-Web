@@ -398,11 +398,13 @@ export function AlarmConsole() {
   );
 
   return (
-    <div className="flex flex-col h-full bg-bg0">
-      <div className="p-3.5 flex items-center gap-2.5 border-b border-border-dim shrink-0">
-        <div className="font-heading text-[15px] font-semibold text-t0">Unified Alarm Console</div>
+    <div className="flex flex-col h-full overflow-hidden font-sans">
+      <header className="h-12 border-b border-white/5 bg-bg1 flex items-center px-3 shrink-0">
+        <h1 className="text-[15px] font-semibold text-t-0 tracking-tight">
+          Alarm Console
+        </h1>
         <div className={cn(
-          "w-2 h-2 rounded-full",
+          "w-2 h-2 mx-1 rounded-full",
           connected ? 'bg-psim-green' : 'bg-psim-red'
         )} title={connected ? 'SignalR connected' : 'SignalR disconnected'} />
         <div style={{ display: 'flex', gap: '2px', background: 'var(--bg2)', borderRadius: '7px', padding: '3px' }}>
@@ -421,7 +423,7 @@ export function AlarmConsole() {
         <div className="text-[10px] text-t-2 font-mono ml-auto">
           {filteredAlarms.length} active · {alarms.filter(a => a.pri === 'critical').length} critical
         </div>
-      </div>
+      </header>
       
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Alarm Table */}

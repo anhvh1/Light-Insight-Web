@@ -147,8 +147,10 @@ export function UsersRolesSection({ getUserGradient }: UsersRolesSectionProps) {
       {/* Header Section */}
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
-          <h2 className="text-[14px] font-heading font-bold text-t0 uppercase">User & Role Management (4.1)</h2>
-          <div className="h-3 w-[1px] bg-border-dim mx-1"></div>
+          <div>
+            <h2 className="text-[14px] font-heading font-bold text-t0">User & Role Management</h2>
+            <p className="text-[12px] text-t-2 mt-1">‎ </p>
+          </div>
         </div>
         <button 
           onClick={() => setIsAddUserDialogOpen(true)}

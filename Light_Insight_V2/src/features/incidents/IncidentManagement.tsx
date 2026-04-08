@@ -252,10 +252,12 @@ export function IncidentManagement() {
   );
 
   return (
-    <div className="flex flex-col h-full bg-bg0">
+    <div className="flex flex-col h-full overflow-hidden font-sans">
       {/* Header */}
       <div className="p-3.5 flex items-center gap-3 border-b border-border-dim bg-bg0 shrink-0">
-        <div className="font-heading text-[15px] font-semibold text-t0 uppercase tracking-tight">Incident Management</div>
+        <h1 className="text-[15px] font-semibold text-t-0 tracking-tight">
+          Incident Management
+        </h1>
         <div className="flex gap-0.5 bg-bg2 rounded-md p-0.5 ml-2">
           {tabs.map(tab => (
             <button

@@ -616,15 +616,15 @@ export function MapManagementSection() {
   };
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-500 w-full overflow-hidden">
-      <div className="flex items-center justify-between mb-3 shrink-0">
+    <div className="flex flex-col gap-6 h-full animate-in fade-in duration-500 w-full overflow-hidden">
+      <div className="flex items-center justify-between shrink-0">
         <div>
-          <h2 className="text-[18px] font-heading font-bold text-t0 uppercase tracking-tight">Thiết lập map</h2>
-          <p className="text-[11px] text-t-2">Tạo bản đồ và đặt camera để theo dõi.</p>
+          <h2 className="text-[14px] font-heading font-bold text-t0">Thiết lập map</h2>
+          <p className="text-[12px] text-t-2 mt-1">Tạo bản đồ và đặt camera để theo dõi.</p>
         </div>
         <button 
           onClick={() => setIsCreateMapModalOpen(true)}
-          className="bg-psim-orange text-white font-bold text-[11px] uppercase tracking-wider gap-2 h-9 px-5 rounded-md flex items-center shadow-lg shadow-psim-orange/20 hover:scale-[1.02] transition-all"
+          className="bg-psim-accent2 text-white font-bold text-[11px] uppercase tracking-wider gap-2 h-8 px-4 rounded flex items-center shadow-lg shadow-psim-accent2/20 hover:scale-[1.02] transition-all"
         >
           <Plus size={16} /> Tạo bản đồ
         </button>

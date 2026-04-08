@@ -106,12 +106,12 @@ export function AlarmPrioritySection({ actualConnectors }: AlarmPrioritySectionP
     <div className="flex flex-col gap-6 animate-in fade-in duration-500 w-full h-full overflow-hidden">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h2 className="text-[18px] font-heading font-bold text-t0 text-white uppercase tracking-tight">Alarm Priority Management (Live API)</h2>
+          <h2 className="text-[14px] font-heading font-bold text-t0">Alarm Priority Management</h2>
           <p className="text-[12px] text-t-2 mt-1">Quản lý các quy tắc phân loại mức độ nghiêm trọng cho từng sự kiện AI</p>
         </div>
         <button 
           onClick={() => { setBasket([]); setIsDialogOpen(true); }}
-          className="bg-psim-accent2 text-bg0 font-bold text-[11px] uppercase tracking-wider gap-2 h-10 px-6 rounded-md flex items-center shadow-lg shadow-psim-accent/20 hover:scale-[1.02] transition-all"
+          className="bg-psim-accent2 text-white font-bold text-[11px] uppercase tracking-wider gap-2 h-8 px-4 rounded flex items-center shadow-lg shadow-psim-accent2/20 hover:scale-[1.02] transition-all"
         >
           <Plus size={16} /> Tạo cấu hình mới
         </button>
@@ -232,7 +232,7 @@ export function AlarmPrioritySection({ actualConnectors }: AlarmPrioritySectionP
               </div>
               <div className="flex gap-4">
                 <button onClick={() => setIsDialogOpen(false)} className="px-8 py-3 text-[11px] font-bold text-t-2 uppercase hover:text-white">Hủy bỏ</button>
-                <button onClick={() => insertMutation.mutate({ PriorityID: selectedPriorityId, AnalyticsEvents: basket })} disabled={basket.length === 0 || insertMutation.isPending} className="px-12 py-3 bg-psim-accent text-bg0 font-bold text-[12px] uppercase rounded shadow-lg disabled:opacity-30">Lưu cấu hình</button>
+                <button onClick={() => insertMutation.mutate({ PriorityID: selectedPriorityId, AnalyticsEvents: basket })} disabled={basket.length === 0 || insertMutation.isPending} className="px-12 py-3 bg-psim-accent2 text-bg0 font-bold text-[12px] uppercase rounded shadow-lg disabled:opacity-30">Lưu cấu hình</button>
               </div>
             </div>
           </div>
