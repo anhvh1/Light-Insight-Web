@@ -20,6 +20,9 @@ import { LoginPage } from './features/auth/LoginPage';
 import { AnalyticsPage } from './features/analytics/AnalyticsPage';
 import { ShiftHandoverPage } from './features/shift/ShiftHandoverPage';
 import { SystemHealthPage } from './features/health/SystemHealthPage';
+import { SopBuilderSection } from './features/config/sections/SopBuilder';
+import { EscalationRulesSection } from './features/config/sections/EscalationRulesSection';
+import { NotificationsSection } from './features/config/sections/NotificationsSection';
 
 // 1. Root Route
 const rootRoute = createRootRoute({
@@ -105,6 +108,24 @@ const configRulesRoute = createRoute({
   component: RuleAlarmConfigSection
 });
 
+const configSopBuilderRoute = createRoute({
+  getParentRoute: () => configRoute,
+  path: 'sop',
+  component: SopBuilderSection
+});
+
+const configEscalationRulesSection = createRoute({
+  getParentRoute: () => configRoute,
+  path: 'escalation',
+  component: EscalationRulesSection
+});
+
+const configNotificationsSection = createRoute({
+  getParentRoute: () => configRoute,
+  path: 'notif',
+  component: NotificationsSection
+});
+
 // Root Page Redirect
 const configIndexRoute = createRoute({
   getParentRoute: () => configRoute,
@@ -130,7 +151,10 @@ const routeTree = rootRoute.addChildren([
       configPriorityRoute,
       configMapRoute,
       configConnectorsRoute,
-      configRulesRoute
+      configRulesRoute,
+      configSopBuilderRoute,
+      configEscalationRulesSection,
+      configNotificationsSection
     ]),
   ]),
 ]);

@@ -44,19 +44,34 @@ function normalizePriority(priorityName?: string): string {
 function normalizeStatus(stateName?: string): string {
   const normalized = (stateName ?? '').trim().toLowerCase();
   if (normalized === 'new') return 'new';
-  if (normalized === 'ack' || normalized === 'acknowledged') return 'ack';
-  if (normalized === 'prog' || normalized === 'in progress' || normalized === 'progress') return 'prog';
-  return 'new';
+  if (normalized === 'in progress' || normalized === 'progress' || normalized === 'in_progress') return 'in progress';
+  if (normalized === 'on hold' || normalized === 'hold' || normalized === 'on_hold') return 'on hold';
+  if (normalized === 'close' || normalized === 'closed') return 'close';
+  return normalized || 'new';
 }
 
 function toAlarm(payload: AlarmPayload, isNew: boolean): Alarm {
   const id = payload.alarmId?.trim() || generateId();
+  const statusByLevel: Record<number, { status: string; label: string }> = {
+    1: { status: 'new', label: 'New' },
+    4: { status: 'in progress', label: 'In progress' },
+    9: { status: 'on hold', label: 'On hold' },
+    11: { status: 'close', label: 'Close' },
+  };
+  const level = payload.stateLevel ?? -1;
+  const stateName = payload.stateName?.trim();
+  const mapped = statusByLevel[level];
+  const status = mapped?.status ?? normalizeStatus(stateName);
+  const statusLabel = stateName && stateName.length > 0 ? stateName : (mapped?.label ?? status);
+
   return {
     id,
     title: payload.message ?? payload.alarmName ?? '',
     pri: normalizePriority(payload.priorityName),
     src: payload.source ?? '',
-    status: normalizeStatus(payload.stateName),
+    status,
+    statusLabel,
+    statusLevel: payload.stateLevel,
     time: formatDisplayTime(payload.time),
     type: 'light',
     typeLabel: payload.type?.trim() || 'Hệ thống',

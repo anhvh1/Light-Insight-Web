@@ -14,7 +14,16 @@ export interface AlarmApiItem {
   type?: string;
 }
 
-export interface AlarmPageQuery {
+export interface AlarmFilters {
+  priorityName?: 'Low' | 'Medium' | 'High';
+  stateName?: 'New' | 'In progress' | 'On hold' | 'Closed';
+  message?: string;
+  source?: string;
+  fromTime?: string;
+  toTime?: string;
+}
+
+export interface AlarmPageQuery extends AlarmFilters {
   page?: number;
   pageSize?: number;
 }
@@ -67,9 +76,34 @@ export const alarmApi = {
         to: end,
         skip: start - 1,
         take: pageSize,
+        priorityName: query?.priorityName,
+        stateName: query?.stateName,
+        message: query?.message,
+        source: query?.source,
+        fromTime: query?.fromTime,
+        toTime: query?.toTime,
       },
     });
 
     return extractAlarmRows(response.data);
+  },
+
+  getMessages: async (): Promise<string[]> => {
+    const response = await apiClient.get('/Alarm/MessageDropdown');
+    const data = response.data;
+    if (!data) return [];
+    if (Array.isArray(data)) return data as string[];
+    if (Array.isArray((data as any).array)) return (data as any).array as string[];
+    return [];
+  },
+
+  getSources: async (): Promise<Array<{ id: string; name: string }>> => {
+    const response = await apiClient.get('/Alarm/CameraDropdown');
+    const data = response.data;
+    if (!Array.isArray(data)) return [];
+    return data.map((item: any) => ({
+      id: item.id ?? item.Id ?? item.sourceId ?? '',
+      name: item.name ?? item.Name ?? item.sourceName ?? '',
+    })).filter((x: { id: string; name: string }) => x.id && x.name);
   },
 };

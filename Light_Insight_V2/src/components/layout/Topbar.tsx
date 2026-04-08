@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { authApi } from '@/lib/auth-api';
+import { Link } from '@tanstack/react-router';
 
 export function Topbar() {
   const [time, setTime] = useState(new Date());
@@ -29,9 +30,9 @@ export function Topbar() {
 
   return (
     <header className="h-12 bg-bg-1 border-b border-border flex items-center px-4 gap-3 z-100 shrink-0">
-      <div className="font-heading text-[15px] font-bold text-psim-accent flex items-center gap-2 whitespace-nowrap">
-        <img src="/public/lightjsc.png" className="max-h-6" alt="Logo"/>
-      </div>
+      <Link to="/" className="font-heading text-[15px] font-bold text-psim-accent flex items-center gap-2 whitespace-nowrap hover:opacity-80 transition-opacity">
+        <img src="/lightjsc.png" className="max-h-6" alt="Logo"/>
+      </Link>
       
       <span className="text-[11px] text-t-2 font-mono px-2.5 py-1 bg-bg-2 rounded border border-border">
         Times Square Đà Nẵng
