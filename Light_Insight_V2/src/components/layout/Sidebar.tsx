@@ -35,7 +35,7 @@ const navItems: NavItem[] = [
 ];
 
 export function Sidebar() {
-  const { newCount, refreshAlarms } = useAlarmSignalR();
+  const { bellCount, refreshAlarms } = useAlarmSignalR();
 
   return (
     <nav className="w-14.5 bg-bg-1 border-r border-border-dim flex flex-col items-center py-2 gap-0.5 overflow-hidden shrink-0 h-full">
@@ -45,7 +45,7 @@ export function Sidebar() {
         }
 
         const Icon = item.icon!;
-        const badge = item.id === 'alarm' ? newCount : item.badge;
+        const badge = item.id === 'alarm' ? bellCount : item.badge;
         
         return (
           <Link

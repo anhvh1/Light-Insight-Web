@@ -93,6 +93,26 @@ export function AlarmConsole() {
     setSelectedAlarmId(null);
   };
 
+  const mapTabToStateName = (tabValue: string): AlarmFilters['stateName'] | undefined => {
+    if (tabValue === 'new') return 'New';
+    if (tabValue === 'in progress') return 'In progress';
+    if (tabValue === 'on hold') return 'On hold';
+    if (tabValue === 'close') return 'Closed';
+    return undefined;
+  };
+
+  const handleStatusTabClick = async (tabValue: string) => {
+    setActiveTab(tabValue);
+    const stateName = mapTabToStateName(tabValue);
+    setLocalFilters((prev) => ({
+      ...prev,
+      stateName,
+    }));
+    await refreshAlarms({
+      stateName,
+    });
+  };
+
   useEffect(() => {
     void refreshAlarms();
   }, [refreshAlarms]);
@@ -217,7 +237,7 @@ export function AlarmConsole() {
             void prevPage();
           }}
         >
-          Prev
+          Trang trước
         </button>
         <div className="font-mono text-t-2">
           Bản ghi {startRecord} - {endRecord}
@@ -229,7 +249,7 @@ export function AlarmConsole() {
             void nextPage();
           }}
         >
-          Next
+          Trang sau
         </button>
       </div>
     </div>
@@ -390,7 +410,9 @@ export function AlarmConsole() {
             <button
               key={tab.value}
               className={`alarm-tab${activeTab === tab.value ? ' on' : ''}`}
-              onClick={() => setActiveTab(tab.value)}
+              onClick={() => {
+                void handleStatusTabClick(tab.value);
+              }}
             >
               {tab.label}
             </button>
