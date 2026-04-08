@@ -299,7 +299,6 @@ export function MapManagementSection() {
   const [rotatingDeviceId, setRotatingDeviceId] = useState<string | null>(null);
   const [mapImage, setMapImage] = useState<string | null>(null);
   const [isUploadWizardOpen, setIsUploadWizardOpen] = useState(false);
-  const [isDownloadingSample, setIsDownloadingSample] = useState(false);
   const [showDownloadManual, setShowDownloadManual] = useState<{ isOpen: boolean; url: string }>({ isOpen: false, url: '' });
   const [responseModal, setResponseModal] = useState<{ isOpen: boolean; status: number; message: string }>({
     isOpen: false,
@@ -577,7 +576,7 @@ export function MapManagementSection() {
     setMapOffset({ x: 0, y: 0 });
   };
 
-  const [isPending, startTransition] = useTransition();
+  const [_isPending, startTransition] = useTransition();
 
   const handleDownloadSample = () => {
     startTransition(async () => {

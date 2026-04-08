@@ -1,13 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   CheckCircle2, 
   AlertTriangle, 
   Upload, 
   X, 
   ImageIcon,
-  Maximize,
   Palette,
-  Layers
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

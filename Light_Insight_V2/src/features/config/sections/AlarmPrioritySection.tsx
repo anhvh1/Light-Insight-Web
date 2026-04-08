@@ -7,7 +7,6 @@ import {
   Sliders, 
   X, 
   SearchIcon, 
-  Edit2, 
   Trash2,
   Check,
 } from 'lucide-react';
@@ -17,10 +16,10 @@ import type { Priority } from '@/types';
 
 interface AlarmPrioritySectionProps {
   actualConnectors: any[];
-  isLoadingConnectors: boolean;
+  // isLoadingConnectors: boolean;
 }
 
-export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: AlarmPrioritySectionProps) {
+export function AlarmPrioritySection({ actualConnectors }: AlarmPrioritySectionProps) {
   const queryClient = useQueryClient();
   
   // --- STATES ---
@@ -28,12 +27,12 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
   const [basket, setBasket] = useState<string[]>([]);
   const [selectedPriorityId, setSelectedPriorityId] = useState<number>(2);
   const [modalSearch, setModalSearch] = useState('');
-  const [editingMapping, setEditingMapping] = useState<{ id: number; name: string; currentPriorityId: number } | null>(null);
-  const [responseModal, setResponseModal] = useState<{ isOpen: boolean; status: number; message: string }>({
-    isOpen: false,
-    status: 0,
-    message: ''
-  });
+  // const [editingMapping, setEditingMapping] = useState<{ id: number; name: string; currentPriorityId: number } | null>(null);
+  // const [responseModal, setResponseModal] = useState<{ isOpen: boolean; status: number; message: string }>({
+  //   isOpen: false,
+  //   status: 0,
+  //   message: ''
+  // });
 
   // --- API DATA FETCHING ---
   const { data: priorities = [] } = useQuery({
@@ -81,18 +80,18 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
     }
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { ID: number; PriorityID: number } }) => 
-      priorityApi.updateMapping(id, data),
-    onSuccess: (res) => {
-      if (res.Status === 1) {
-        queryClient.invalidateQueries({ queryKey: ['priority-mappings'] });
-        setEditingMapping(null);
-      } else {
-        alert(res.Message);
-      }
-    }
-  });
+  // const updateMutation = useMutation({
+  //   mutationFn: ({ id, data }: { id: number; data: { ID: number; PriorityID: number } }) => 
+  //     priorityApi.updateMapping(id, data),
+  //   onSuccess: (res) => {
+  //     if (res.Status === 1) {
+  //       queryClient.invalidateQueries({ queryKey: ['priority-mappings'] });
+  //       setEditingMapping(null);
+  //     } else {
+  //       alert(res.Message);
+  //     }
+  //   }
+  // });
 
   const tableData = mappings.flatMap(m => 
     m.AnalyticsEvents.map(evtName => ({
@@ -149,7 +148,7 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
                     </td>
                     <td className="py-3 px-6 text-right">
                        <div className="flex justify-end gap-1.5 opacity-20 group-hover:opacity-100 transition-all">
-                          <button className="w-9 h-9 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-psim-accent" onClick={() => setEditingMapping({ id: c.mappingId, name: c.label, currentPriorityId: c.priorityId })}><Edit2 size={14} /></button>
+                          {/* <button className="w-9 h-9 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-psim-accent" onClick={() => setEditingMapping({ id: c.mappingId, name: c.label, currentPriorityId: c.priorityId })}><Edit2 size={14} /></button> */}
                           <button className="w-9 h-9 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-psim-red" onClick={() => { if(confirm('Xóa?')) deleteMutation.mutate(c.mappingId); }}><Trash2 size={14} /></button>
                        </div>
                     </td>

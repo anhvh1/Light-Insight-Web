@@ -87,13 +87,13 @@ const configUsersRolesRoute = createRoute({
 const configPriorityRoute = createRoute({
   getParentRoute: () => configRoute,
   path: 'priority',
-  component: () => <AlarmPrioritySection actualConnectors={[]} isLoadingConnectors={false} />
+  component: () => <AlarmPrioritySection actualConnectors={[]} />
 });
 
 const configMapRoute = createRoute({
   getParentRoute: () => configRoute,
   path: 'map',
-  component: () => <MapManagementSection actualConnectors={[]} />
+  component: () => <MapManagementSection />
 });
 
 const configConnectorsRoute = createRoute({
