@@ -7,6 +7,52 @@ namespace LightInsightBUS.ExternalServices.MileStone
 {
     class GetCameras
     {
+        public string GetAllCameras(string baseUrl, string token)
+        {
+            string result = string.Empty;
+            try
+            {
+                // Khởi tạo handler bỏ qua lỗi SSL
+                var handler = new HttpClientHandler();
+                handler.ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
+
+                using (var client = new HttpClient(handler))
+                {
+                    // Thiết lập địa chỉ gốc
+                    client.BaseAddress = new Uri(baseUrl);
+
+                    // Cấu hình Header nhận JSON
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                    // Thêm Bearer Token vào Header
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+                    // Điểm khác biệt lớn nhất: Endpoint không có ID ở đuôi
+                    string endpoint = "/api/rest/v1/cameras";
+
+                    // Thực hiện gọi API
+                    HttpResponseMessage response = client.GetAsync(endpoint).Result;
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        // Đọc dữ liệu JSON trả về (Sẽ là một mảng chứa tất cả camera)
+                        result = response.Content.ReadAsStringAsync().Result;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"API Error: {response.StatusCode} - {response.ReasonPhrase}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error fetching all cameras: " + ex.Message);
+            }
+
+            return result;
+        }
+
         public string GetCameraById(string baseUrl, string token, string cameraId)
         {
             string result = string.Empty;
