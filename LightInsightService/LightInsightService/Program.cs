@@ -55,6 +55,8 @@ builder.Services.AddScoped<IRegister, RegisterBUS>();
 builder.Services.AddScoped<ILogin, LoginBUS>();
 builder.Services.AddScoped<IConnectors, ConnectorsBUS>();
 builder.Services.AddScoped<IDMMap, DMMapBUS>();
+builder.Services.AddScoped<LightInsightDAL.Repositories.General.SystemConfigDAL>();
+builder.Services.AddScoped<ISystemConfig, SystemConfigBUS>();
 
 
 builder.Services.AddSignalR();

@@ -352,15 +352,45 @@
 //         message: res.Message || (res.Status === 1 ? 'Xóa bản đồ thành công.' : 'Có lỗi xảy ra')
 //       });
 //       if (res.Status === 1) {
-//         queryClient.invalidateQueries({ queryKey: ['map-tree'] });
-//         setMapToDelete(null);
-//       }
-//     }
-//   });
+queryClient.invalidateQueries({ queryKey: ['map-tree'] });
+setMapToDelete(null);
+}
+}
+});
 
-//   const [isConnectorDialogOpen, setIsConnectorDialogOpen] = useState(false);
-//   const [newConnector, setNewConnector] = useState({
-//     name: '',
+const uploadMapImageMutation = useMutation({
+mutationFn: ({ id, file }: { id: string; file: File }) => mapApi.uploadImage(id, file),
+onSuccess: (res) => {
+setResponseModal({
+isOpen: true,
+status: res.Status,
+message: res.Message || (res.Status === 1 ? 'Tải ảnh lên thành công.' : 'Có lỗi xảy ra')
+});
+if (res.Status === 1 && res.Data) {
+queryClient.invalidateQueries({ queryKey: ['map-tree'] });
+setMapImage(res.Data); // Update with the new URL from backend
+}
+}
+});
+
+const deleteMapImageMutation = useMutation({
+mutationFn: mapApi.deleteImage,
+onSuccess: (res) => {
+setResponseModal({
+isOpen: true,
+status: res.Status,
+message: res.Message || (res.Status === 1 ? 'Xóa ảnh thành công.' : 'Có lỗi xảy ra')
+});
+if (res.Status === 1) {
+queryClient.invalidateQueries({ queryKey: ['map-tree'] });
+setMapImage(null);
+}
+}
+});
+
+const [isConnectorDialogOpen, setIsConnectorDialogOpen] = useState(false);
+const [newConnector, setNewConnector] = useState({
+name: '',
 //     vmsId: 0,
 //     ip: '',
 //     port: '',
@@ -435,16 +465,12 @@
 
 //   const fileInputRef = useRef<HTMLInputElement>(null);
 //   const [mapImage, setMapImage] = useState<string | null>(null);
-
-//   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-//     const file = e.target.files?.[0];
-//     if (file) {
-//       const reader = new FileReader();
-//       reader.onloadend = () => {
-//         setMapImage(reader.result as string);
-//       };
-//       reader.readAsDataURL(file);
-//     }
+const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (file && selectedMapId) {
+    uploadMapImageMutation.mutate({ id: selectedMapId, file });
+  }
+};
 //   };
 
 //   const handleDragStart = (e: React.DragEvent, device: { Id: string; Name: string; vmsId: number }) => {

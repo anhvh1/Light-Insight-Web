@@ -56,5 +56,11 @@ export const priorityApi = {
   deleteConnector: async (id: string) => {
     const response = await apiClient.delete<ApiResponse<null>>(`/Connectors/Delete/${id}`);
     return response.data || { Status: -1, Message: 'Delete failed' };
+  },
+
+  // 11. Cập nhật Connector
+  updateConnector: async (data: any) => {
+    const response = await apiClient.put<ApiResponse<null>>('/Connectors/Update', data);
+    return response.data || { Status: -1, Message: 'Update failed' };
   }
 };

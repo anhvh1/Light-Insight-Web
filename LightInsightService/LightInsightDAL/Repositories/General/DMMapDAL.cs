@@ -127,7 +127,7 @@ namespace LightInsightDAL.Repositories.General
 
                 await using var cmd = new NpgsqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("p_id", id);
-                cmd.Parameters.AddWithValue("p_map_image_path", path);
+                cmd.Parameters.AddWithValue("p_map_image_path", (object)path ?? DBNull.Value);
 
                 var result = await cmd.ExecuteScalarAsync();
                 return result is bool && (bool)result;

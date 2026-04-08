@@ -46,6 +46,13 @@ namespace LightInsightService.Controllers.General
             return Ok(result);
         }
 
+        [HttpDelete("DeleteImage/{id}")]
+        public async Task<IActionResult> DeleteImage(Guid id)
+        {
+            var result = await _dmMapBUS.DeleteMapImageAsync(id);
+            return Ok(result);
+        }
+
         [HttpPost("UploadImage/{id}")]
         public async Task<IActionResult> UploadImage(Guid id, Microsoft.AspNetCore.Http.IFormFile file)
         {

@@ -21,7 +21,7 @@ export function ConnectorsSection() {
   const [isConnectorDialogOpen, setIsConnectorDialogOpen] = useState(false);
   const [isViewingDetails, setIsViewingDetails] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [newConnector, setNewConnector] = useState({ name: '', vmsId: 0, ip: '', port: '', username: '', password: '' });
+  const [newConnector, setNewConnector] = useState({ id: '', name: '', vmsId: 0, ip: '', port: '', username: '', password: '' });
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: '', name: '' });
   const [responseModal, setResponseModal] = useState<{ isOpen: boolean; status: number; message: string }>({ isOpen: false, status: 0, message: '' });
 
@@ -44,7 +44,19 @@ export function ConnectorsSection() {
       if (res.Status === 1) {
         queryClient.invalidateQueries({ queryKey: ['connectors-list'] });
         setIsConnectorDialogOpen(false);
-        setNewConnector({ name: '', vmsId: 0, ip: '', port: '', username: '', password: '' });
+        setNewConnector({ id: '', name: '', vmsId: 0, ip: '', port: '', username: '', password: '' });
+      }
+    }
+  });
+
+  const updateConnectorMutation = useMutation({
+    mutationFn: (data: any) => priorityApi.updateConnector(data),
+    onSuccess: (res) => {
+      setResponseModal({ isOpen: true, status: res.Status, message: res.Message || 'Cập nhật thành công' });
+      if (res.Status === 1) {
+        queryClient.invalidateQueries({ queryKey: ['connectors-list'] });
+        setIsConnectorDialogOpen(false);
+        setNewConnector({ id: '', name: '', vmsId: 0, ip: '', port: '', username: '', password: '' });
       }
     }
   });
@@ -59,6 +71,11 @@ export function ConnectorsSection() {
       }
     }
   });
+
+  // Lọc danh sách VMS: Nếu đang thêm mới thì loại bỏ các VMS đã tồn tại trong actualConnectors
+  const filteredVmsList = isViewingDetails 
+    ? vmsList 
+    : vmsList.filter((v: any) => !actualConnectors.some((c: any) => c.VmsID === v.VmsId));
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500 w-full h-full overflow-hidden">
@@ -88,11 +105,11 @@ export function ConnectorsSection() {
                 </div>
                 <Progress value={c.Status === 'Connected' ? 100 : 0} className="h-1 bg-bg3" indicatorClassName={c.Status === 'Connected' ? "bg-psim-green" : "bg-psim-orange"} />
                 <div className="flex gap-2">
-                  <button className="flex-1 h-8 rounded bg-bg2 border border-border-dim text-[10px] font-bold text-t-1" onClick={() => {
-                    setNewConnector({ name: c.VmsName, vmsId: c.VmsID || 0, ip: c.IpServer, port: c.Port.toString(), username: c.Username, password: c.Password });
+                  <button className="flex-1 h-8 rounded bg-bg2 border border-border-dim text-[10px] font-bold text-t-1 hover:border-psim-accent/30" onClick={() => {
+                    setNewConnector({ id: c.Id, name: c.VmsName, vmsId: c.VmsID || 0, ip: c.IpServer, port: c.Port.toString(), username: c.Username, password: c.Password });
                     setIsViewingDetails(true); setIsConnectorDialogOpen(true);
                   }}>Chi tiết</button>
-                  <button className="flex-1 h-8 rounded bg-bg2 border border-red-900/30 text-[10px] font-bold text-t-2" onClick={() => setDeleteConfirmModal({ isOpen: true, id: c.Id, name: c.VmsName })}>Xóa</button>
+                  <button className="flex-1 h-8 rounded bg-bg2 border border-red-900/30 text-[10px] font-bold text-t-2 hover:border-psim-red/50" onClick={() => setDeleteConfirmModal({ isOpen: true, id: c.Id, name: c.VmsName })}>Xóa</button>
                 </div>
               </div>
             ))}
@@ -103,34 +120,116 @@ export function ConnectorsSection() {
       {/* ADD/EDIT MODAL */}
       {isConnectorDialogOpen && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/90" onClick={() => setIsConnectorDialogOpen(false)} />
-          <div className="relative w-full max-w-lg bg-[#161b2e] border border-white/10 rounded-xl shadow-2xl p-8">
+          <div className="absolute inset-0 bg-black/95 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsConnectorDialogOpen(false)} />
+          <div className="relative w-full max-w-lg bg-[#161b2e] border border-white/10 rounded-2xl shadow-2xl p-8 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start mb-8">
-              <h3 className="text-[18px] font-bold text-white uppercase">{isViewingDetails ? 'Chi tiết Connector' : 'Thêm Connector Mới'}</h3>
-              <button onClick={() => setIsConnectorDialogOpen(false)} className="text-t-2 hover:text-white"><X size={20} /></button>
+              <div>
+                <h3 className="text-[18px] font-bold text-white uppercase tracking-tight">{isViewingDetails ? 'Chi tiết Connector' : 'Thêm Connector Mới'}</h3>
+                <p className="text-[11px] text-t-2 mt-1">Cấu hình thông số kết nối tới hệ thống VMS.</p>
+              </div>
+              <button onClick={() => setIsConnectorDialogOpen(false)} className="text-t-2 hover:text-white transition-colors p-1"><X size={20} /></button>
             </div>
-            <div className="flex flex-col gap-5">
-              <select className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-white" value={newConnector.vmsId} onChange={(e) => setNewConnector({...newConnector, vmsId: parseInt(e.target.value)})}>
-                <option value={0}>-- Chọn VMS --</option>
-                {vmsList.map((v: any) => (<option key={v.VmsId} value={v.VmsId}>{v.VmsName}</option>))}
-              </select>
+            
+            <div className="flex flex-col gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Loại hệ thống (VMS)</label>
+                <select 
+                  className="w-full bg-black/40 border border-white/10 rounded-xl h-12 px-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all appearance-none cursor-pointer" 
+                  value={newConnector.vmsId} 
+                  onChange={(e) => setNewConnector({...newConnector, vmsId: parseInt(e.target.value)})}
+                >
+                  <option value={0} className="bg-[#161b2e]">-- Chọn VMS --</option>
+                  {filteredVmsList.map((v: any) => (<option key={v.VmsId} value={v.VmsId} className="bg-[#161b2e]">{v.VmsName}</option>))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
-                <input className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-white" placeholder="IP" value={newConnector.ip} onChange={(e) => setNewConnector({...newConnector, ip: e.target.value})} />
-                <input className="w-full bg-black/20 border border-white/10 rounded-lg h-11 px-4 text-white" placeholder="Port" value={newConnector.port} onChange={(e) => setNewConnector({...newConnector, port: e.target.value})} />
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Địa chỉ IP</label>
+                  <input 
+                    className="w-full bg-black/40 border border-white/10 rounded-xl h-12 px-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all font-mono" 
+                    placeholder="192.168.1.100" 
+                    value={newConnector.ip} 
+                    onChange={(e) => setNewConnector({...newConnector, ip: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Cổng (Port)</label>
+                  <input 
+                    className="w-full bg-black/40 border border-white/10 rounded-xl h-12 px-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all font-mono" 
+                    placeholder="8080" 
+                    value={newConnector.port} 
+                    onChange={(e) => setNewConnector({...newConnector, port: e.target.value})}
+                  />
+                </div>
               </div>
-              <div className="relative">
-                <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t-2" size={16} />
-                <input className="w-full bg-black/20 border border-white/10 rounded-lg h-11 pl-11 text-white" placeholder="Username" value={newConnector.username} onChange={(e) => setNewConnector({...newConnector, username: e.target.value})} />
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Tài khoản quản trị</label>
+                <div className="relative">
+                  <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-t-2" size={16} />
+                  <input 
+                    className="w-full bg-black/40 border border-white/10 rounded-xl h-12 pl-12 pr-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all" 
+                    placeholder="admin" 
+                    value={newConnector.username} 
+                    onChange={(e) => setNewConnector({...newConnector, username: e.target.value})}
+                  />
+                </div>
               </div>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t-2" size={16} />
-                <input type={showPassword ? "text" : "password"} className="w-full bg-black/20 border border-white/10 rounded-lg h-11 pl-11 pr-11 text-white" placeholder="Password" value={newConnector.password} onChange={(e) => setNewConnector({...newConnector, password: e.target.value})} />
-                <button className="absolute right-3.5 top-1/2 -translate-y-1/2 text-t-2" onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Mật khẩu</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-t-2" size={16} />
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    className="w-full bg-black/40 border border-white/10 rounded-xl h-12 pl-12 pr-12 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all font-mono" 
+                    placeholder="••••••••" 
+                    value={newConnector.password} 
+                    onChange={(e) => setNewConnector({...newConnector, password: e.target.value})}
+                  />
+                  <button 
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-t-2 hover:text-white transition-colors" 
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
             </div>
-            {!isViewingDetails && (
-              <button className="w-full mt-8 h-11 bg-psim-accent text-bg0 rounded-lg font-bold uppercase" onClick={() => connectorMutation.mutate({ IpServer: newConnector.ip, Port: parseInt(newConnector.port), Username: newConnector.username, Password: newConnector.password, VMSID: newConnector.vmsId })}>Lưu cấu hình</button>
-            )}
+
+            <div className="mt-10 flex gap-4">
+              <button 
+                onClick={() => setIsConnectorDialogOpen(false)}
+                className="flex-1 h-12 rounded-xl text-[11px] font-bold text-t-2 uppercase border border-white/10 hover:bg-white/5 transition-all"
+              >
+                Hủy bỏ
+              </button>
+              <button 
+                className="flex-[2] h-12 bg-psim-accent text-bg0 rounded-xl font-bold uppercase tracking-widest text-[12px] shadow-lg shadow-psim-accent/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2" 
+                onClick={() => {
+                  const payload = { 
+                    Id: newConnector.id,
+                    IpServer: newConnector.ip, 
+                    Port: parseInt(newConnector.port), 
+                    Username: newConnector.username, 
+                    Password: newConnector.password, 
+                    VMSID: newConnector.vmsId,
+                    Name: newConnector.name || 'Connector',
+                    Status: 'Connected'
+                  };
+                  if (isViewingDetails) {
+                    updateConnectorMutation.mutate(payload);
+                  } else {
+                    connectorMutation.mutate(payload);
+                  }
+                }}
+                disabled={connectorMutation.isPending || updateConnectorMutation.isPending}
+              >
+                {(connectorMutation.isPending || updateConnectorMutation.isPending) && <RefreshCcw size={14} className="animate-spin" />}
+                Lưu cấu hình
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -138,14 +237,29 @@ export function ConnectorsSection() {
       {/* DELETE CONFIRM */}
       {deleteConfirmModal.isOpen && (
         <div className="fixed inset-0 z-[11000] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80" onClick={() => setDeleteConfirmModal({...deleteConfirmModal, isOpen: false})} />
-          <div className="relative w-full max-w-sm bg-[#161b2e] border border-white/10 rounded-2xl p-8 text-center">
-            <Trash2 size={40} className="mx-auto mb-4 text-psim-red" />
-            <h3 className="text-white font-bold mb-2">Xác nhận xóa?</h3>
-            <p className="text-t-2 text-[13px] mb-8">Xóa connector "{deleteConfirmModal.name}"?</p>
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setDeleteConfirmModal({...deleteConfirmModal, isOpen: false})} />
+          <div className="relative w-full max-w-sm bg-[#161b2e] border border-white/10 rounded-2xl p-8 text-center shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="w-20 h-20 rounded-full bg-psim-red/20 text-psim-red flex items-center justify-center mx-auto mb-6 shadow-lg shadow-psim-red/10 animate-pulse">
+              <Trash2 size={36} />
+            </div>
+            <h3 className="text-white text-[18px] font-bold mb-2 uppercase tracking-tight">Xác nhận xóa?</h3>
+            <p className="text-t-2 text-[13px] leading-relaxed mb-10 px-4">
+              Bạn có chắc chắn muốn xóa connector <span className="text-white font-bold">"{deleteConfirmModal.name}"</span>? Hành động này không thể hoàn tác.
+            </p>
             <div className="flex gap-3">
-              <button className="flex-1 h-12 rounded-xl border border-white/10 text-white" onClick={() => setDeleteConfirmModal({...deleteConfirmModal, isOpen: false})}>Hủy</button>
-              <button className="flex-1 h-12 rounded-xl bg-psim-red text-white" onClick={() => deleteConnectorMutation.mutate(deleteConfirmModal.id)}>Xác nhận</button>
+              <button 
+                className="flex-1 h-12 rounded-xl border border-white/10 text-t-2 font-bold text-[11px] uppercase hover:bg-white/5 transition-all" 
+                onClick={() => setDeleteConfirmModal({...deleteConfirmModal, isOpen: false})}
+              >
+                Hủy bỏ
+              </button>
+              <button 
+                className="flex-[2] h-12 rounded-xl bg-psim-red text-white font-bold text-[11px] uppercase shadow-lg shadow-psim-red/20 hover:scale-[1.02] transition-all" 
+                onClick={() => deleteConnectorMutation.mutate(deleteConfirmModal.id)}
+                disabled={deleteConnectorMutation.isPending}
+              >
+                {deleteConnectorMutation.isPending ? <RefreshCcw size={14} className="animate-spin" /> : 'Xác nhận xóa'}
+              </button>
             </div>
           </div>
         </div>
@@ -154,12 +268,25 @@ export function ConnectorsSection() {
       {/* RESPONSE NOTIF */}
       {responseModal.isOpen && (
         <div className="fixed inset-0 z-[12000] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80" onClick={() => setResponseModal({...responseModal, isOpen: false})} />
-          <div className="relative w-full max-w-sm bg-[#161b2e] border border-white/10 rounded-2xl p-8 text-center">
-            {responseModal.status === 1 ? <CheckCircle2 size={40} className="mx-auto mb-4 text-psim-green" /> : <ShieldAlert size={40} className="mx-auto mb-4 text-psim-red" />}
-            <h3 className="text-white font-bold mb-2">{responseModal.status === 1 ? 'Thành công' : 'Lỗi'}</h3>
-            <p className="text-t-2 text-[13px] mb-8">{responseModal.message}</p>
-            <button className="w-full h-12 rounded-xl bg-psim-accent text-bg0 font-bold" onClick={() => setResponseModal({...responseModal, isOpen: false})}>OK</button>
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setResponseModal({...responseModal, isOpen: false})} />
+          <div className="relative w-full max-w-sm bg-[#161b2e] border border-white/10 rounded-2xl p-8 text-center shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className={cn(
+              "w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg",
+              responseModal.status === 1 ? "bg-psim-green/20 text-psim-green shadow-psim-green/10" : "bg-psim-red/20 text-psim-red shadow-psim-red/10"
+            )}>
+              {responseModal.status === 1 ? <CheckCircle2 size={40} /> : <ShieldAlert size={40} />}
+            </div>
+            <h3 className="text-white text-[18px] font-bold mb-2 uppercase tracking-tight">{responseModal.status === 1 ? 'Thành công' : 'Thông báo lỗi'}</h3>
+            <p className="text-t-2 text-[13px] leading-relaxed mb-10 px-4">{responseModal.message}</p>
+            <button 
+              className={cn(
+                "w-full h-12 rounded-xl font-bold uppercase text-[11px] tracking-widest shadow-lg transition-all hover:scale-[1.02]",
+                responseModal.status === 1 ? "bg-psim-accent text-bg0 shadow-psim-accent/20" : "bg-psim-red text-white shadow-psim-red/20"
+              )} 
+              onClick={() => setResponseModal({...responseModal, isOpen: false})}
+            >
+              Xác nhận (OK)
+            </button>
           </div>
         </div>
       )}

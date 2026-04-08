@@ -297,5 +297,71 @@ namespace LightInsightBUS.Service.General
             return result;
 
         }
+
+        public async Task<BaseResultModel> DeleteMapImageAsync(Guid id)
+        {
+            var result = new BaseResultModel();
+            try
+            {
+                // 1. Lấy thông tin bản đồ từ CSDL
+                var allMaps = await _dmMapDAL.GetAllMapsAsync();
+                var map = allMaps.FirstOrDefault(m => m.Id == id);
+
+                if (map == null)
+                {
+                    result.Status = 0;
+                    result.Message = "Không tìm thấy bản đồ.";
+                    return result;
+                }
+
+                if (string.IsNullOrEmpty(map.MapImagePath))
+                {
+                    result.Status = 1;
+                    result.Message = "Bản đồ không có ảnh để xóa.";
+                    return result;
+                }
+
+                // 2. Xóa file vật lý
+                try
+                {
+                    // Đường dẫn trong DB là /Upload/Map/abc.jpg
+                    // Cần chuyển thành đường dẫn vật lý đầy đủ
+                    var webRootPath = AppDomain.CurrentDomain.BaseDirectory;
+                    var relativePath = map.MapImagePath.TrimStart('/'); // Bỏ dấu / ở đầu
+                    var filePath = System.IO.Path.Combine(webRootPath, relativePath);
+
+                    if (System.IO.File.Exists(filePath))
+                    {
+                        System.IO.File.Delete(filePath);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Có thể log lỗi xóa file ở đây, nhưng vẫn tiếp tục để cập nhật CSDL
+                    Console.WriteLine($"Lỗi khi xóa file ảnh vật lý: {ex.Message}");
+                }
+
+
+                // 3. Cập nhật CSDL, set đường dẫn ảnh về null
+                var success = await _dmMapDAL.UpdateMapImageAsync(id, null);
+
+                if (success)
+                {
+                    result.Status = 1;
+                    result.Message = "Xóa ảnh bản đồ thành công.";
+                }
+                else
+                {
+                    result.Status = 0;
+                    result.Message = "Xóa ảnh thành công nhưng cập nhật CSDL thất bại.";
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Status = -1;
+                result.Message = ex.Message;
+            }
+            return result;
+        }
     }
 }
