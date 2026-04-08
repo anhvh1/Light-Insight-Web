@@ -2,6 +2,8 @@ using LightInsightBUS.ExternalServices.MileStone;
 using LightInsightModel.General;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -13,91 +15,173 @@ namespace LightInsightBUS.ExternalServices.MileStone
     {
         private readonly HttpClient _httpClient;
         private readonly GetAnalyticsEvents _tokenService;
+        private static PerformanceCounter _cpuCounter;
 
         public MilestoneSystemProber(GetAnalyticsEvents tokenService)
         {
             _httpClient = new HttpClient();
-            _httpClient.Timeout = TimeSpan.FromSeconds(5); // Tối ưu: Timeout 5s để không treo UI
+            _httpClient.Timeout = TimeSpan.FromSeconds(5);
             _tokenService = tokenService;
+
+            try {
+                if (OperatingSystem.IsWindows())
+                {
+                    _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+                    _cpuCounter.NextValue(); // Khởi động counter
+                }
+            } catch (Exception ex) {
+                Console.WriteLine("[SystemHealth] CPU Counter Init Error: " + ex.Message);
+            }
         }
 
         public async Task<List<InfrastructureHealth>> GetInfrastructureStatusAsync()
         {
-            var result = new List<InfrastructureHealth>();
+            var finalResult = new List<InfrastructureHealth>();
             try
             {
                 var token = await _tokenService.GetTokenAsync();
                 var config = _tokenService.GetVmsConfig(1);
-                if (string.IsNullOrEmpty(token) || config == null) return result;
+                
+                if (string.IsNullOrEmpty(token)) {
+                    Console.WriteLine("[SystemHealth] Error: Could not get Milestone Token.");
+                    return finalResult;
+                }
+                
+                if (config == null) {
+                    Console.WriteLine("[SystemHealth] Error: VMS Config not found in cache.");
+                    return finalResult;
+                }
 
                 string baseUrl = $"http://{config.IpServer}:{config.Port}/API/rest/v1";
+                Console.WriteLine($"[SystemHealth] Probing Milestone at: {baseUrl}");
 
-                // Kỹ thuật 1: Chạy song song cả 3 yêu cầu tới Milestone
-                var serversTask = GetRecordingServers(baseUrl, token);
-                var storageTask = GetOverallStorage(baseUrl, token);
-                var camerasTask = GetOfflineCameras(baseUrl, token);
+                // Thực hiện các task và bẫy lỗi riêng cho từng task để không làm hỏng cả result
+                var servers = await SafeGetRecordingServers(baseUrl, token);
+                var storages = await SafeGetDetailedStorage(baseUrl, token);
+                var events = await SafeGetEventServers(baseUrl, token);
 
-                await Task.WhenAll(serversTask, storageTask, camerasTask);
+                finalResult.AddRange(servers);
+                finalResult.AddRange(storages);
+                finalResult.AddRange(events);
 
-                result.AddRange(await serversTask);
-                var storage = await storageTask;
-                if (storage != null) result.Add(storage);
-                result.AddRange(await camerasTask);
+                Console.WriteLine($"[SystemHealth] Prober scan complete. Found: {servers.Count} servers, {storages.Count} storages, {events.Count} event servers.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine("MilestoneProber Optimized Error: " + ex.Message);
+                Console.WriteLine("[SystemHealth] Critical Prober Error: " + ex.Message);
             }
-            return result;
+            return finalResult;
         }
 
-        private async Task<List<InfrastructureHealth>> GetRecordingServers(string baseUrl, string token)
+        public int GetCurrentCpuUsage()
+        {
+            try {
+                if (_cpuCounter != null) return (int)_cpuCounter.NextValue();
+            } catch { }
+            return 0;
+        }
+
+        private async Task<List<InfrastructureHealth>> SafeGetRecordingServers(string baseUrl, string token)
+        {
+            var list = new List<InfrastructureHealth>();
+            try {
+                var response = await _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/recordingServers") { 
+                    Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) } 
+                });
+                if (response.IsSuccessStatusCode) {
+                    var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                    if (doc.RootElement.TryGetProperty("array", out var array)) {
+                        foreach (var item in array.EnumerateArray()) {
+                            string name = item.GetProperty("name").GetString();
+                            string status = item.GetProperty("status").GetString();
+                            list.Add(new InfrastructureHealth { Name = name, Description = "Milestone Recording Server", Status = status == "Running" ? "ONLINE" : "OFFLINE", Type = "server" });
+                        }
+                    }
+                } else {
+                    Console.WriteLine($"[SystemHealth] RecordingServers API Failed: {response.StatusCode}");
+                }
+            } catch (Exception ex) { Console.WriteLine("[SystemHealth] RecordingServers Exception: " + ex.Message); }
+            return list;
+        }
+
+        private async Task<List<InfrastructureHealth>> SafeGetEventServers(string baseUrl, string token)
+        {
+            var list = new List<InfrastructureHealth>();
+            try {
+                var response = await _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/eventServers") { 
+                    Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) } 
+                });
+                if (response.IsSuccessStatusCode) {
+                    var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                    if (doc.RootElement.TryGetProperty("array", out var array)) {
+                        foreach (var item in array.EnumerateArray()) {
+                            list.Add(new InfrastructureHealth { Name = item.GetProperty("name").GetString(), Description = "Milestone Event Server", Status = "ONLINE", Type = "server" });
+                        }
+                    }
+                }
+            } catch { }
+            return list;
+        }
+
+        private async Task<List<InfrastructureHealth>> SafeGetDetailedStorage(string baseUrl, string token)
         {
             var list = new List<InfrastructureHealth>();
             try
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/recordingServers");
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                var response = await _httpClient.SendAsync(request);
+                var response = await _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/recordingServers") { 
+                    Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) } 
+                });
                 
                 if (response.IsSuccessStatusCode)
                 {
-                    var json = await response.Content.ReadAsStringAsync();
-                    using var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.TryGetProperty("array", out var array))
+                    var serversDoc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                    foreach (var server in serversDoc.RootElement.GetProperty("array").EnumerateArray())
                     {
-                        foreach (var item in array.EnumerateArray())
+                        string serverId = server.GetProperty("id").GetString();
+                        string serverName = server.GetProperty("name").GetString();
+
+                        var storageRes = await _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/recordingServers/{serverId}/storages") { 
+                            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) } 
+                        });
+
+                        if (storageRes.IsSuccessStatusCode)
                         {
-                            bool isRunning = item.GetProperty("status").GetString() == "Running";
-                            list.Add(new InfrastructureHealth
+                            var storagesDoc = JsonDocument.Parse(await storageRes.Content.ReadAsStringAsync());
+                            if (storagesDoc.RootElement.TryGetProperty("array", out var storageArray))
                             {
-                                Name = item.GetProperty("name").GetString(),
-                                Description = "Milestone Recording Server",
-                                Status = isRunning ? "ONLINE" : "OFFLINE",
-                                Type = "server"
-                            });
+                                foreach (var storage in storageArray.EnumerateArray())
+                                {
+                                    long capacity = GetLongValue(storage, "capacity", "totalSize");
+                                    long usage = GetLongValue(storage, "usage", "usedSize");
+
+                                    if (capacity > 0)
+                                    {
+                                        double totalTB = Math.Round(capacity / 1024.0 / 1024.0 / 1024.0 / 1024.0, 2);
+                                        double usedTB = Math.Round(usage / 1024.0 / 1024.0 / 1024.0 / 1024.0, 2);
+                                        int percent = (int)((usage * 100) / capacity);
+
+                                        list.Add(new InfrastructureHealth { Name = $"Storage - {serverName}", Description = $"{usedTB}TB / {totalTB}TB", Status = $"{percent}%", Type = "storage" });
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-            }
-            catch { }
+            } catch { }
             return list;
         }
 
-        private async Task<InfrastructureHealth> GetOverallStorage(string baseUrl, string token)
+        private long GetLongValue(JsonElement element, params string[] propertyNames)
         {
-            return new InfrastructureHealth
+            foreach (var name in propertyNames)
             {
-                Name = "Milestone Video Repository",
-                Description = "All recording storages status check",
-                Status = "ONLINE",
-                Type = "storage"
-            };
-        }
-
-        private async Task<List<InfrastructureHealth>> GetOfflineCameras(string baseUrl, string token)
-        {
-            return new List<InfrastructureHealth>(); // Sẽ triển khai chi tiết khi cần lọc camera cụ thể
+                if (element.TryGetProperty(name, out var prop))
+                {
+                    if (prop.ValueKind == JsonValueKind.Number) return prop.GetInt64();
+                    if (prop.ValueKind == JsonValueKind.String && long.TryParse(prop.GetString(), out long val)) return val;
+                }
+            }
+            return 0;
         }
     }
 }

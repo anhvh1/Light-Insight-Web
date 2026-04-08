@@ -7,6 +7,7 @@ using LightInsightModel.MileStone.General;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -32,14 +33,22 @@ namespace LightInsightBUS.Service.General
             
             try
             {
+                // 1. Lấy thông số App Server (CPU/RAM/Disk thật)
+                result.Infrastructure.Add(await GetLocalServerHealth());
+
+                // 2. Quét Connectors song song
                 var connectorsRes = await _connectorService.GetAllConnectorsAsync();
                 var connectorList = connectorsRes.Data as List<ConnectorListModel> ?? new List<ConnectorListModel>();
-
                 var probeTasks = connectorList.Select(conn => ProbeConnectorAsync(conn)).ToList();
                 var connectorResults = await Task.WhenAll(probeTasks);
-                
                 result.Connectors.AddRange(connectorResults.Where(r => r != null));
-                result.Infrastructure = await _milestoneProber.GetInfrastructureStatusAsync();
+
+                // 3. Lấy dữ liệu hạ tầng Milestone (Servers, Storages...)
+                var realInfra = await _milestoneProber.GetInfrastructureStatusAsync();
+                if (realInfra != null && realInfra.Count > 0)
+                {
+                    result.Infrastructure.AddRange(realInfra);
+                }
 
                 return new BaseResultModel { Status = 1, Message = "Success", Data = result };
             }
@@ -47,6 +56,34 @@ namespace LightInsightBUS.Service.General
             {
                 return new BaseResultModel { Status = -1, Message = "Error: " + ex.Message };
             }
+        }
+
+        private async Task<InfrastructureHealth> GetLocalServerHealth()
+        {
+            string cpu = "N/A";
+            string ram = "N/A";
+            string disk = "N/A";
+            try {
+                // Lấy CPU thật từ Prober
+                cpu = $"{_milestoneProber.GetCurrentCpuUsage()}%";
+
+                var memStatus = GC.GetGCMemoryInfo();
+                if (memStatus.TotalAvailableMemoryBytes > 0)
+                    ram = $"{(memStatus.MemoryLoadBytes * 100) / memStatus.TotalAvailableMemoryBytes}%";
+
+                if (OperatingSystem.IsWindows()) {
+                    var driveC = new DriveInfo("C");
+                    if (driveC.IsReady)
+                        disk = $"{(int)((driveC.TotalSize - driveC.AvailableFreeSpace) * 100 / driveC.TotalSize)}%";
+                }
+            } catch { }
+
+            return new InfrastructureHealth { 
+                Name = "Management Server", 
+                Description = $"CPU {cpu} · RAM {ram} · SysDisk {disk} (Customer App Node)", 
+                Status = "ONLINE", 
+                Type = "server" 
+            };
         }
 
         private async Task<ConnectorHealth> ProbeConnectorAsync(ConnectorListModel conn)
@@ -59,9 +96,8 @@ namespace LightInsightBUS.Service.General
                 Status = "OFFLINE",
                 Latency = "0ms",
                 HealthPercentage = 0,
-                EventsPerMin = "0", // Mặc định là 0, không random
-                Stats = "Disconnected",
-                Description = "Pending network check"
+                EventsPerMin = "0",
+                Stats = "Disconnected"
             };
 
             var sw = Stopwatch.StartNew();
@@ -76,7 +112,6 @@ namespace LightInsightBUS.Service.General
                     health.Latency = $"{sw.ElapsedMilliseconds}ms";
                     health.HealthPercentage = 100;
                     health.Stats = "Connected";
-                    health.Description = "System reachable";
 
                     if (conn.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase))
                     {
@@ -86,15 +121,11 @@ namespace LightInsightBUS.Service.General
                             var cameras = await _tokenService.GetCamerasAsync();
                             health.Stats = $"{cameras.Count} / {cameras.Count}";
                             health.StatsLabel = "Cameras";
-                            health.EventsPerMin = "0"; // Milestone API không trả về trực tiếp, tạm để 0
                         }
                     }
                 }
             }
-            catch 
-            { 
-                health.Status = "OFFLINE"; 
-            }
+            catch { health.Status = "OFFLINE"; }
 
             return health;
         }
@@ -112,10 +143,7 @@ namespace LightInsightBUS.Service.General
                 }
                 return false;
             }
-            catch
-            {
-                return false;
-            }
+            catch { return false; }
         }
     }
 }

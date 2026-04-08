@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="JsonConverter.Newtonsoft.Json" Version="0.8.0" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="10.0.5" />
   </ItemGroup>
 
   <ItemGroup>
