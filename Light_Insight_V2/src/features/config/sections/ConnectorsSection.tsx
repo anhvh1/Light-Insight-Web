@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { 
   RefreshCcw, 
-  Plug2, 
   X, 
   Key, 
   Lock, 

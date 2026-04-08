@@ -4,14 +4,11 @@ import { cn } from '@/lib/utils';
 import { 
   Plus, 
   RefreshCcw, 
-  Zap, 
   Sliders, 
   X, 
   SearchIcon, 
-  Edit2, 
   Trash2,
   Check,
-  Search
 } from 'lucide-react';
 import { priorityApi } from '@/lib/priority-api';
 import { StatusPill } from '@/components/ui/status-badge';
@@ -19,10 +16,10 @@ import type { Priority } from '@/types';
 
 interface AlarmPrioritySectionProps {
   actualConnectors: any[];
-  isLoadingConnectors: boolean;
+  // isLoadingConnectors: boolean;
 }
 
-export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: AlarmPrioritySectionProps) {
+export function AlarmPrioritySection({ actualConnectors }: AlarmPrioritySectionProps) {
   const queryClient = useQueryClient();
   
   // --- STATES ---
@@ -30,12 +27,12 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
   const [basket, setBasket] = useState<string[]>([]);
   const [selectedPriorityId, setSelectedPriorityId] = useState<number>(2);
   const [modalSearch, setModalSearch] = useState('');
-  const [editingMapping, setEditingMapping] = useState<{ id: number; name: string; currentPriorityId: number } | null>(null);
-  const [responseModal, setResponseModal] = useState<{ isOpen: boolean; status: number; message: string }>({
-    isOpen: false,
-    status: 0,
-    message: ''
-  });
+  // const [editingMapping, setEditingMapping] = useState<{ id: number; name: string; currentPriorityId: number } | null>(null);
+  // const [responseModal, setResponseModal] = useState<{ isOpen: boolean; status: number; message: string }>({
+  //   isOpen: false,
+  //   status: 0,
+  //   message: ''
+  // });
 
   // --- API DATA FETCHING ---
   const { data: priorities = [] } = useQuery({
@@ -83,18 +80,18 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
     }
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { ID: number; PriorityID: number } }) => 
-      priorityApi.updateMapping(id, data),
-    onSuccess: (res) => {
-      if (res.Status === 1) {
-        queryClient.invalidateQueries({ queryKey: ['priority-mappings'] });
-        setEditingMapping(null);
-      } else {
-        alert(res.Message);
-      }
-    }
-  });
+  // const updateMutation = useMutation({
+  //   mutationFn: ({ id, data }: { id: number; data: { ID: number; PriorityID: number } }) => 
+  //     priorityApi.updateMapping(id, data),
+  //   onSuccess: (res) => {
+  //     if (res.Status === 1) {
+  //       queryClient.invalidateQueries({ queryKey: ['priority-mappings'] });
+  //       setEditingMapping(null);
+  //     } else {
+  //       alert(res.Message);
+  //     }
+  //   }
+  // });
 
   const tableData = mappings.flatMap(m => 
     m.AnalyticsEvents.map(evtName => ({
@@ -114,7 +111,7 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
         </div>
         <button 
           onClick={() => { setBasket([]); setIsDialogOpen(true); }}
-          className="bg-psim-accent text-bg0 font-bold text-[11px] uppercase tracking-wider gap-2 h-10 px-6 rounded-md flex items-center shadow-lg shadow-psim-accent/20 hover:scale-[1.02] transition-all"
+          className="bg-psim-accent2 text-bg0 font-bold text-[11px] uppercase tracking-wider gap-2 h-10 px-6 rounded-md flex items-center shadow-lg shadow-psim-accent/20 hover:scale-[1.02] transition-all"
         >
           <Plus size={16} /> Tạo cấu hình mới
         </button>
@@ -127,7 +124,7 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
              <span className="text-t-2 font-mono text-[11px] uppercase tracking-widest">Đang tải...</span>
           </div>
         ) : (
-          <div className="overflow-auto flex-1 scrollbar-thin scrollbar-thumb-psim-accent/30 scrollbar-track-transparent hover:scrollbar-thumb-psim-accent/50">
+          <div className="overflow-auto flex-1">
             <table className="w-full text-left border-collapse">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-[#121929] border-b border-border-dim">
@@ -151,7 +148,7 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
                     </td>
                     <td className="py-3 px-6 text-right">
                        <div className="flex justify-end gap-1.5 opacity-20 group-hover:opacity-100 transition-all">
-                          <button className="w-9 h-9 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-psim-accent" onClick={() => setEditingMapping({ id: c.mappingId, name: c.label, currentPriorityId: c.priorityId })}><Edit2 size={14} /></button>
+                          {/* <button className="w-9 h-9 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-psim-accent" onClick={() => setEditingMapping({ id: c.mappingId, name: c.label, currentPriorityId: c.priorityId })}><Edit2 size={14} /></button> */}
                           <button className="w-9 h-9 rounded bg-bg2 border border-border-dim flex items-center justify-center text-t-2 hover:text-psim-red" onClick={() => { if(confirm('Xóa?')) deleteMutation.mutate(c.mappingId); }}><Trash2 size={14} /></button>
                        </div>
                     </td>
@@ -195,7 +192,7 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
                   <input className="w-full bg-[#121929] border border-white/10 rounded-lg h-10 pl-10 pr-4 text-[12px] text-white outline-none" placeholder="Tìm kiếm sự kiện AI..." value={modalSearch} onChange={(e) => setModalSearch(e.target.value)} />
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-psim-accent/20 scrollbar-track-transparent">
+              <div className="flex-1 overflow-y-auto ">
                 <div className="grid grid-cols-3 gap-3">
                   {(() => {
                     const configuredEvents = new Set(mappings.flatMap(m => m.AnalyticsEvents));
@@ -217,9 +214,20 @@ export function AlarmPrioritySection({ actualConnectors, isLoadingConnectors }: 
               <div className="flex flex-col gap-3">
                 <span className="text-[10px] font-bold text-t-2 uppercase tracking-widest text-white">Thiết lập Priority: <span className="text-psim-accent ml-2">{basket.length} items</span></span>
                 <div className="flex gap-2">
-                  {priorities.map(p => (
-                    <button key={p.ID} onClick={() => setSelectedPriorityId(p.ID)} className={cn("px-4 py-2 rounded text-[11px] font-bold border transition-all", selectedPriorityId === p.ID ? "bg-psim-accent text-bg0 border-transparent scale-105" : "bg-[#121929] text-t-2 border-white/5")}>● {p.PriorityName}</button>
-                  ))}
+                   {priorities.map((p: any) => (
+                     <button
+                       key={p.ID}
+                       onClick={() => setSelectedPriorityId(p.ID)}
+                       className={cn(
+                         "px-4 py-2 rounded text-[11px] font-bold border transition-all flex items-center gap-2",
+                         selectedPriorityId === p.ID 
+                           ? `${p.PriorityName === 'CRITICAL' ? 'bg-psim-red text-white border-transparent' : p.PriorityName === 'HIGH' ? 'bg-psim-orange text-white border-transparent' : p.PriorityName === 'MEDIUM' ? 'bg-psim-yellow text-bg0 border-transparent' : 'bg-bg4 text-t-1 border-white/20'} scale-105 shadow-xl` 
+                           : "bg-[#121929] text-t-2 border-white/5 hover:border-white/20"
+                       )}
+                     >
+                       ● {p.PriorityName}
+                     </button>
+                   ))}
                 </div>
               </div>
               <div className="flex gap-4">

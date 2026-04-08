@@ -299,7 +299,6 @@ export function MapManagementSection() {
   const [rotatingDeviceId, setRotatingDeviceId] = useState<string | null>(null);
   const [mapImage, setMapImage] = useState<string | null>(null);
   const [isUploadWizardOpen, setIsUploadWizardOpen] = useState(false);
-  const [isDownloadingSample, setIsDownloadingSample] = useState(false);
   const [showDownloadManual, setShowDownloadManual] = useState<{ isOpen: boolean; url: string }>({ isOpen: false, url: '' });
   const [responseModal, setResponseModal] = useState<{ isOpen: boolean; status: number; message: string }>({
     isOpen: false,
@@ -456,9 +455,9 @@ export function MapManagementSection() {
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, device: { Id: string; Name: string; vmsId: number }) => {
+  const handleDragStart = (e: React.DragEvent, device: { id: string; name: string; vmsId: number }) => {
     setDraggingDevice(device);
-    e.dataTransfer.setData('deviceId', device.Id);
+    e.dataTransfer.setData('deviceId', device.id);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -468,9 +467,9 @@ export function MapManagementSection() {
     const y = ((e.clientY - rect.top - mapOffsetRef.current.y) / (rect.height * zoomScaleRef.current)) * 100;
 
     if (draggingDevice && selectedMapId) {
-      if (placedDevices.some(d => d.id === draggingDevice.Id && d.mapId === selectedMapId)) return;
+      if (placedDevices.some(d => d.id === draggingDevice.id && d.mapId === selectedMapId)) return;
       setPlacedDevices(prev => [...prev, {
-        id: draggingDevice.Id, name: draggingDevice.Name, x, y, mapId: selectedMapId, rotation: 0, vmsId: draggingDevice.vmsId
+        id: draggingDevice.id, name: draggingDevice.name, x, y, mapId: selectedMapId, rotation: 0, vmsId: draggingDevice.vmsId
       }]);
       setDraggingDevice(null);
     } else if (movingDeviceId) {
@@ -577,7 +576,7 @@ export function MapManagementSection() {
     setMapOffset({ x: 0, y: 0 });
   };
 
-  const [isPending, startTransition] = useTransition();
+  const [_isPending, startTransition] = useTransition();
 
   const handleDownloadSample = () => {
     startTransition(async () => {

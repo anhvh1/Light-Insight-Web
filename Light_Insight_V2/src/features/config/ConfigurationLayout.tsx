@@ -8,15 +8,16 @@ import {
   BellRing, 
   ShieldCheck,
   Sliders,
-  Database,
-  Map as MapIcon
+  Map as MapIcon,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
 import { Link, Outlet, useLocation } from '@tanstack/react-router';
 
 export function ConfigurationLayout() {
   const location = useLocation();
   const currentPath = location.pathname;
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const navItems = [
     { id: 'roles', label: 'User & Roles', icon: Users, group: 'Admin', path: '/config/users-roles' },
@@ -32,65 +33,112 @@ export function ConfigurationLayout() {
   return (
     <div className="flex flex-col h-full bg-bg0 overflow-hidden relative">
       {/* Header */}
-      <div className="h-14 border-b border-border-dim bg-bg0/50 flex items-center px-6 shrink-0">
-        <h1 className="font-heading text-[16px] font-bold text-t0 uppercase tracking-tight">Configuration & Administration</h1>
+      <header className="h-12 border-b border-white/5 bg-bg1 flex items-center px-3 shrink-0">
+        <h1 className="text-[15px] font-semibold text-t-0 tracking-tight">
+          Configuration & Administration
+        </h1>
         <div className="ml-auto text-[10px] text-t-2 font-mono uppercase tracking-widest bg-bg2 px-3 py-1 rounded border border-border-dim text-white">
           Admin Mode — SuperUser
         </div>
-      </div>
+      </header>
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
-        <div className="w-[240px] border-r border-border-dim bg-bg0 flex flex-col p-4 gap-6 shrink-0 bg-bg-1">
-          <div>
-            <div className="text-[10px] font-bold text-t-2 uppercase tracking-[0.2em] mb-3 px-2">Nhóm 4 — Quản trị</div>
-            <div className="flex flex-col gap-0.5">
-              {navItems.filter(i => i.group === 'Admin').map((item) => (
-                <Link
-                  key={item.id}
-                  to={item.path}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-md text-[12px] font-medium transition-all group",
-                    currentPath === item.path ? "bg-psim-accent/15 text-psim-accent" : "text-t-2 hover:bg-bg2 hover:text-t-1"
-                  )}
-                >
-                  <item.icon size={16} className={cn(currentPath === item.path ? "text-psim-accent" : "text-t-2 group-hover:text-t-1")} />
-                  {item.label}
-                </Link>
-              ))}
+        <div className={cn(
+          "border-r border-border-dim bg-bg0 flex flex-col transition-all duration-300 shrink-0 bg-bg-1 relative z-[50]",
+          isCollapsed ? "w-[64px]" : "w-[240px]"
+        )}>
+          <div className={cn(
+            "flex-1 flex flex-col p-3 gap-6 scrollbar-none",
+            isCollapsed ? "overflow-visible" : "overflow-y-auto overflow-x-hidden"
+          )}>
+            <div>
+              <div className={cn(
+                "text-[10px] font-bold text-t-2 uppercase tracking-[0.2em] mb-3 transition-all duration-300",
+                isCollapsed ? "opacity-0 overflow-hidden" : "opacity-100"
+              )}>
+                <div className="whitespace-nowrap">Nhóm 4 — Quản trị</div>
+              </div>
+              <div className="flex flex-col gap-1">
+                {navItems.filter(i => i.group === 'Admin').map((item) => (
+                  <Link
+                    key={item.id}
+                    to={item.path}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2 rounded-md text-[12px] font-medium transition-all group relative",
+                      currentPath === item.path ? "bg-psim-accent/15 text-psim-accent" : "text-t-2 hover:bg-bg2 hover:text-t-1"
+                    )}
+                  >
+                    <item.icon size={18} className={cn("shrink-0", currentPath === item.path ? "text-psim-accent" : "text-t-2 group-hover:text-t-1")} />
+                    <div className={cn(
+                      "transition-all duration-300 overflow-hidden",
+                      isCollapsed ? "max-w-0 opacity-0" : "max-w-[160px] opacity-100"
+                    )}>
+                      <span className="whitespace-nowrap">{item.label}</span>
+                    </div>
+                    
+                    {/* Tooltip for collapsed mode - Simplified and Robust */}
+                    {isCollapsed && (
+                      <div className="absolute left-full ml-4 px-3 py-2 bg-[#1a2236] text-white text-[11px] font-bold rounded-lg whitespace-nowrap border border-white/10 pointer-events-none opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all z-[9999] shadow-2xl uppercase tracking-wider block">
+                        {item.label}
+                        <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-[#1a2236] border-l border-b border-white/10 rotate-45" />
+                      </div>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className={cn(
+                "text-[10px] font-bold text-t-2 uppercase tracking-[0.2em] mb-3 transition-all duration-300",
+                isCollapsed ? "opacity-0 overflow-hidden" : "opacity-100"
+              )}>
+                <div className="whitespace-nowrap">Hệ thống</div>
+              </div>
+              <div className="flex flex-col gap-1">
+                {navItems.filter(i => i.group === 'Hệ thống').map((item) => (
+                  <Link
+                    key={item.id}
+                    to={item.path}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2 rounded-md text-[12px] font-medium transition-all group relative",
+                      currentPath === item.path ? "bg-psim-accent/15 text-psim-accent" : "text-t-2 hover:bg-bg2 hover:text-t-1"
+                    )}
+                  >
+                    <item.icon size={18} className={cn("shrink-0", currentPath === item.path ? "text-psim-accent" : "text-t-2 group-hover:text-t-1")} />
+                    <div className={cn(
+                      "transition-all duration-300 overflow-hidden",
+                      isCollapsed ? "max-w-0 opacity-0" : "max-w-[160px] opacity-100"
+                    )}>
+                      <span className="whitespace-nowrap">{item.label}</span>
+                    </div>
+
+                    {/* Tooltip for collapsed mode */}
+                    {isCollapsed && (
+                      <div className="absolute left-full ml-4 px-3 py-2 bg-[#1a2236] text-white text-[11px] font-bold rounded-lg whitespace-nowrap border border-white/10 pointer-events-none opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all z-[9999] shadow-2xl uppercase tracking-wider block">
+                        {item.label}
+                        <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-[#1a2236] border-l border-b border-white/10 rotate-45" />
+                      </div>
+                    )}
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div>
-            <div className="text-[10px] font-bold text-t-2 uppercase tracking-[0.2em] mb-3 px-2">Hệ thống</div>
-            <div className="flex flex-col gap-0.5">
-              {navItems.filter(i => i.group === 'Hệ thống').map((item) => (
-                <Link
-                  key={item.id}
-                  to={item.path}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-md text-[12px] font-medium transition-all group",
-                    currentPath === item.path ? "bg-psim-accent/15 text-psim-accent" : "text-t-2 hover:bg-bg2 hover:text-t-1"
-                  )}
-                >
-                  <item.icon size={16} className={cn(currentPath === item.path ? "text-psim-accent" : "text-t-2 group-hover:text-t-1")} />
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-auto p-4 bg-bg2/50 border border-border-dim rounded-lg">
-             <div className="flex items-center gap-2 mb-2">
-                <Database size={14} className="text-psim-accent" />
-                <span className="text-[10px] font-bold uppercase tracking-tight text-t-1">System Storage</span>
-             </div>
-             <div className="flex justify-between mb-1 text-[9px] font-mono">
-                <span className="text-t-2">48TB / 64TB</span>
-                <span className="text-psim-orange">75%</span>
-             </div>
-             <Progress value={75} className="h-1 bg-bg3" indicatorClassName="bg-psim-orange" />
-          </div>
+          {/* Collapse Toggle Button */}
+          <button 
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="h-12 border-t border-border-dim flex items-center justify-center text-t-2 hover:text-white hover:bg-bg2 transition-all group shrink-0"
+          >
+            {isCollapsed ? <ChevronRight size={18} className="group-hover:translate-x-0.5 transition-transform" /> : (
+              <div className="flex items-center gap-2">
+                <ChevronLeft size={18} className="group-hover:-translate-x-0.5 transition-transform" />
+                <span className="text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">Thu gọn menu</span>
+              </div>
+            )}
+          </button>
         </div>
 
         {/* Content Area - Where sub-pages render */}
@@ -101,3 +149,4 @@ export function ConfigurationLayout() {
     </div>
   );
 }
+

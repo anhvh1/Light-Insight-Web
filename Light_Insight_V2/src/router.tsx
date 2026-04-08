@@ -20,6 +20,9 @@ import { LoginPage } from './features/auth/LoginPage';
 import { AnalyticsPage } from './features/analytics/AnalyticsPage';
 import { ShiftHandoverPage } from './features/shift/ShiftHandoverPage';
 import { SystemHealthPage } from './features/health/SystemHealthPage';
+import { SopBuilderSection } from './features/config/sections/SopBuilder';
+import { EscalationRulesSection } from './features/config/sections/EscalationRulesSection';
+import { NotificationsSection } from './features/config/sections/NotificationsSection';
 
 // 1. Root Route
 const rootRoute = createRootRoute({
@@ -84,13 +87,13 @@ const configUsersRolesRoute = createRoute({
 const configPriorityRoute = createRoute({
   getParentRoute: () => configRoute,
   path: 'priority',
-  component: () => <AlarmPrioritySection actualConnectors={[]} isLoadingConnectors={false} />
+  component: () => <AlarmPrioritySection actualConnectors={[]} />
 });
 
 const configMapRoute = createRoute({
   getParentRoute: () => configRoute,
   path: 'map',
-  component: () => <MapManagementSection actualConnectors={[]} />
+  component: () => <MapManagementSection />
 });
 
 const configConnectorsRoute = createRoute({
@@ -103,6 +106,24 @@ const configRulesRoute = createRoute({
   getParentRoute: () => configRoute,
   path: 'rules',
   component: RuleAlarmConfigSection
+});
+
+const configSopBuilderRoute = createRoute({
+  getParentRoute: () => configRoute,
+  path: 'sop',
+  component: SopBuilderSection
+});
+
+const configEscalationRulesSection = createRoute({
+  getParentRoute: () => configRoute,
+  path: 'escalation',
+  component: EscalationRulesSection
+});
+
+const configNotificationsSection = createRoute({
+  getParentRoute: () => configRoute,
+  path: 'notif',
+  component: NotificationsSection
 });
 
 // Root Page Redirect
@@ -130,7 +151,10 @@ const routeTree = rootRoute.addChildren([
       configPriorityRoute,
       configMapRoute,
       configConnectorsRoute,
-      configRulesRoute
+      configRulesRoute,
+      configSopBuilderRoute,
+      configEscalationRulesSection,
+      configNotificationsSection
     ]),
   ]),
 ]);
