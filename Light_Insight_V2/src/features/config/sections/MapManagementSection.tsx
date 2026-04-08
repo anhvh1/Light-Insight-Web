@@ -456,9 +456,9 @@ export function MapManagementSection() {
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, device: { Id: string; Name: string; vmsId: number }) => {
+  const handleDragStart = (e: React.DragEvent, device: { id: string; name: string; vmsId: number }) => {
     setDraggingDevice(device);
-    e.dataTransfer.setData('deviceId', device.Id);
+    e.dataTransfer.setData('deviceId', device.id);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -468,9 +468,9 @@ export function MapManagementSection() {
     const y = ((e.clientY - rect.top - mapOffsetRef.current.y) / (rect.height * zoomScaleRef.current)) * 100;
 
     if (draggingDevice && selectedMapId) {
-      if (placedDevices.some(d => d.id === draggingDevice.Id && d.mapId === selectedMapId)) return;
+      if (placedDevices.some(d => d.id === draggingDevice.id && d.mapId === selectedMapId)) return;
       setPlacedDevices(prev => [...prev, {
-        id: draggingDevice.Id, name: draggingDevice.Name, x, y, mapId: selectedMapId, rotation: 0, vmsId: draggingDevice.vmsId
+        id: draggingDevice.id, name: draggingDevice.name, x, y, mapId: selectedMapId, rotation: 0, vmsId: draggingDevice.vmsId
       }]);
       setDraggingDevice(null);
     } else if (movingDeviceId) {
