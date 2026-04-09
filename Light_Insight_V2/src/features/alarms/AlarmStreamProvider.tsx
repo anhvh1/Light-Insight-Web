@@ -1,9 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import * as signalR from '@microsoft/signalr';
-import { useQuery } from '@tanstack/react-query';
 import type { Alarm } from '@/types';
 import { alarmApi, type AlarmFilters } from '@/lib/alarm-api';
-import { priorityApi } from '@/lib/priority-api';
 import { normalizeApiAlarm, normalizeSignalRAlarm, type AlarmPayload } from './alarm-mapper';
 
 const HUB_BASE_URL = import.meta.env.VITE_ALARM_HUB_URL;
@@ -11,9 +9,8 @@ const HUB_URL = HUB_BASE_URL ? `${HUB_BASE_URL.replace(/\/$/, '')}/alarm-hub` : 
 
 // TODO: doi ten event cho dung voi hub backend dang emit
 const HUB_EVENT_NAME = 'ReceiveAlarm';
-const MAX_ALARMS = 50; // Giới hạn 50 bản ghi theo yêu cầu
-const SERVER_PAGE_SIZE = 50;
-const SESSION_STORAGE_KEY = 'psim_live_alarms';
+const MAX_ALARMS = 100;
+const SERVER_PAGE_SIZE = 100;
 
 type AlarmStreamContextValue = {
   alarms: Alarm[];
@@ -39,38 +36,6 @@ const AlarmStreamContext = createContext<AlarmStreamContextValue | null>(null);
 export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [connected, setConnected] = useState(false);
-  
-  // Persistence Logic: Load initial state from sessionStorage
-  useEffect(() => {
-    const saved = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (saved) {
-      try {
-        setAlarms(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to parse saved alarms", e);
-      }
-    }
-  }, []);
-
-  // Persistence Logic: Save to sessionStorage whenever alarms change
-  useEffect(() => {
-    if (alarms.length > 0) {
-      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(alarms));
-    }
-  }, [alarms]);
-
-  // Logout Detection: Clear storage if no token
-  useEffect(() => {
-    const checkAuth = () => {
-      if (!localStorage.getItem('auth_token')) {
-        sessionStorage.removeItem(SESSION_STORAGE_KEY);
-        setAlarms([]);
-      }
-    };
-    window.addEventListener('storage', checkAuth);
-    return () => window.removeEventListener('storage', checkAuth);
-  }, []);
-
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [canNextPage, setCanNextPage] = useState(true);
@@ -79,19 +44,6 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   const [pendingRealtimeCount, setPendingRealtimeCount] = useState(0);
   const currentPageRef = useRef(1);
   const filtersRef = useRef<AlarmFilters>({});
-  const priorityMappingsRef = useRef<any[]>([]);
-
-  // Fetch Priority Mappings
-  const { data: mappingsResponse } = useQuery({
-    queryKey: ['priority-mappings-stream'],
-    queryFn: priorityApi.getAllMappings,
-  });
-
-  useEffect(() => {
-    if (mappingsResponse?.Data) {
-      priorityMappingsRef.current = mappingsResponse.Data;
-    }
-  }, [mappingsResponse]);
 
   const clearBellCount = useCallback(() => {
     setBellCount(0);
@@ -193,7 +145,7 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
         pageSize: SERVER_PAGE_SIZE,
         ...activeFilters,
       });
-      const nextAlarms = rows.map(r => normalizeApiAlarm(r, priorityMappingsRef.current)).slice(0, MAX_ALARMS);
+      const nextAlarms = rows.map(normalizeApiAlarm).slice(0, MAX_ALARMS);
       setAlarms(nextAlarms);
       setCurrentPage(page);
       currentPageRef.current = page;
@@ -215,10 +167,6 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
 
   const refreshAlarms = useCallback(
     async (nextFilters?: AlarmFilters) => {
-      // Chỉ fetch từ DB nếu hiện tại không có dữ liệu trong phiên
-      const saved = sessionStorage.getItem(SESSION_STORAGE_KEY);
-      if (saved && !nextFilters) return;
-
       clearBellCount();
       let merged: AlarmFilters = {};
       setFilters((prev) => {
@@ -244,7 +192,7 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   }, [currentPage, fetchPage, filters, loading]);
 
   const addAlarm = useCallback((payload: AlarmPayload) => {
-    const alarm = normalizeSignalRAlarm(payload, priorityMappingsRef.current);
+    const alarm = normalizeSignalRAlarm(payload);
     setBellCount((prev) => prev + 1);
     const activeFilters = filtersRef.current;
     if (!matchesFilters(alarm, payload, activeFilters)) {
@@ -280,7 +228,6 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
       .build();
 
     connection.on(HUB_EVENT_NAME, (data: AlarmPayload) => {
-      console.log('--- SIGNALR DATA RECEIVED ---', data);
       addAlarm(data);
     });
 

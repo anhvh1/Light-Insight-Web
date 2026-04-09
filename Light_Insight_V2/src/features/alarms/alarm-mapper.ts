@@ -38,26 +38,7 @@ function normalizePriority(priorityName?: string): string {
   if (normalized === 'high') return 'high';
   if (normalized === 'medium') return 'medium';
   if (normalized === 'low') return 'low';
-  return 'low'; // Default to low instead of medium as requested
-}
-
-function matchPriority(alarmName: string, priorityMappings: any[]): string {
-  if (!alarmName || !priorityMappings || priorityMappings.length === 0) return 'low';
-
-  const nameLower = alarmName.trim().toLowerCase();
-  
-  for (const mapping of priorityMappings) {
-    if (mapping.AnalyticsEvents && Array.isArray(mapping.AnalyticsEvents)) {
-      const hasMatch = mapping.AnalyticsEvents.some(
-        (event: string) => event.trim().toLowerCase() === nameLower
-      );
-      if (hasMatch) {
-        return normalizePriority(mapping.PriorityName);
-      }
-    }
-  }
-
-  return 'low';
+  return 'medium';
 }
 
 function normalizeStatus(stateName?: string): string {
@@ -69,7 +50,7 @@ function normalizeStatus(stateName?: string): string {
   return normalized || 'new';
 }
 
-function toAlarm(payload: AlarmPayload, isNew: boolean, priorityMappings?: any[]): Alarm {
+function toAlarm(payload: AlarmPayload, isNew: boolean): Alarm {
   const id = payload.alarmId?.trim() || generateId();
   const statusByLevel: Record<number, { status: string; label: string }> = {
     1: { status: 'new', label: 'New' },
@@ -83,18 +64,10 @@ function toAlarm(payload: AlarmPayload, isNew: boolean, priorityMappings?: any[]
   const status = mapped?.status ?? normalizeStatus(stateName);
   const statusLabel = stateName && stateName.length > 0 ? stateName : (mapped?.label ?? status);
 
-  // Determine priority: Try matching alarmName with priorityMappings first, then fallback to payload.priorityName
-  const alarmName = payload.alarmName ?? '';
-  let priority = payload.priorityName;
-  
-  if (priorityMappings && alarmName) {
-    priority = matchPriority(alarmName, priorityMappings);
-  }
-
   return {
     id,
     title: payload.message ?? payload.alarmName ?? '',
-    pri: normalizePriority(priority),
+    pri: normalizePriority(payload.priorityName),
     src: payload.source ?? '',
     status,
     statusLabel,
@@ -108,10 +81,10 @@ function toAlarm(payload: AlarmPayload, isNew: boolean, priorityMappings?: any[]
   };
 }
 
-export function normalizeSignalRAlarm(payload: AlarmPayload, priorityMappings?: any[]): Alarm {
-  return toAlarm(payload, true, priorityMappings);
+export function normalizeSignalRAlarm(payload: AlarmPayload): Alarm {
+  return toAlarm(payload, true);
 }
 
-export function normalizeApiAlarm(payload: AlarmPayload, priorityMappings?: any[]): Alarm {
-  return toAlarm(payload, false, priorityMappings);
+export function normalizeApiAlarm(payload: AlarmPayload): Alarm {
+  return toAlarm(payload, false);
 }
