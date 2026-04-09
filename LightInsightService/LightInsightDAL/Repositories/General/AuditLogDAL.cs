@@ -18,8 +18,8 @@ namespace LightInsightDAL.Repositories.General
             {
                 await conn.OpenAsync();
 
-                // 1. Đếm tổng số dòng
-                string countSql = "SELECT COUNT(*) FROM public.audit_logs WHERE (@s IS NULL OR username ILIKE @s OR description ILIKE @s)";
+                // 1. Đếm tổng số dòng (Sử dụng ::text để tránh lỗi 42P08)
+                string countSql = "SELECT COUNT(*) FROM public.audit_logs WHERE (@s::text IS NULL OR username ILIKE @s::text OR description ILIKE @s::text)";
                 using (var countCmd = new NpgsqlCommand(countSql, conn))
                 {
                     countCmd.Parameters.AddWithValue("s", string.IsNullOrEmpty(req.Search) ? (object)DBNull.Value : $"%{req.Search}%");
@@ -30,7 +30,7 @@ namespace LightInsightDAL.Repositories.General
                 string sql = @"
                     SELECT id, created_at, username, user_role, ip_address, action_type, description, metadata
                     FROM public.audit_logs
-                    WHERE (@s IS NULL OR username ILIKE @s OR description ILIKE @s)
+                    WHERE (@s::text IS NULL OR username ILIKE @s::text OR description ILIKE @s::text)
                     ORDER BY created_at DESC
                     LIMIT @ps OFFSET @offset";
 

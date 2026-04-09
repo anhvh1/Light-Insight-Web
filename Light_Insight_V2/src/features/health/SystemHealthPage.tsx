@@ -1,36 +1,37 @@
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { 
   RefreshCcw, 
-  ShieldCheck
+  ShieldCheck,
+  Clock
 } from 'lucide-react';
 import { systemHealthApi } from '@/lib/system-health-api';
 
-// --- AUDIT LOGS (Tạm thời giữ mock vì chưa có API Audit) ---
-// const AUDIT_LOGS = [ 
-//   { time: '02:14:41', user: 'Trần Hùng', action: 'Acknowledged alarm', ctx: 'ALM-0847 · Xe không đăng ký B1' },
-//   { time: '02:14:36', user: 'SYSTEM', action: 'Correlation matched', ctx: '3 nguồn khớp → INC-0847 tạo tự động' },
-//   { time: '02:11:10', user: 'Trần Hùng', action: 'Viewed camera live', ctx: 'CAM-B1-04 · Đỗ xe sai' },
-//   { time: '02:08:50', user: 'Nguyễn Minh', action: 'Dispatched guard task', ctx: 'Bảo vệ → Cửa T2 · Kiểm tra thẻ' },
-//   { time: '01:55:25', user: 'SYSTEM', action: 'SOP auto-assigned', ctx: 'SOP-Chiếm dụng hành lang → INC-0844' },
-//   { time: '01:20:05', user: 'SYSTEM', action: 'Device offline alert', ctx: 'CAM-L3-07 · Video loss detected' },
-//   { time: '01:05:44', user: 'Nguyễn Minh', action: 'Resolved incident', ctx: 'INC-0835 · Báo cháy T4 — False alarm' },
-//   { time: '00:58:35', user: 'SYSTEM', action: 'Connector reconnected', ctx: 'BMS Portal · 45s downtime' },
-//   { time: '22:00:00', user: 'Trần Hùng', action: 'Login', ctx: 'Operator · Ca đêm 22:00–06:00' },
-// ];
-
 export function SystemHealthPage() {
-  const { data: healthResponse, isLoading, refetch, isRefetching } = useQuery({
+  // 1. Fetch Health Status
+  const { data: healthResponse, isLoading: isLoadingHealth, refetch: refetchHealth, isRefetching: isRefetchingHealth } = useQuery({
     queryKey: ['system-health-status'],
     queryFn: systemHealthApi.getStatus,
-    refetchInterval: 30000, // Tự động làm mới mỗi 30 giây
+    refetchInterval: 30000,
+  });
+
+  // 2. Fetch Audit Logs
+  const { data: logsResponse, isLoading: isLoadingLogs, refetch: refetchLogs } = useQuery({
+    queryKey: ['audit-logs-health'],
+    queryFn: () => systemHealthApi.getAuditLogs(1, 50),
+    refetchInterval: 15000, // Tự động cập nhật log nhanh hơn (15 giây)
   });
 
   const connectors = healthResponse?.Data?.Connectors || [];
   const infrastructure = healthResponse?.Data?.Infrastructure || [];
-
+  const auditLogs = logsResponse?.Data || [];
+  useEffect(()=> {
+    console.log(auditLogs);
+  },[auditLogs]);
   const handleRefresh = () => {
-    refetch();
+    refetchHealth();
+    refetchLogs();
   };
 
   // Status Badge and Status Text Component based on Incident Page style
@@ -81,10 +82,10 @@ export function SystemHealthPage() {
           </div>
           <button 
             onClick={handleRefresh}
-            disabled={isLoading || isRefetching}
+            disabled={isLoadingHealth || isRefetchingHealth}
             className="bg-bg-3 border border-white/10 hover:bg-bg4 text-t1 hover:text-t0 h-7 px-3 rounded-md flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
           >
-            <RefreshCcw size={12} className={cn((isLoading || isRefetching) && "animate-spin text-psim-accent")} />
+            <RefreshCcw size={12} className={cn((isLoadingHealth || isRefetchingHealth) && "animate-spin text-psim-accent")} />
             <span className="text-[10px] font-bold uppercase tracking-wider">Refresh now</span>
           </button>
         </div>
@@ -105,7 +106,7 @@ export function SystemHealthPage() {
             </div>
             
             <div className="flex-1 overflow-y-auto px-3 pb-6 scrollbar-thin scrollbar-thumb-psim-accent/20">
-              {isLoading && !isRefetching ? (
+              {isLoadingHealth && !isRefetchingHealth ? (
                 <div className="h-full flex items-center justify-center opacity-30 uppercase font-bold text-[11px] tracking-widest animate-pulse">
                   Đang đồng bộ hệ thống...
                 </div>
@@ -139,10 +140,10 @@ export function SystemHealthPage() {
                           <span className="text-t-2">{c.StatsLabel}</span>
                           <span className="font-semibold text-t1">{c.Stats}</span>
                         </div>
-                        {/* <div className="flex justify-between text-[11px]">
+                        <div className="flex justify-between text-[11px]">
                           <span className="text-t2">Events/min</span>
                           <span className="font-semibold text-t1">{c.EventsPerMin}</span>
-                        </div> */}
+                        </div>
                         <div className="flex justify-between text-[11px] items-center">
                           <span className="text-t-2">Status</span>
                           <StatusText status={c.Status} />
@@ -210,26 +211,37 @@ export function SystemHealthPage() {
               <ShieldCheck size={14} className="text-psim-accent" />
               Audit Log
             </h2>
+            {isLoadingLogs && <RefreshCcw size={12} className="animate-spin text-psim-accent" />}
           </div>
           
           <div className="flex-1 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-psim-accent/20">
             <div className="flex flex-col">
-              {/* {AUDIT_LOGS.map((log, i) => (
-                <div key={i} className="px-4 py-2.5 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors flex gap-3 items-start group">
-                  <div className="text-[10px] font-mono text-t-2 w-14 shrink-0 pt-0.5 group-hover:text-t1 transition-colors">
-                    {log.time}
+              {auditLogs.length > 0 ? auditLogs.map((log, i) => (
+                <div key={log.Id || i} className="px-4 py-2.5 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors flex gap-3 items-start group animate-in slide-in-from-top duration-300">
+                  <div className="text-[10px] font-mono text-t-2 w-14 shrink-0 pt-0.5 group-hover:text-t1 transition-colors font-bold">
+                    {new Date(log.CreatedAt).toLocaleTimeString('vi-VN', { hour12: false })}
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <div className="text-[12px] leading-tight">
-                      <span className="font-bold text-psim-accent uppercase tracking-tight">{log.user}</span>
-                      <span className="text-t1 ml-2">{log.action}</span>
+                    <div className="text-[12px] leading-tight mb-0.5">
+                      <span className="font-bold text-psim-accent uppercase tracking-tight">@{log.Username}</span>
+                      <span className="text-t-2 mx-1.5 opacity-50">•</span>
+                      <span className="text-t-1 font-medium">{log.ActionType}</span>
                     </div>
-                    <div className="text-[11px] text-t-2 mt-0.5 truncate opacity-60 italic">
-                      {log.ctx}
+                    <div className="text-[11px] text-t-2 leading-relaxed opacity-80">
+                      {log.Description}
                     </div>
+                    {log.IpAddress && (
+                      <div className="text-[9px] text-t-2 font-mono mt-1 opacity-40">
+                        IP: {log.IpAddress}
+                      </div>
+                    )}
                   </div>
                 </div>
-              ))} */}
+              )) : (
+                <div className="py-20 text-center opacity-20 uppercase font-bold text-[11px] tracking-widest">
+                  Chưa có dữ liệu nhật ký
+                </div>
+              )}
             </div>
           </div>
         </div>
