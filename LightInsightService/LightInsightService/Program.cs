@@ -60,6 +60,7 @@ builder.Services.AddScoped<ILogin, LoginBUS>();
 builder.Services.AddScoped<IConnectors, ConnectorsBUS>();
 builder.Services.AddScoped<IDMMap, DMMapBUS>();
 builder.Services.AddScoped<ISystemHealth, SystemHealthBUS>();
+builder.Services.AddScoped<IAuditLog, AuditLogBUS>();
 builder.Services.AddScoped<GetAnalyticsEvents>();
 builder.Services.AddScoped<MilestoneSystemProber>();
 builder.Services.AddScoped<LightInsightDAL.Repositories.General.SystemConfigDAL>();
