@@ -45,6 +45,6 @@ export const systemHealthApi = {
     const response = await apiClient.get<ApiResponse<AuditLog[]>>('AuditLog/GetAll', {
       params: { page, pageSize, search }
     });
-    return response.data;
+    return response.data || { Data: [], TotalRow: 0, Status: 0, Message: '' };
   }
 };
