@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import * as signalR from '@microsoft/signalr';
 import { cn } from '@/lib/utils';
 import { 
   RefreshCcw, 
   ShieldCheck,
-  Clock
 } from 'lucide-react';
 import { systemHealthApi, type AuditLog } from '@/lib/system-health-api';
 
@@ -13,7 +12,6 @@ const AUDIT_HUB_URL = import.meta.env.VITE_ALARM_HUB_URL ? `${import.meta.env.VI
 
 export function SystemHealthPage() {
   const queryClient = useQueryClient();
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   // 1. Fetch Health Status (30s polling)
   const { data: healthResponse, isLoading: isLoadingHealth, refetch: refetchHealth, isRefetching: isRefetchingHealth } = useQuery({
@@ -28,7 +26,6 @@ export function SystemHealthPage() {
     fetchNextPage, 
     hasNextPage, 
     isFetchingNextPage, 
-    isLoading: isLoadingLogs,
     refetch: refetchLogs
   } = useInfiniteQuery({
     queryKey: ['audit-logs-infinite'],

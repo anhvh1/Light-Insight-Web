@@ -20,13 +20,6 @@ import { mapApi } from '@/lib/map-api';
 import { useAlarmStream } from '@/features/alarms/AlarmStreamProvider';
 import type { MapTreeNode } from '@/types';
 
-const STATS = [
-  { label: 'CAMERA ACTIVE', val: '47', sub: '/ 52 total', color: 'text-psim-green' },
-  { label: 'GUARDS ON DUTY', val: '8', sub: 'Ca đêm', color: 'text-psim-orange' },
-  { label: 'ACCESS EVENTS/H', val: '142', sub: '↑ normal', color: 'text-psim-accent' },
-  { label: 'LPR SCAN/H', val: '38', sub: '2 mismatch', color: 'text-teal' },
-];
-
 export function MapView() {
   const { alarms, bellCount } = useAlarmStream();
   
