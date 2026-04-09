@@ -2,6 +2,7 @@
 using LightInsightDAL.Repositories.Login;
 using LightInsightModel.Login;
 using LightInsightModel.MileStone.General;
+using LightInsightUtiltites;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -40,6 +41,10 @@ namespace LightInsightBUS.Service.Login
                 string registerResult = await instance.Register(req);
                 if (registerResult == "OK")
                 {
+                    // Ghi nhận Audit Log
+                    AuditLogger.Log("SYSTEM", "USER_REGISTER", $"Hệ thống đã tạo tài khoản người dùng mới: {req.Name} (@{req.Username})", 
+                        new { Username = req.Username, Name = req.Name, RoleId = req.RoleId });
+
                     result.Status = 1;
                     result.Message = "User registered successfully.";
                 }

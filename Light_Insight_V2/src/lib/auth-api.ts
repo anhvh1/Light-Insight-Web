@@ -71,9 +71,21 @@ export const authApi = {
     }
   },
 
-  logout: () => {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user_info');
-    window.location.href = '/login';
+  logout: async () => {
+    try {
+      const userInfoStr = localStorage.getItem('user_info');
+      if (userInfoStr) {
+        const user = JSON.parse(userInfoStr);
+        if (user && user.username) {
+          await apiClient.post(`Login/Logout?username=${user.username}`);
+        }
+      }
+    } catch (e) {
+      console.error('Logout logging failed', e);
+    } finally {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user_info');
+      window.location.href = '/login';
+    }
   }
 };

@@ -96,5 +96,10 @@ namespace LightInsightBUS.Service.Login
                 };
             }
         }
+        public async Task<BaseResultModel> Logout(string username)
+        {
+            AuditLogger.Log(username, "AUTH_LOGOUT", $"Người dùng {username} đã đăng xuất khỏi hệ thống.");
+            return new BaseResultModel { Status = 1, Message = "Logout logged successfully." };
+        }
     }
 }
