@@ -37,9 +37,6 @@ export function ConfigurationLayout() {
         <h1 className="text-[15px] font-semibold text-t-0 tracking-tight">
           Configuration & Administration
         </h1>
-        <div className="ml-auto text-[10px] text-t-2 font-mono uppercase tracking-widest bg-bg2 px-3 py-1 rounded border border-border-dim text-white">
-          Admin Mode — SuperUser
-        </div>
       </header>
 
       <div className="flex-1 flex overflow-hidden">

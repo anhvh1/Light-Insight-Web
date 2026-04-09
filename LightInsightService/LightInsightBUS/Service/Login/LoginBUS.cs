@@ -2,6 +2,7 @@ using LightInsightBUS.Interfaces.Login;
 using LightInsightDAL.Repositories.Login;
 using LightInsightModel.Login;
 using LightInsightModel.MileStone.General;
+using LightInsightUtiltites;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -38,6 +39,10 @@ namespace LightInsightBUS.Service.Login
             }
             else
             {
+                // Ghi nhận Audit Log khi đăng nhập thành công
+                AuditLogger.Log(user.Username, "AUTH_LOGIN", $"Người dùng {user.Name} (@{user.Username}) đã đăng nhập vào hệ thống.", 
+                    new { Name = user.Name, RoleId = user.RoleId }, user.RoleName);
+
                 return new BaseResultModel
                 {
                     Status = 1,
@@ -90,6 +95,11 @@ namespace LightInsightBUS.Service.Login
                     Message = "Backend Error: " + ex.Message
                 };
             }
+        }
+        public async Task<BaseResultModel> Logout(string username)
+        {
+            AuditLogger.Log(username, "AUTH_LOGOUT", $"Người dùng {username} đã đăng xuất khỏi hệ thống.");
+            return new BaseResultModel { Status = 1, Message = "Logout logged successfully." };
         }
     }
 }

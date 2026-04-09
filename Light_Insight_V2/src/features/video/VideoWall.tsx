@@ -23,12 +23,12 @@ export function VideoWall() {
   const visibleCameras = cameras.slice(0, layout === '1x1' ? 1 : layout === '2x2' ? 4 : 12);
 
   return (
-    <div className="flex flex-col h-full bg-black overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden font-sans">
       {/* Header Toolbar */}
-      <div className="h-12 border-b border-white/5 bg-bg1 flex items-center px-4 gap-4 shrink-0">
-        <div className="font-heading text-[14px] font-semibold text-t0 flex items-center gap-2">
-          <Video size={16} className="text-psim-accent" /> Video Wall
-        </div>
+      <header className="h-12 border-b border-white/5 bg-bg1 flex items-center px-4 gap-4 shrink-0">
+        <h1 className="text-[15px] font-semibold text-t-0 tracking-tight">
+          Video Wall
+        </h1>
         
         <div className="flex gap-1 bg-bg2 p-1 rounded-md border border-border-dim ml-4">
           <button 
@@ -78,7 +78,7 @@ export function VideoWall() {
         >
           🗺 {isAlarmPopupOn ? 'Alarm Popup ON' : 'Alarm Popup OFF'}
         </button>
-      </div>
+      </header>
 
       {/* Grid Area */}
       <div className={cn("flex-1 grid gap-0.5 p-0.5", getGridLayout())}>

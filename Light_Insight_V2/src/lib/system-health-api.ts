@@ -24,9 +24,27 @@ export interface InfrastructureHealth {
   Type: string;
 }
 
+export interface AuditLog {
+  Id: string;
+  CreatedAt: string;
+  Username: string;
+  UserRole: string;
+  IpAddress: string;
+  ActionType: string;
+  Description: string;
+  Metadata: string;
+}
+
 export const systemHealthApi = {
   getStatus: async () => {
-    const response = await apiClient.get<ApiResponse<SystemHealthData>>('/SystemHealth/Status');
+    const response = await apiClient.get<ApiResponse<SystemHealthData>>('SystemHealth/Status');
     return response.data;
+  },
+
+  getAuditLogs: async (page: number = 1, pageSize: number = 50, search?: string) => {
+    const response = await apiClient.get<ApiResponse<AuditLog[]>>('AuditLog/GetAll', {
+      params: { page, pageSize, search }
+    });
+    return response.data || { Data: [], TotalRow: 0, Status: 0, Message: '' };
   }
 };

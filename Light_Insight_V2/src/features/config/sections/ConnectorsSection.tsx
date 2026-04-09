@@ -80,10 +80,10 @@ export function ConnectorsSection() {
     <div className="flex flex-col gap-6 animate-in fade-in duration-500 w-full h-full overflow-hidden">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h2 className="text-[18px] font-heading font-bold text-t0 uppercase tracking-tight">VMS & Device Connectors (4.3)</h2>
+          <h2 className="text-[14px] font-heading font-bold text-t0">VMS & Device Connectors</h2>
           <p className="text-[12px] text-t-2 mt-1">Trạng thái kết nối API tới các hệ thống ngoại vi</p>
         </div>
-        <button onClick={() => { setIsViewingDetails(false); setIsConnectorDialogOpen(true); }} className="px-4 py-1.5 bg-bg2 border border-border-dim rounded text-[11px] font-bold text-t-1 hover:bg-bg3">+ Thêm Connector</button>
+        <button onClick={() => { setIsViewingDetails(false); setIsConnectorDialogOpen(true); }} className="bg-psim-accent2 text-white font-bold text-[11px] uppercase tracking-wider gap-2 h-8 px-4 rounded flex items-center shadow-lg shadow-psim-accent2/20 hover:scale-[1.02] transition-all">+ Thêm Connector</button>
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-psim-accent/30 pr-2">
@@ -104,11 +104,11 @@ export function ConnectorsSection() {
                 </div>
                 <Progress value={c.Status === 'Connected' ? 100 : 0} className="h-1 bg-bg3" indicatorClassName={c.Status === 'Connected' ? "bg-psim-green" : "bg-psim-orange"} />
                 <div className="flex gap-2">
-                  <button className="flex-1 h-8 rounded bg-bg2 border border-border-dim text-[10px] font-bold text-t-1 hover:border-psim-accent/30" onClick={() => {
+                  <button className="flex-1 h-8 rounded bg-psim-accent2 border border-border-dim text-[11px] font-bold text-white hover:border-psim-accent/30 shadow-lg shadow-psim-accent2/20 hover:scale-[1.02] transition-all" onClick={() => {
                     setNewConnector({ id: c.Id, name: c.VmsName, vmsId: c.VmsID || 0, ip: c.IpServer, port: c.Port.toString(), username: c.Username, password: c.Password });
                     setIsViewingDetails(true); setIsConnectorDialogOpen(true);
                   }}>Chi tiết</button>
-                  <button className="flex-1 h-8 rounded bg-bg2 border border-red-900/30 text-[10px] font-bold text-t-2 hover:border-psim-red/50" onClick={() => setDeleteConfirmModal({ isOpen: true, id: c.Id, name: c.VmsName })}>Xóa</button>
+                  <button className="flex-1 h-8 rounded bg-bg2 border border-red-900/30 text-[11px] font-bold text-white hover:border-psim-red/50" onClick={() => setDeleteConfirmModal({ isOpen: true, id: c.Id, name: c.VmsName })}>Xóa</button>
                 </div>
               </div>
             ))}

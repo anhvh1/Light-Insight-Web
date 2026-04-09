@@ -161,9 +161,9 @@ export function MapView() {
   }, [isDragging, isPanning, activeMapUrl]);
 
   return (
-    <div className="flex flex-col h-full bg-bg0 text-t0 select-none font-sans">
+    <div className="flex flex-col h-full overflow-hidden font-sans select-none">
       {/* Header & Stats Bar */}
-      <div className="px-4 py-3 border-b border-border-dim bg-bg0/50">
+      <div className="px-3 py-3 border-b border-border-dim bg-bg0/50">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <h1 className="font-heading text-[16px] font-semibold uppercase tracking-tight text-white">Situational Map</h1>

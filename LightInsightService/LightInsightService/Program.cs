@@ -19,6 +19,7 @@ using LightInsightService.CacheLoader;
 using LightInsightBUS.Interfaces.MileStone.Camera;
 using LightInsightBUS.Service.MileStone.Camera;
 using LightInsightBUS.ExternalServices.MileStone;
+using Microsoft.AspNetCore.SignalR;
 
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -60,13 +61,16 @@ builder.Services.AddScoped<ILogin, LoginBUS>();
 builder.Services.AddScoped<IConnectors, ConnectorsBUS>();
 builder.Services.AddScoped<IDMMap, DMMapBUS>();
 builder.Services.AddScoped<ISystemHealth, SystemHealthBUS>();
+builder.Services.AddScoped<IAuditLog, AuditLogBUS>();
 builder.Services.AddScoped<GetAnalyticsEvents>();
 builder.Services.AddScoped<MilestoneSystemProber>();
 builder.Services.AddScoped<LightInsightDAL.Repositories.General.SystemConfigDAL>();
 builder.Services.AddScoped<ISystemConfig, SystemConfigBUS>();
 
 
-builder.Services.AddSignalR();
+builder.Services.AddSignalR().AddJsonProtocol(options => {
+    options.PayloadSerializerOptions.PropertyNamingPolicy = null;
+});
 builder.Services.AddScoped<IAlarmService, AlarmServiceBUS>();
 
 // -------------------- CORS --------------------
@@ -75,9 +79,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(name: MyAllowSpecificOrigins, policy =>
         {
-            policy.AllowAnyOrigin()
+            policy.SetIsOriginAllowed(origin => true)
                   .AllowAnyMethod()
                   .AllowAnyHeader()
+                  .AllowCredentials()
                   .WithExposedHeaders("Content-Disposition");
         });
 });
@@ -141,6 +146,13 @@ if (string.IsNullOrEmpty(connStr))
 
 SQLHelper.appConnectionStrings = connStr;
 
+// Kết nối AuditLogger với SignalR Hub
+var hubContext = app.Services.GetRequiredService<Microsoft.AspNetCore.SignalR.IHubContext<LightInsightService.Sockets.General.AuditLogHub>>();
+AuditLogger.OnLogCreated = async (log) =>
+{
+    await hubContext.Clients.All.SendAsync("ReceiveAuditLog", log);
+};
+
 // Nạp dữ liệu vào Cache khi khởi động
 
 //if (app.Environment.IsDevelopment())
@@ -175,5 +187,6 @@ app.MapFallbackToFile("/index.html");
 
 
 app.MapHub<MilestoneAlarmHub>("/alarm-hub");
+app.MapHub<LightInsightService.Sockets.General.AuditLogHub>("/audit-log-hub");
 
 app.Run();

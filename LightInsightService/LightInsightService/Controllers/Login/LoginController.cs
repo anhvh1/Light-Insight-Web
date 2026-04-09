@@ -44,6 +44,13 @@ namespace LightInsightService.Controllers.Login
             var result = await _service.GetRoles();
             return Ok(result);
         }
+
+        [HttpPost("Logout")]
+        public async Task<IActionResult> Logout([FromQuery] string username)
+        {
+            var result = await _service.Logout(username);
+            return Ok(result);
+        }
     }
 
     
