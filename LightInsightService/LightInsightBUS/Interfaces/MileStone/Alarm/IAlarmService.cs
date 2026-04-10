@@ -9,7 +9,7 @@ namespace LightInsightBUS.Interfaces.MileStone.Alarm
 {
     public interface IAlarmService
     {
-        Task<List<AlarmData>> GetAlarmData(int page, int pageSize, AlarmFilter filter = null);
-        Task<List<string>> GetAlarmMessageDropdownAsync();
+        Task<List<AlarmData>> GetAlarmData(Guid key,int page, int pageSize, AlarmFilter filter = null);
+        Task<List<string>> GetAlarmMessageDropdownAsync(Guid key);
     }
 }

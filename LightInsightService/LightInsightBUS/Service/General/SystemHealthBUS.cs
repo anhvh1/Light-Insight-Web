@@ -40,7 +40,7 @@ namespace LightInsightBUS.Service.General
                 // 2. QUÉT CONNECTORS (Giữ nguyên vì phần này đang ổn định)
                 var connectorsRes = await _connectorService.GetAllConnectorsAsync();
                 var connectorList = connectorsRes.Data as List<ConnectorListModel> ?? new List<ConnectorListModel>();
-                var probeTasks = connectorList.Select(conn => ProbeConnectorAsync(conn)).ToList();
+                var probeTasks = connectorList.Select(conn => ProbeConnectorAsync(conn,conn.Id)).ToList();
                 var connectorResults = await Task.WhenAll(probeTasks);
                 result.Connectors.AddRange(connectorResults.Where(r => r != null));
 
@@ -80,9 +80,10 @@ namespace LightInsightBUS.Service.General
             };
         }
 
-        private async Task<ConnectorHealth> ProbeConnectorAsync(ConnectorListModel conn)
+        private async Task<ConnectorHealth> ProbeConnectorAsync(ConnectorListModel conn,Guid key)
         {
-            var health = new ConnectorHealth {
+            var health = new ConnectorHealth
+            {
                 Name = conn.VmsName,
                 ApiInfo = $"{conn.IpServer}:{conn.Port}",
                 StatsLabel = "Status",
@@ -94,26 +95,31 @@ namespace LightInsightBUS.Service.General
             };
 
             var sw = Stopwatch.StartNew();
-            try {
+            try
+            {
                 bool isReachable = await CheckConnectivityAsync(conn.IpServer, (int)conn.Port);
                 sw.Stop();
 
-                if (isReachable) {
+                if (isReachable)
+                {
                     health.Status = sw.ElapsedMilliseconds > 500 ? "SLOW" : "ONLINE";
                     health.Latency = $"{sw.ElapsedMilliseconds}ms";
                     health.HealthPercentage = 100;
                     health.Stats = "Connected";
 
-                    if (conn.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase)) {
-                        var token = await _tokenService.GetTokenAsync();
-                        if (!string.IsNullOrEmpty(token)) {
-                            var cameras = await _tokenService.GetCamerasAsync();
+                    if (conn.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var token = await _tokenService.GetTokenAsync(key);
+                        if (!string.IsNullOrEmpty(token))
+                        {
+                            var cameras = await _tokenService.GetCamerasAsync(key);
                             health.Stats = $"{cameras.Count} / {cameras.Count}";
                             health.StatsLabel = "Cameras";
                         }
                     }
                 }
-            } catch { health.Status = "OFFLINE"; }
+            }
+            catch { health.Status = "OFFLINE"; }
             return health;
         }
 

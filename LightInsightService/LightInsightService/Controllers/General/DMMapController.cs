@@ -82,10 +82,10 @@ namespace LightInsightService.Controllers.General
             var result = await _dmMapBUS.GetMarkersByMapIdAsync(mapId);
             return Ok(result);
         }
-        [HttpGet("GetCamerasAsync")]
-        public async Task<IActionResult> GetCamerasAsync([FromQuery] int id)
+        [HttpGet("GetAllDevicesAsync")]
+        public async Task<IActionResult> GetAllDevicesAsync([FromQuery] Guid key)
         {
-            var result = await _dmMapBUS.GetCamerasAsync(id);
+            var result = await _dmMapBUS.GetAllDevicesAsync(key);
             return Ok(result);
         }
     }

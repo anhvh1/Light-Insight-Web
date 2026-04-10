@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace LightInsightBUS.ExternalServices.MileStone
 {
-    class GetCameras
+    public class GetCameras
     {
         public string GetAllCameras(string baseUrl, string token)
         {

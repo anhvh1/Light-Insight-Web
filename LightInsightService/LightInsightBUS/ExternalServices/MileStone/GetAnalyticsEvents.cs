@@ -9,14 +9,16 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
+using LightInsightModel.Enums;
+using LightInsightModel.General;
+using System.Collections.Concurrent;
+using System.Net;
 
 namespace LightInsightBUS.ExternalServices.MileStone
 {
     public class GetAnalyticsEvents
     {
         private static readonly HttpClient _httpClient = new HttpClient();
-        private string _accessToken;
-        private DateTime _expireTime;
         private readonly IMemoryCache _cache;
 
         public GetAnalyticsEvents(IMemoryCache cache)
@@ -24,9 +26,9 @@ namespace LightInsightBUS.ExternalServices.MileStone
             _cache = cache;
         }
 
-        public ConnectorsModel GetVmsConfig(int vmsid = 1)
+        public ConnectorsModel GetVmsConfig(Guid key)
         {
-            string cacheKey = $"VMS_{vmsid}";
+            string cacheKey = $"{key}";
             if (_cache.TryGetValue(cacheKey, out object cacheObj))
             {
                 if (cacheObj is ConnectorsModel model) return model;
@@ -45,24 +47,36 @@ namespace LightInsightBUS.ExternalServices.MileStone
             return null;
         }
 
-        public async Task<string> GetTokenAsync()
+        private static readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+
+        public async Task<string> GetTokenAsync(Guid key)
         {
+            string cacheKey = $"TOKEN_{key}";
+
+            // 1. Check cache trước
+            if (_cache.TryGetValue(cacheKey, out string token))
+            {
+                return token;
+            }
+
+            // 2. Lock theo key để tránh gọi API nhiều lần
+            var myLock = _locks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
+
+            await myLock.WaitAsync();
             try
             {
-                // 1. Lấy cấu hình từ Cache (mặc định VMSID = 1)
-                var config = GetVmsConfig(1);
-                if (config == null) return null;
-
-                // 2. Nếu token còn hạn → dùng lại
-                if (!string.IsNullOrEmpty(_accessToken) && DateTime.Now < _expireTime)
+                // 3. Check lại cache sau khi lock (rất quan trọng)
+                if (_cache.TryGetValue(cacheKey, out token))
                 {
-                    return _accessToken;
+                    return token;
                 }
 
-                // 3. Xây dựng URL từ Cache
+                // 4. Lấy config
+                var config = GetVmsConfig(key);
+                if (config == null) return null;
+
                 string tokenUrl = $"http://{config.IpServer}:{config.Port}/API/IDP/connect/token";
 
-                // 4. Gọi API lấy Token
                 var request = new HttpRequestMessage(HttpMethod.Post, tokenUrl);
                 request.Content = new FormUrlEncodedContent(new[]
                 {
@@ -80,14 +94,24 @@ namespace LightInsightBUS.ExternalServices.MileStone
                 var json = await response.Content.ReadAsStringAsync();
                 var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(json);
 
-                _accessToken = tokenResponse.access_token;
-                _expireTime = DateTime.Now.AddSeconds(tokenResponse.expires_in - 30);
+                token = tokenResponse?.access_token;
 
-                return _accessToken;
+                if (string.IsNullOrEmpty(token)) return null;
+
+                // 5. TTL an toàn (tránh expires_in nhỏ)
+                var ttl = Math.Max(10, tokenResponse.expires_in - 30);
+
+                _cache.Set(cacheKey, token, TimeSpan.FromSeconds(ttl));
+
+                return token;
             }
-            catch (Exception)
+            catch
             {
                 return null;
+            }
+            finally
+            {
+                myLock.Release();
             }
         }
         public async Task<string> CheckTokenAsync(string username, string password, string ipserver, long port)
@@ -95,16 +119,8 @@ namespace LightInsightBUS.ExternalServices.MileStone
             try
             {
 
-                // 2. Nếu token còn hạn → dùng lại
-                if (!string.IsNullOrEmpty(_accessToken) && DateTime.Now < _expireTime)
-                {
-                    return _accessToken;
-                }
-
-                // 3. Xây dựng URL từ Cache
                 string tokenUrl = $"http://{ipserver}:{port}/API/IDP/connect/token";
 
-                // 4. Gọi API lấy Token
                 var request = new HttpRequestMessage(HttpMethod.Post, tokenUrl);
                 request.Content = new FormUrlEncodedContent(new[]
                 {
@@ -122,10 +138,9 @@ namespace LightInsightBUS.ExternalServices.MileStone
                 var json = await response.Content.ReadAsStringAsync();
                 var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(json);
 
-                _accessToken = tokenResponse.access_token;
-                _expireTime = DateTime.Now.AddSeconds(tokenResponse.expires_in - 30);
+                var token = tokenResponse.access_token;
 
-                return _accessToken;
+                return token;
             }
             catch (Exception)
             {
@@ -133,29 +148,36 @@ namespace LightInsightBUS.ExternalServices.MileStone
             }
         }
 
-        public async Task<List<SimpleEvent>> GetSimpleEventsAsync()
+        public async Task<List<SimpleEvent>> GetSimpleEventsAsync(Guid key)
         {
-            var config = GetVmsConfig(1);
+            var config = GetVmsConfig(key);
             if (config == null) return new List<SimpleEvent>();
 
-            string token = await GetTokenAsync();
+            string token = await GetTokenAsync(key);
             if (string.IsNullOrEmpty(token)) return new List<SimpleEvent>();
 
             string apiUrl = $"http://{config.IpServer}:{config.Port}/API/rest/v1/analyticsEvents";
-            
+
             var request = new HttpRequestMessage(HttpMethod.Get, apiUrl);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             var response = await _httpClient.SendAsync(request);
 
+            // 🔥 FIX QUAN TRỌNG
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                token = await GetTokenAsync();
+                // ❗ XÓA TOKEN CŨ TRONG CACHE
+                _cache.Remove($"TOKEN_{key}");
+
+                // ❗ LẤY TOKEN MỚI
+                token = await GetTokenAsync(key);
+
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                 response = await _httpClient.SendAsync(request);
             }
 
             response.EnsureSuccessStatusCode();
+
             var json = await response.Content.ReadAsStringAsync();
 
             using var doc = JsonDocument.Parse(json);
@@ -175,31 +197,88 @@ namespace LightInsightBUS.ExternalServices.MileStone
 
             return list;
         }
-        public async Task<List<CameraItem>> GetCamerasAsync()
+        public async Task<List<CameraItem>> GetCamerasAsync(Guid key)
         {
-            var config = GetVmsConfig(1);
+            var config = GetVmsConfig(key);
             if (config == null) return new List<CameraItem>();
 
-            string token = await GetTokenAsync();
+            var token = await GetTokenAsync(key);
             if (string.IsNullOrEmpty(token)) return new List<CameraItem>();
 
-            string apiUrl = $"http://{config.IpServer}:{config.Port}/API/rest/v1/Cameras";
+            var apiUrl = $"http://{config.IpServer}:{config.Port}/API/rest/v1/Cameras";
 
-            var request = new HttpRequestMessage(HttpMethod.Get, apiUrl);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var response = await SendRequestAsync(apiUrl, token);
 
-            var response = await _httpClient.SendAsync(request);
-
-            // 🔁 retry nếu token hết hạn
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            // retry nếu token hết hạn
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
-                token = await GetTokenAsync();
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                response = await _httpClient.SendAsync(request);
+                token = await GetTokenAsync(key);
+                if (string.IsNullOrEmpty(token)) return new List<CameraItem>();
+
+                response = await SendRequestAsync(apiUrl, token);
             }
 
             response.EnsureSuccessStatusCode();
 
+            return await ParseResponseAsync(response);
+        }
+        private async Task<List<CameraItem>> GetMicrophonesAsync(Guid key)
+        {
+            var config = GetVmsConfig(key);
+            if (config == null) return new List<CameraItem>();
+
+            var token = await GetTokenAsync(key);
+            if (string.IsNullOrEmpty(token)) return new List<CameraItem>();
+
+            var apiUrl = $"http://{config.IpServer}:{config.Port}/API/rest/v1/Microphones";
+
+            var response = await SendRequestAsync(apiUrl, token);
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                token = await GetTokenAsync(key);
+                if (string.IsNullOrEmpty(token)) return new List<CameraItem>();
+
+                response = await SendRequestAsync(apiUrl, token);
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            return await ParseResponseAsync(response);
+        }
+        private async Task<List<CameraItem>> GetSpeakersAsync(Guid key)
+        {
+            var config = GetVmsConfig(key);
+            if (config == null) return new List<CameraItem>();
+
+            var token = await GetTokenAsync(key);
+            if (string.IsNullOrEmpty(token)) return new List<CameraItem>();
+
+            var apiUrl = $"http://{config.IpServer}:{config.Port}/API/rest/v1/Speakers";
+
+            var response = await SendRequestAsync(apiUrl, token);
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                token = await GetTokenAsync(key);
+                if (string.IsNullOrEmpty(token)) return new List<CameraItem>();
+
+                response = await SendRequestAsync(apiUrl, token);
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            return await ParseResponseAsync(response);
+        }
+        private async Task<HttpResponseMessage> SendRequestAsync(string url, string token)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            return await _httpClient.SendAsync(request);
+        }
+        private async Task<List<CameraItem>> ParseResponseAsync(HttpResponseMessage response)
+        {
             var json = await response.Content.ReadAsStringAsync();
 
             using var doc = JsonDocument.Parse(json);
@@ -218,6 +297,26 @@ namespace LightInsightBUS.ExternalServices.MileStone
             }
 
             return list;
+        }
+        public async Task<List<GenericDeviceModel>> GetAllDevicesAsync(Guid key)
+        {
+            var camerasTask = GetCamerasAsync(key);
+            var microphonesTask = GetMicrophonesAsync(key);
+            var speakersTask = GetSpeakersAsync(key);
+
+            await Task.WhenAll(camerasTask, microphonesTask, speakersTask);
+
+            var cameras = await camerasTask;
+            var microphones = await microphonesTask;
+            var speakers = await speakersTask;
+
+            var allDevices = new List<GenericDeviceModel>();
+
+            allDevices.AddRange(cameras.Select(c => new GenericDeviceModel { Id = c.Id, Name = c.Name, Type = DeviceType.Camera }));
+            allDevices.AddRange(microphones.Select(m => new GenericDeviceModel { Id = m.Id, Name = m.Name, Type = DeviceType.Microphone }));
+            allDevices.AddRange(speakers.Select(s => new GenericDeviceModel { Id = s.Id, Name = s.Name, Type = DeviceType.Speaker }));
+
+            return allDevices;
         }
     }
 }

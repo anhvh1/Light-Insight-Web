@@ -9,6 +9,6 @@ namespace LightInsightBUS.Interfaces.MileStone.Camera
 {
     public interface ICameraDropDown
     {
-        Task<List<CameraDropDown>> GetCameraDropdownAsync();
+        Task<List<CameraDropDown>> GetCameraDropdownAsync(Guid key);
     }
 }

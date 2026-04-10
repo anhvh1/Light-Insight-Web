@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useTransition } from 'react';
+import { useState, useEffect, useRef, useTransition, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { 
@@ -190,7 +190,7 @@ function DeviceTab({
       <div className="flex items-center justify-between shrink-0">
         <h3 className="text-[10px] font-bold text-t-2 uppercase tracking-widest">Kho thiết bị</h3>
         <select 
-          className="bg-black/40 border border-white/10 rounded h-7 px-2 text-[10px] text-white outline-none focus:border-psim-orange/50 transition-all cursor-pointer min-w-[120px]"
+          className="bg-black/40 border border-white/10 rounded h-7 px-2 text-[10px] text-white outline-none focus:border-psim-orange/50 transition-all cursor-pointer min-w-[150px]"
           value={selectedVmsId !== null ? selectedVmsId : ''}
           onChange={(e) => onVmsChange(e.target.value !== '' ? parseInt(e.target.value) : null)}
           disabled={isLoadingConnectors}
@@ -198,7 +198,7 @@ function DeviceTab({
           <option value="" className="bg-[#161b2e]">{isLoadingConnectors ? 'Đang tải...' : '-- Hệ thống --'}</option>
           {actualConnectors.map((c: any) => (
             <option key={c.Id} value={c.VmsID} className="bg-[#161b2e]">
-              {c.VmsName}
+              {c.Name}
             </option>
           ))}
         </select>
@@ -225,7 +225,11 @@ function DeviceTab({
               <div 
                 key={cam.Id || i} 
                 draggable={!isPlaced} 
-                onDragStart={(e) => onDragStart(e, { Id: cam.Id, Name: cam.Name, vmsId: selectedVmsId! })} 
+                onDragStart={(e) => onDragStart(e, { 
+                  id: String(cam.Id || ''), 
+                  name: String(cam.Name || ''), 
+                  vmsId: selectedVmsId! 
+                })} 
                 className={cn(
                   "p-3 bg-white/5 border border-white/5 rounded-lg flex items-center justify-between transition-all", 
                   isPlaced 
@@ -283,19 +287,6 @@ export function MapManagementSection() {
   const [zoomScale, setZoomScale] = useState(1);
   const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
-  
-  // Refs for robust Start-Delta dragging logic
-  const panningStartRef = useRef({ mouseX: 0, mouseY: 0, offsetX: 0, offsetY: 0 });
-  const deviceStartRef = useRef({ mouseX: 0, mouseY: 0, deviceX: 0, deviceY: 0 });
-  const mapOffsetRef = useRef({ x: 0, y: 0 });
-  const zoomScaleRef = useRef(1);
-  const isPanningRef = useRef(false);
-  
-  // Sync refs with state for use in stable handlers
-  useEffect(() => { mapOffsetRef.current = mapOffset; }, [mapOffset]);
-  useEffect(() => { zoomScaleRef.current = zoomScale; }, [zoomScale]);
-  useEffect(() => { isPanningRef.current = isPanning; }, [isPanning]);
-
   const [rotatingDeviceId, setRotatingDeviceId] = useState<string | null>(null);
   const [mapImage, setMapImage] = useState<string | null>(null);
   const [isUploadWizardOpen, setIsUploadWizardOpen] = useState(false);
@@ -305,6 +296,17 @@ export function MapManagementSection() {
     status: 0,
     message: ''
   });
+  
+  // Refs for robust Start-Delta dragging logic
+  const panningStartRef = useRef({ mouseX: 0, mouseY: 0, offsetX: 0, offsetY: 0 });
+  const deviceStartRef = useRef({ mouseX: 0, mouseY: 0, deviceX: 0, deviceY: 0 });
+  const mapOffsetRef = useRef({ x: 0, y: 0 });
+  const zoomScaleRef = useRef(1);
+
+  // Sync mapOffset and zoomScale to refs for use in stable handlers
+  // These are calculated frequently in wheel events, so we keep this pattern for performance.
+  useEffect(() => { mapOffsetRef.current = mapOffset; }, [mapOffset]);
+  useEffect(() => { zoomScaleRef.current = zoomScale; }, [zoomScale]);
 
   // --- API DATA FETCHING ---
   const { data: connectorsResponse, isLoading: isLoadingConnectors } = useQuery({
@@ -349,6 +351,148 @@ export function MapManagementSection() {
       });
     }
   }, [markersResponse, selectedMapId]);
+
+  // Main event handler setup
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      // 1. Panning Logic
+      if (isPanning) {
+        const dx = e.clientX - panningStartRef.current.mouseX;
+        const dy = e.clientY - panningStartRef.current.mouseY;
+        setMapOffset({ 
+          x: panningStartRef.current.offsetX + dx, 
+          y: panningStartRef.current.offsetY + dy 
+        });
+        return;
+      }
+
+      const canvas = document.getElementById('map-canvas');
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+
+      // 2. Device Moving Logic
+      if (movingDeviceId && selectedMapId) {
+        const dx = e.clientX - deviceStartRef.current.mouseX;
+        const dy = e.clientY - deviceStartRef.current.mouseY;
+        const dxPercent = (dx / (rect.width * zoomScale)) * 100;
+        const dyPercent = (dy / (rect.height * zoomScale)) * 100;
+        const newX = deviceStartRef.current.deviceX + dxPercent;
+        const newY = deviceStartRef.current.deviceY + dyPercent;
+        
+        setPlacedDevices(prev => prev.map(d => 
+          (d.id === movingDeviceId && d.mapId === selectedMapId) 
+          ? { ...d, x: newX, y: newY } 
+          : d
+        ));
+        return;
+      }
+
+      // 3. Device Rotating Logic
+      if (rotatingDeviceId && selectedMapId) {
+        setPlacedDevices(prev => {
+          const device = prev.find(d => d.id === rotatingDeviceId && d.mapId === selectedMapId);
+          if (!device) return prev;
+          
+          const deviceScreenX = rect.left + mapOffset.x + (device.x / 100) * rect.width * zoomScale;
+          const deviceScreenY = rect.top + mapOffset.y + (device.y / 100) * rect.height * zoomScale;
+          const angle = Math.atan2(e.clientY - deviceScreenY, e.clientX - deviceScreenX) * (180 / Math.PI);
+          
+          return prev.map(d => 
+            (d.id === rotatingDeviceId && d.mapId === selectedMapId) 
+            ? { ...d, rotation: angle + 90 } 
+            : d
+          );
+        });
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (isPanning) setIsPanning(false);
+      if (movingDeviceId) setMovingDeviceId(null);
+      if (rotatingDeviceId) setRotatingDeviceId(null);
+    };
+
+    // Add event listeners
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+
+    // Cleanup event listeners
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isPanning, movingDeviceId, rotatingDeviceId, selectedMapId, zoomScale, mapOffset]);
+  
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!mapImage) return;
+    const zoomSpeed = 0.1;
+    const delta = e.deltaY < 0 ? 1 : -1;
+    const oldScale = zoomScale;
+    const newScale = Math.min(10, Math.max(0.1, oldScale + delta * zoomSpeed * oldScale));
+    if (newScale !== oldScale) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      setZoomScale(newScale);
+      setMapOffset({ 
+        x: mouseX - (mouseX - mapOffset.x) * (newScale / oldScale),
+        y: mouseY - (mouseY - mapOffset.y) * (newScale / oldScale)
+      });
+    }
+  };
+
+  const handleZoomIn = () => {
+    setZoomScale(prev => Math.min(10, prev + 0.2));
+  };
+
+  const handleZoomOut = () => {
+    setZoomScale(prev => Math.max(0.1, prev - 0.2));
+  };
+
+  const handleResetZoom = () => {
+    setZoomScale(1);
+    setMapOffset({ x: 0, y: 0 });
+  };
+
+  const [_isPending, startTransition] = useTransition();
+
+  const handleDownloadSample = () => {
+    startTransition(async () => {
+      try {
+        // Gọi trực tiếp API trả về dữ liệu file (Blob)
+        const response = await mapApi.downloadSampleImage();
+        
+        // Dữ liệu blob nằm trong response.data khi dùng axios với responseType: 'blob'
+        const blob = response.data;
+        const objectUrl = URL.createObjectURL(blob);
+
+        // Kích hoạt tải xuống ngầm
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = 'light-insight-sample-map.png';
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+
+        // Dọn dẹp bộ nhớ
+        setTimeout(() => {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(objectUrl);
+        }, 100);
+
+        setResponseModal({ isOpen: true, status: 1, message: 'Đã tải ảnh mẫu thành công.' });
+
+      } catch (error) {
+        console.error("Download Image Error:", error);
+        setResponseModal({ 
+          isOpen: true, 
+          status: -1, 
+          message: 'Lỗi khi tải file ảnh từ máy chủ.' 
+        });
+      }
+    });
+  };
 
   // --- MUTATIONS ---
   const createMapMutation = useMutation({
@@ -468,151 +612,27 @@ export function MapManagementSection() {
 
     if (draggingDevice && selectedMapId) {
       if (placedDevices.some(d => d.id === draggingDevice.id && d.mapId === selectedMapId)) return;
+      
+      const newDeviceId = String(draggingDevice.id || ''); // Ensure ID is a string, with fallback
+      const newDeviceName = String(draggingDevice.name || ''); // Ensure name is a string, with fallback
+
+      // Only proceed if a valid ID is present
+      if (!newDeviceId) {
+          console.warn("Attempted to drop a device with an invalid or empty ID.");
+          return;
+      }
+
       setPlacedDevices(prev => [...prev, {
-        id: draggingDevice.id, name: draggingDevice.name, x, y, mapId: selectedMapId, rotation: 0, vmsId: draggingDevice.vmsId
+        id: newDeviceId,
+        name: newDeviceName,
+        x, 
+        y, 
+        mapId: selectedMapId, 
+        rotation: 0, 
+        vmsId: draggingDevice.vmsId 
       }]);
       setDraggingDevice(null);
-    } else if (movingDeviceId) {
-      setPlacedDevices(prev => prev.map(d => (d.id === movingDeviceId && d.mapId === selectedMapId) ? { ...d, x, y } : d));
-      setMovingDeviceId(null);
     }
-  };
-
-  useEffect(() => {
-    const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (!selectedMapId) return;
-
-      // 1. Panning Logic (Using Start-Delta)
-      if (isPanningRef.current) {
-        const dx = e.clientX - panningStartRef.current.mouseX;
-        const dy = e.clientY - panningStartRef.current.mouseY;
-        setMapOffset({ 
-          x: panningStartRef.current.offsetX + dx, 
-          y: panningStartRef.current.offsetY + dy 
-        });
-        return;
-      }
-
-      const canvas = document.getElementById('map-canvas');
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-
-      // 2. Device Moving Logic (Using Start-Delta)
-      if (movingDeviceId) {
-        const dx = e.clientX - deviceStartRef.current.mouseX;
-        const dy = e.clientY - deviceStartRef.current.mouseY;
-        
-        // Convert screen delta to percentage delta
-        const dxPercent = (dx / (rect.width * zoomScaleRef.current)) * 100;
-        const dyPercent = (dy / (rect.height * zoomScaleRef.current)) * 100;
-        
-        const newX = deviceStartRef.current.deviceX + dxPercent;
-        const newY = deviceStartRef.current.deviceY + dyPercent;
-        
-        setPlacedDevices(prev => prev.map(d => (d.id === movingDeviceId && d.mapId === selectedMapId) ? { ...d, x: newX, y: newY } : d));
-        return;
-      }
-
-      // 3. Device Rotating Logic
-      if (rotatingDeviceId) {
-        setPlacedDevices(prev => {
-          const device = prev.find(d => d.id === rotatingDeviceId && d.mapId === selectedMapId);
-          if (!device) return prev;
-          
-          const deviceScreenX = rect.left + mapOffsetRef.current.x + (device.x / 100) * rect.width * zoomScaleRef.current;
-          const deviceScreenY = rect.top + mapOffsetRef.current.y + (device.y / 100) * rect.height * zoomScaleRef.current;
-          const angle = Math.atan2(e.clientY - deviceScreenY, e.clientX - deviceScreenX) * (180 / Math.PI);
-          
-          return prev.map(d => (d.id === rotatingDeviceId && d.mapId === selectedMapId) ? { ...d, rotation: angle + 90 } : d);
-        });
-      }
-    };
-
-    const handleGlobalMouseUp = () => {
-      setIsPanning(false);
-      setMovingDeviceId(null);
-      setRotatingDeviceId(null);
-    };
-
-    if (isPanning || movingDeviceId || rotatingDeviceId) {
-      window.addEventListener('mousemove', handleGlobalMouseMove);
-      window.addEventListener('mouseup', handleGlobalMouseUp);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleGlobalMouseMove);
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
-    };
-  }, [isPanning, movingDeviceId, rotatingDeviceId, selectedMapId]);
-
-  const handleWheel = (e: React.WheelEvent) => {
-    if (!mapImage) return;
-    const zoomSpeed = 0.1;
-    const delta = e.deltaY < 0 ? 1 : -1;
-    const oldScale = zoomScale;
-    const newScale = Math.min(10, Math.max(0.1, oldScale + delta * zoomSpeed * oldScale));
-    if (newScale !== oldScale) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-      setZoomScale(newScale);
-      setMapOffset({ 
-        x: mouseX - (mouseX - mapOffset.x) * (newScale / oldScale),
-        y: mouseY - (mouseY - mapOffset.y) * (newScale / oldScale)
-      });
-    }
-  };
-
-  const handleZoomIn = () => {
-    setZoomScale(prev => Math.min(10, prev + 0.2));
-  };
-
-  const handleZoomOut = () => {
-    setZoomScale(prev => Math.max(0.1, prev - 0.2));
-  };
-
-  const handleResetZoom = () => {
-    setZoomScale(1);
-    setMapOffset({ x: 0, y: 0 });
-  };
-
-  const [_isPending, startTransition] = useTransition();
-
-  const handleDownloadSample = () => {
-    startTransition(async () => {
-      try {
-        // Gọi trực tiếp API trả về dữ liệu file (Blob)
-        const response = await mapApi.downloadSampleImage();
-        
-        // Dữ liệu blob nằm trong response.data khi dùng axios với responseType: 'blob'
-        const blob = response.data;
-        const objectUrl = URL.createObjectURL(blob);
-
-        // Kích hoạt tải xuống ngầm
-        const link = document.createElement('a');
-        link.href = objectUrl;
-        link.download = 'light-insight-sample-map.png';
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-
-        // Dọn dẹp bộ nhớ
-        setTimeout(() => {
-          document.body.removeChild(link);
-          URL.revokeObjectURL(objectUrl);
-        }, 100);
-
-        setResponseModal({ isOpen: true, status: 1, message: 'Đã tải ảnh mẫu thành công.' });
-
-      } catch (error) {
-        console.error("Download Image Error:", error);
-        setResponseModal({ 
-          isOpen: true, 
-          status: -1, 
-          message: 'Lỗi khi tải file ảnh từ máy chủ.' 
-        });
-      }
-    });
   };
 
   return (
@@ -746,8 +766,8 @@ export function MapManagementSection() {
                 panningStartRef.current = { 
                   mouseX: e.clientX, 
                   mouseY: e.clientY, 
-                  offsetX: mapOffsetRef.current.x, 
-                  offsetY: mapOffsetRef.current.y 
+                  offsetX: mapOffset.x, 
+                  offsetY: mapOffset.y 
                 };
                 setIsPanning(true); 
               } 
@@ -799,10 +819,29 @@ export function MapManagementSection() {
                           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 pointer-events-none">
                             <div className="relative -top-[100px]">
                               <svg width="140" height="100" viewBox="0 0 140 100" className="opacity-60"><path d="M70 100 L0 0 L140 0 Z" fill="rgba(0, 194, 255, 0.2)" stroke="rgba(0, 194, 255, 0.4)" strokeWidth="1" /></svg>
-                              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-4 h-4 bg-psim-red rounded-full border-2 border-white cursor-pointer pointer-events-auto hover:scale-125" onMouseDown={(e) => { e.stopPropagation(); setRotatingDeviceId(device.id); }} />
-                            </div>
-                          </div>
-                          <div className={cn("w-10 h-10 bg-[#1a1f2e] text-white rounded-xl flex items-center justify-center border border-white/20 cursor-move", movingDeviceId === device.id && "border-psim-orange")} onMouseDown={(e) => { e.stopPropagation(); setMovingDeviceId(device.id); }}><Cctv size={22} className="-rotate-90" /></div>
+                              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-4 h-4 bg-psim-red rounded-full border-2 border-white cursor-pointer pointer-events-auto hover:scale-125" 
+                            onMouseDown={(e) => { 
+                              e.stopPropagation();
+                              setRotatingDeviceId(device.id);
+                            }} 
+                          />
+                        </div>
+                      </div>
+                      <div 
+                        className={cn("w-10 h-10 bg-[#1a1f2e] text-white rounded-xl flex items-center justify-center border border-white/20 cursor-move", movingDeviceId === device.id && "border-psim-orange")} 
+                        onMouseDown={(e) => { 
+                          e.stopPropagation(); 
+                          deviceStartRef.current = {
+                            mouseX: e.clientX,
+                            mouseY: e.clientY,
+                            deviceX: device.x,
+                            deviceY: device.y
+                          };
+                          setMovingDeviceId(device.id); 
+                        }}
+                      >
+                        <Cctv size={22} className="-rotate-90" />
+                      </div>
                         </div>
                         <button onClick={(e) => { e.stopPropagation(); setPlacedDevices(prev => prev.filter(d => !(d.id === device.id && d.mapId === selectedMapId))); }} className="absolute -top-4 -right-4 w-6 h-6 bg-psim-red text-white rounded-full flex items-center justify-center opacity-0 group-hover/device:opacity-100 transition-opacity"><X size={12} /></button>
                       </div>
@@ -1118,3 +1157,4 @@ export function MapManagementSection() {
     </div>
   );
 }
+

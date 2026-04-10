@@ -93,12 +93,12 @@ namespace LightInsightBUS.Service.MileStone.General
             }
             return result;
         }
-        public async Task<BaseResultModel> GetSimpleEventsAsync()
+        public async Task<BaseResultModel> GetSimpleEventsAsync(Guid key)
         {
             try
             {
                 var result = new BaseResultModel();
-                var data = await _getAnalyticsEvents.GetSimpleEventsAsync();
+                var data = await _getAnalyticsEvents.GetSimpleEventsAsync(key);
                 if (data.Any())
                 {
                     result.Status = 1;

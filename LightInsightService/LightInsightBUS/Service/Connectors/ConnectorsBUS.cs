@@ -4,6 +4,7 @@ using LightInsightDAL.Repositories.Connectors;
 using LightInsightModel.Connectors;
 using LightInsightModel.MileStone.General;
 using Microsoft.Extensions.Caching.Memory;
+using Npgsql;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -36,7 +37,7 @@ namespace LightInsightBUS.Service.Connectors
                 var connectors = await _connectorsDAL.GetAllConnectorsAsync();
                 foreach (var item in connectors)
                 {
-                    string cacheKey = $"VMS_{item.VmsID}";
+                    string cacheKey = $"{item.Id}";
                     _cache.Set(cacheKey, item);
                     Console.WriteLine($"[CACHE] Loaded Key: {cacheKey} for Connector: {item.VmsName}");
                 }
@@ -54,10 +55,9 @@ namespace LightInsightBUS.Service.Connectors
 
         public async Task<BaseResultModel> AddConnectorAsync(ConnectorsModel model)
         {
+            var result = new BaseResultModel();
             try
             {
-
-                var result = new BaseResultModel();
                 var ping = await _checkServerBUS.CheckTcpConnectionAsync(model.IpServer, model.Port);
                 var token = await _getAnalyticsEvents.CheckTokenAsync(model.Username, model.Password, model.IpServer, model.Port);
                 if (!ping)
@@ -76,41 +76,58 @@ namespace LightInsightBUS.Service.Connectors
                 {
                     model.Status = "Connected";
                 }
+
                 var newID = await _connectorsDAL.AddConnectorAsync(model.Name, model.IpServer, model.Port, model.Username, model.Password, model.VMSID, model.Status);
+
                 if (newID != null)
                 {
-                    // Cập nhật Cache sau khi thêm thành công - Dùng Key đồng nhất VMS_{id}
                     model.Id = (Guid)newID;
                     _cache.Set($"VMS_{model.VMSID}", model);
 
                     result.Status = 1;
                     result.Message = "Thêm connector thành công.";
                     result.Data = newID;
-                    return result;
                 }
                 else
                 {
                     result.Status = -1;
-                    result.Message = "Thêm connector thất bại. Vui lòng thử lại.";
-                    return result;
+                    result.Message = "Thêm connector thất bại do lỗi không xác định.";
                 }
-
+                return result;
+            }
+            catch (PostgresException ex)
+            {
+                // Handle specific database errors from the RAISE EXCEPTION calls
+                result.Status = 0; // Use 0 for validation/business rule errors
+                if (ex.Message.Contains("DUPLICATE_NAME"))
+                {
+                    result.Message = "Tên connector đã tồn tại. Vui lòng chọn tên khác.";
+                }
+                else if (ex.Message.Contains("DUPLICATE_IP"))
+                {
+                    result.Message = "Địa chỉ IP đã tồn tại. Vui lòng kiểm tra lại.";
+                }
+                else
+                {
+                    result.Status = -1; // System-level DB error
+                    result.Message = "Lỗi cơ sở dữ liệu không xác định.";
+                    Console.WriteLine($"PostgresException: {ex.Message}");
+                }
+                return result;
             }
             catch (Exception ex)
             {
-                var result = new BaseResultModel();
                 result.Status = -1;
                 result.Message = ex.Message;
                 return result;
             }
-
         }
 
         public async Task<BaseResultModel> UpdateConnectorAsync(ConnectorsModel model)
         {
+            var result = new BaseResultModel();
             try
             {
-                var result = new BaseResultModel();
                 var ping = await _checkServerBUS.CheckTcpConnectionAsync(model.IpServer, model.Port);
                 var token = await _getAnalyticsEvents.CheckTokenAsync(model.Username, model.Password, model.IpServer, model.Port);
 
@@ -139,19 +156,35 @@ namespace LightInsightBUS.Service.Connectors
 
                     result.Status = 1;
                     result.Message = "Cập nhật connector thành công.";
-                    return result;
                 }
                 else
                 {
                     result.Status = -1;
-                    result.Message = "Cập nhật connector thất bại. Vui lòng thử lại.";
-                    return result;
+                    result.Message = "Cập nhật connector thất bại. Không tìm thấy ID để cập nhật.";
                 }
-
+                return result;
+            }
+            catch (PostgresException ex)
+            {
+                result.Status = 0; // Validation/Business rule error
+                if (ex.Message.Contains("DUPLICATE_NAME"))
+                {
+                    result.Message = "Tên connector đã tồn tại. Vui lòng chọn tên khác.";
+                }
+                else if (ex.Message.Contains("DUPLICATE_IP"))
+                {
+                    result.Message = "Địa chỉ IP đã tồn tại. Vui lòng kiểm tra lại.";
+                }
+                else
+                {
+                    result.Status = -1; // System-level DB error
+                    result.Message = "Lỗi cơ sở dữ liệu không xác định khi cập nhật.";
+                    Console.WriteLine($"PostgresException: {ex.Message}");
+                }
+                return result;
             }
             catch (Exception ex)
             {
-                var result = new BaseResultModel();
                 result.Status = -1;
                 result.Message = ex.Message;
                 return result;
