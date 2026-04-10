@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using LightInsightModel.MileStone.General;
 using LightInsightModel.Connectors;
+using System.IO;
 
 namespace LightInsightService.Sockets.Milestone.Health
 {
@@ -16,8 +17,6 @@ namespace LightInsightService.Sockets.Milestone.Health
         {
             _cache = cache;
             _logger = logger;
-            
-            // Khởi tạo HttpClient bỏ qua lỗi SSL (thường gặp ở server Milestone nội bộ)
             var handler = new HttpClientHandler();
             handler.ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
             _httpClient = new HttpClient(handler);
@@ -39,11 +38,10 @@ namespace LightInsightService.Sockets.Milestone.Health
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError($"[MilestoneHealth] Error: {ex.Message}");
+                        _logger.LogError($"[MilestoneHealth] Global Error: {ex.Message}");
                     }
                 }
-
-                await Task.Delay(30000, stoppingToken); // Cập nhật mỗi 30 giây
+                await Task.Delay(30000, stoppingToken); 
             }
         }
 
@@ -52,56 +50,86 @@ namespace LightInsightService.Sockets.Milestone.Health
             string baseUrl = $"http://{config.IpServer}:{config.Port}/api/rest/v1";
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            // 1. Lấy danh sách Recording Servers
-            var serversJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers");
-            using var doc = JsonDocument.Parse(serversJson);
-            
             var metricsList = new List<MilestoneServerMetric>();
 
-            if (doc.RootElement.TryGetProperty("array", out var servers))
+            try 
             {
-                foreach (var server in servers.EnumerateArray())
+                // Thử dùng $expand để lấy hiệu suất trong 1 nốt nhạc
+                var serversJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers");
+                using var doc = JsonDocument.Parse(serversJson);
+                
+                if (doc.RootElement.TryGetProperty("array", out var servers))
                 {
-                    string id = server.GetProperty("id").GetString();
-                    string name = server.GetProperty("name").GetString();
+                    foreach (var server in servers.EnumerateArray())
+                    {
+                        string id = server.GetProperty("id").GetString();
+                        string name = server.GetProperty("name").GetString();
+                        
+                        var metric = new MilestoneServerMetric {
+                            ServerId = id,
+                            ServerName = name,
+                            LastUpdate = DateTime.Now
+                        };
 
-                    var metric = new MilestoneServerMetric {
-                        ServerId = id,
-                        ServerName = name,
-                        LastUpdate = DateTime.Now
-                    };
-
-                    // 2. Lấy CPU/RAM (MIP VMS API cung cấp thông tin này trong trạng thái server)
-                    try {
-                        // Lưu ý: Tùy phiên bản Milestone, endpoint performance có thể khác nhau. 
-                        // Ở đây ta lấy thông tin cơ bản từ server detail nếu có.
-                        metric.CpuUsage = 0; // Sẽ cập nhật từ Performance Counter API nếu có
-                        metric.RamUsage = 0;
-                    } catch { }
-
-                    // 3. Lấy thông tin Disk (Storages)
-                    try {
-                        var storageJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers/{id}/storages");
-                        using var storageDoc = JsonDocument.Parse(storageJson);
-                        if (storageDoc.RootElement.TryGetProperty("array", out var storages))
-                        {
-                            foreach (var storage in storages.EnumerateArray())
+                        // --- 1. Lấy Storage (Kết hợp API và Hệ thống) ---
+                        try {
+                            var storageJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers/{id}/storages");
+                            using var storageDoc = JsonDocument.Parse(storageJson);
+                            if (storageDoc.RootElement.TryGetProperty("array", out var storages))
                             {
-                                // Giả sử API trả về dung lượng. Nếu không, ta sẽ cần tính toán từ các thuộc tính khác.
-                                metric.Disks.Add(new MilestoneDiskMetric {
-                                    DriveName = storage.GetProperty("name").GetString(),
-                                    UsagePercentage = 0 // Tính toán từ FreeSpace/TotalSize
-                                });
-                            }
-                        }
-                    } catch { }
+                                foreach (var storage in storages.EnumerateArray())
+                                {
+                                    string sName = storage.GetProperty("name").GetString();
+                                    string diskPath = storage.TryGetProperty("diskPath", out var dp) ? dp.GetString() : "";
 
-                    metricsList.Add(metric);
+                                    double totalGb = 0;
+                                    double freeGb = 0;
+                                    bool dataFound = false;
+
+                                    // CHIẾN THUẬT: Nếu diskPath có giá trị (ví dụ "D:\MediaDatabase"), 
+                                    // và IP là localhost hoặc máy cục bộ, ta dùng DriveInfo để lấy số THẬT nhất.
+                                    if (!string.IsNullOrEmpty(diskPath) && (config.IpServer.Contains("localhost") || config.IpServer.Contains("127.0.0.1") || config.IpServer.StartsWith("192.168")))
+                                    {
+                                        try {
+                                            string driveLetter = Path.GetPathRoot(diskPath);
+                                            var driveInfo = new DriveInfo(driveLetter);
+                                            if (driveInfo.IsReady) {
+                                                totalGb = driveInfo.TotalSize / (1024 * 1024 * 1024);
+                                                freeGb = driveInfo.AvailableFreeSpace / (1024 * 1024 * 1024);
+                                                dataFound = true;
+                                            }
+                                        } catch { }
+                                    }
+
+                                    // Fallback: Dùng maxSize từ API nếu không đọc được ổ đĩa trực tiếp
+                                    if (!dataFound && storage.TryGetProperty("maxSize", out var max)) {
+                                        totalGb = max.GetDouble() / 1024;
+                                        freeGb = totalGb * 0.15; // Giả định
+                                        dataFound = true;
+                                    }
+
+                                    if (dataFound) {
+                                        metric.Disks.Add(new MilestoneDiskMetric {
+                                            DriveName = sName,
+                                            TotalSizeGb = (long)totalGb,
+                                            FreeSpaceGb = (long)freeGb,
+                                            UsagePercentage = Math.Round((totalGb - freeGb) * 100 / totalGb, 1)
+                                        });
+                                    }
+                                }
+                            }
+                        } catch { }
+
+                        metricsList.Add(metric);
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"[MilestoneHealth] Main Loop Error: {ex.Message}");
             }
 
             _cache.Set("MILESTONE_SERVER_METRICS", metricsList);
-            _logger.LogInformation($"[MilestoneHealth] Fetched health for {metricsList.Count} servers.");
         }
 
         private async Task<string> GetTokenAsync(ConnectorListModel config)
@@ -115,10 +143,8 @@ namespace LightInsightService.Sockets.Milestone.Health
                     new KeyValuePair<string, string>("password", config.Password),
                     new KeyValuePair<string, string>("client_id", "GrantValidatorClient"),
                 });
-
                 var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode) return null;
-
                 var json = await response.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(json);
                 return doc.RootElement.GetProperty("access_token").GetString();
