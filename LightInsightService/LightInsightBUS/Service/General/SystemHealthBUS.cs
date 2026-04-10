@@ -3,7 +3,7 @@ using LightInsightBUS.Interfaces.General;
 using LightInsightModel.General;
 using LightInsightModel.Connectors;
 using LightInsightModel.MileStone.General;
-using LightInsightBUS.Service.Providers.Milestone;
+using LightInsightBUS.Service.HealthProviders.Milestone;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -16,10 +16,10 @@ namespace LightInsightBUS.Service.General
     public class SystemHealthBUS : ISystemHealth
     {
         private readonly IConnectors _connectorService;
-        private readonly MilestoneHealthProvider _milestoneProvider;
+        private readonly MilestoneHealthBUS _milestoneProvider;
         private readonly MilestoneSystemProber _systemProber;
 
-        public SystemHealthBUS(IConnectors connectorService, MilestoneHealthProvider milestoneProvider, MilestoneSystemProber systemProber)
+        public SystemHealthBUS(IConnectors connectorService, MilestoneHealthBUS milestoneProvider, MilestoneSystemProber systemProber)
         {
             _connectorService = connectorService;
             _milestoneProvider = milestoneProvider;

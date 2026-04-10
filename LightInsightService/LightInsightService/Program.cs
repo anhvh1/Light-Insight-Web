@@ -66,7 +66,7 @@ builder.Services.AddScoped<GetAnalyticsEvents>();
 builder.Services.AddScoped<MilestoneSystemProber>();
 builder.Services.AddScoped<LightInsightDAL.Repositories.General.SystemConfigDAL>();
 builder.Services.AddScoped<ISystemConfig, SystemConfigBUS>();
-builder.Services.AddScoped<LightInsightBUS.Service.Providers.Milestone.MilestoneHealthProvider>();
+builder.Services.AddScoped<LightInsightBUS.Service.HealthProviders.Milestone.MilestoneHealthBUS>();
 
 
 builder.Services.AddSignalR().AddJsonProtocol(options => {
