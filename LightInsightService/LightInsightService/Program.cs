@@ -89,6 +89,7 @@ builder.Services.AddCors(options =>
 });
 builder.Services.AddHostedService<MilestoneAlarmSocketWorker>();
 builder.Services.AddHostedService<CacheLoaderService>();
+builder.Services.AddHostedService<LightInsightService.Sockets.Milestone.Health.MilestoneHealthSocketWorker>();
 
 // -------------------- Swagger --------------------
 builder.Services.AddEndpointsApiExplorer();

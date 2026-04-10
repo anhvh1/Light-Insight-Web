@@ -1,5 +1,7 @@
 using LightInsightModel.General;
 using LightInsightModel.Connectors;
+using LightInsightModel.MileStone.General;
+using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -14,6 +16,12 @@ namespace LightInsightBUS.Service.HealthProviders.Milestone
     public class MilestoneHealthBUS
     {
         private readonly HttpClient _httpClient = new HttpClient();
+        private readonly IMemoryCache _cache;
+
+        public MilestoneHealthBUS(IMemoryCache cache)
+        {
+            _cache = cache;
+        }
 
         public async Task<ConnectorHealth> GetHealthAsync(ConnectorListModel config)
         {
@@ -55,7 +63,6 @@ namespace LightInsightBUS.Service.HealthProviders.Milestone
 
                     if (sw.ElapsedMilliseconds > 200) score -= 10;
                     if (sw.ElapsedMilliseconds > 500) score -= 20;
-                    if (sw.ElapsedMilliseconds > 1000) score -= 40;
 
                     health.HealthPercentage = Math.Max(0, score);
                 }
@@ -72,25 +79,53 @@ namespace LightInsightBUS.Service.HealthProviders.Milestone
         public async Task<List<InfrastructureHealth>> GetInfrastructureAsync(ConnectorListModel config)
         {
             var infra = new List<InfrastructureHealth>();
-            string token = await GetTokenInternalAsync(config);
             
-            if (!string.IsNullOrEmpty(token))
+            // 1. Lấy dữ liệu Metrics từ Cache (do Background Worker nạp)
+            if (_cache.TryGetValue("MILESTONE_SERVER_METRICS", out List<MilestoneServerMetric> metrics))
             {
+                foreach (var m in metrics)
+                {
+                    infra.Add(new InfrastructureHealth {
+                        Name = m.ServerName,
+                        Description = $"CPU {m.CpuUsage}% · RAM {m.RamUsage}% · Disk {m.Disks.FirstOrDefault()?.UsagePercentage}%",
+                        Status = "ONLINE",
+                        Type = "server"
+                    });
+
+                    // Thêm thông tin Disk chi tiết nếu cần
+                    foreach (var disk in m.Disks)
+                    {
+                        infra.Add(new InfrastructureHealth {
+                            Name = $"Storage: {disk.DriveName}",
+                            Description = $"Free {disk.FreeSpaceGb}GB / {disk.TotalSizeGb}GB",
+                            Status = disk.UsagePercentage > 90 ? "SLOW" : "ONLINE",
+                            Type = "storage"
+                        });
+                    }
+                }
+            }
+            else
+            {
+                // Fallback nếu chưa có dữ liệu cache
                 infra.Add(new InfrastructureHealth {
-                    Name = "Management Server",
-                    Description = $"Milestone VMS System @ {config.IpServer}",
+                    Name = "Milestone Management Server",
+                    Description = $"VMS System @ {config.IpServer}",
                     Status = "ONLINE",
                     Type = "server"
                 });
+            }
 
+            // 2. Lấy danh sách Camera Offline (giữ nguyên logic cũ hoặc mở rộng từ cache trạng thái)
+            string token = await GetTokenInternalAsync(config);
+            if (!string.IsNullOrEmpty(token))
+            {
                 var cameras = await GetCamerasInternalAsync(config, token);
                 var offlineCameras = cameras.Where(c => !c.enabled).ToList();
-
                 foreach (var cam in offlineCameras)
                 {
                     infra.Add(new InfrastructureHealth {
                         Name = cam.name,
-                        Description = "Camera Connection Lost / Disabled",
+                        Description = "Connection Lost",
                         Status = "OFFLINE",
                         Type = "camera"
                     });
