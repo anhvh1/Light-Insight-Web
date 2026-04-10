@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AlarmType } from '@/types';
 import { StatusPill, TypeBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
@@ -38,15 +38,30 @@ export function AlarmConsole() {
     alarms,
     connected,
     loading,
-    currentPage,
-    pageSize,
     canNextPage,
+    pendingRealtimeCount,
     filters,
     refreshAlarms,
-    nextPage,
-    prevPage,
+    loadMore,
+    setIsAtTop,
+    clearBellCount,
+    clearPendingRealtimeCount,
     markAlarmAsRead,
   } = useAlarmSignalR();
+
+  const [isAutoScroll, setIsAutoScroll] = useState(true);
+  const listRef = useRef<HTMLDivElement>(null);
+  const isAutoScrollRef = useRef(true);
+  const [showScrollToTop, setShowScrollToTop] = useState(false);
+  // (kept for possible future edge handling)
+  const firstRowHeightRef = useRef<number | null>(null);
+  const firstRowRef = useCallback((node: HTMLTableRowElement | null) => {
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    if (rect.height > 0) {
+      firstRowHeightRef.current = rect.height;
+    }
+  }, []);
 
   const [activeTab, setActiveTab] = useState<string>('all');
   const [filterType, setFilterType] = useState<AlarmType | 'all'>('all');
@@ -59,6 +74,17 @@ export function AlarmConsole() {
   const [sources, setSources] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingDicts, setLoadingDicts] = useState(false);
   const [dictLoaded, setDictLoaded] = useState(false);
+
+  useEffect(() => {
+    isAutoScrollRef.current = isAutoScroll;
+  }, [isAutoScroll]);
+
+  useEffect(() => {
+    setIsAtTop(isAutoScroll);
+    if (isAutoScroll) {
+      clearPendingRealtimeCount();
+    }
+  }, [clearPendingRealtimeCount, isAutoScroll, setIsAtTop]);
 
   const selectedAlarm = useMemo(
     () => alarms.find(a => a.id === selectedAlarmId) ?? null,
@@ -84,9 +110,6 @@ export function AlarmConsole() {
     { value: 'close', label: 'Close' },
   ];
   const filterTypes: (AlarmType | 'all')[] = ['all', 'ai', 'lpr', 'acs', 'fire', 'bms', 'tech', 'light'];
-  const hasRecords = filteredAlarms.length > 0;
-  const startRecord = hasRecords ? (currentPage - 1) * pageSize + 1 : 0;
-  const endRecord = hasRecords ? (currentPage - 1) * pageSize + filteredAlarms.length : 0;
 
   const handleAcknowledge = () => {
     if (!selectedAlarmId) return;
@@ -108,13 +131,11 @@ export function AlarmConsole() {
       ...prev,
       stateName,
     }));
-    await refreshAlarms({
-      stateName,
-    });
+    await refreshAlarms({ ...filters, stateName });
   };
 
   useEffect(() => {
-    void refreshAlarms();
+    void refreshAlarms(EMPTY_FILTERS);
   }, [refreshAlarms]);
 
   useEffect(() => {
@@ -172,7 +193,27 @@ export function AlarmConsole() {
 
   const renderAlarmTable = () => (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto pr-1">
+      <div className="relative flex-1 min-h-0 flex flex-col">
+      <div
+        ref={listRef}
+        className="flex-1 overflow-y-auto pr-1"
+        onScroll={() => {
+          const el = listRef.current;
+          if (!el) return;
+          const firstRowHeight = firstRowHeightRef.current ?? 44;
+          setShowScrollToTop(el.scrollTop > firstRowHeight);
+          if (el.scrollTop > 0 && isAutoScrollRef.current) {
+            setIsAutoScroll(false);
+          }
+          if (el.scrollTop <= 24 && !isAutoScrollRef.current) {
+            setIsAutoScroll(true);
+          }
+          const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+          if (distanceFromBottom < 200) {
+            void loadMore();
+          }
+        }}
+      >
         <table className="w-full border-collapse text-left">
           <thead>
             <tr>
@@ -191,6 +232,7 @@ export function AlarmConsole() {
             {filteredAlarms.map((alarm) => (
               <tr
                 key={alarm.id}
+                ref={alarm.id === filteredAlarms[0]?.id ? firstRowRef : undefined}
                 className={cn(
                   "cursor-pointer transition-colors hover:bg-bg2 border-b border-border-dim",
                   selectedAlarmId === alarm.id && "bg-[rgba(0,194,255,0.05)]",
@@ -229,28 +271,45 @@ export function AlarmConsole() {
           </tbody>
         </table>
       </div>
-      <div className="flex items-center justify-between gap-3 border-t border-border-dim bg-bg1 px-3 py-2 text-[11px]">
+      {showScrollToTop && (
         <button
-          className="rounded-md border border-border-dim px-3 py-1 text-t1 transition-colors hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={loading || currentPage === 1}
+          type="button"
+          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-md border border-border-dim bg-bg3 text-[14px] text-t1 shadow-lg transition-colors hover:bg-bg4 hover:border-psim-accent hover:text-psim-accent"
+          aria-label="Về đầu danh sách"
+          title="Về đầu danh sách"
           onClick={() => {
-            void prevPage();
+            listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+            clearBellCount();
+            requestAnimationFrame(() => {
+              setIsAutoScroll(true);
+            });
           }}
         >
-          Trang trước
+          ↑
         </button>
-        <div className="font-mono text-t-2">
-          Bản ghi {startRecord} - {endRecord}
+      )}
+      </div>
+      <div className="relative border-t border-border-dim bg-bg1 px-3 py-2 text-[11px]">
+        <div className="font-mono text-t-2 text-center">
+          Hiển thị {filteredAlarms.length} bản ghi
+          {loading && <span className="text-psim-accent"> · Đang tải…</span>}
+          {!loading && !canNextPage && alarms.length > 0 && <span className="text-t-2"> · Đã tải hết dữ liệu</span>}
         </div>
-        <button
-          className="rounded-md border border-border-dim px-3 py-1 text-t1 transition-colors hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={loading || !canNextPage}
-          onClick={() => {
-            void nextPage();
-          }}
-        >
-          Trang sau
-        </button>
+
+        {!isAutoScroll && pendingRealtimeCount > 0 && (
+          <button
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-psim-accent/50 bg-bg3 px-3 py-1.5 text-[11px] text-psim-accent shadow-lg hover:bg-bg4"
+            onClick={() => {
+              listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              clearBellCount();
+              requestAnimationFrame(() => {
+                setIsAutoScroll(true);
+              });
+            }}
+          >
+            Tạm dừng - Có {pendingRealtimeCount} tin mới - Click để Resume
+          </button>
+        )}
       </div>
     </div>
   );
