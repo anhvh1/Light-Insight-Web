@@ -164,7 +164,7 @@ namespace LightInsightBUS.Service.MileStone.Alarm
                 queryParts.Add($"message='{EscapeString(filter.message)}'");
 
             if (!string.IsNullOrEmpty(filter.source))
-                queryParts.Add($"cameraId='{EscapeString(filter.source)}'");
+                queryParts.Add($"source.name='{EscapeString(filter.source)}'");
 
             //if (filter.ExcludeClosedAlarms)
             //{

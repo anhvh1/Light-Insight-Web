@@ -13,13 +13,11 @@ namespace LightInsightModel.MileStone.Camera
 
     public class MilestoneCameraData
     {
-        public string id { get; set; }
         public string name { get; set; }
     }
 
     public class CameraDropDown
     {
-        public string id { get; set; }
         public string name { get; set; }
     }
 }

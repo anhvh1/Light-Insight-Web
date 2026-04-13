@@ -47,7 +47,6 @@ namespace LightInsightBUS.Service.MileStone.Camera
                 {
                     resultList.Add(new CameraDropDown
                     {
-                        id = item.id,
                         name = item.name
                     });
                 }
