@@ -24,6 +24,15 @@ export function ConnectorsSection() {
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: '', name: '' });
   const [responseModal, setResponseModal] = useState<{ isOpen: boolean; status: number; message: string }>({ isOpen: false, status: 0, message: '' });
 
+  const resetNewConnectorState = useCallback(() => {
+    setNewConnector({ id: '', name: '', vmsId: 0, ip: '', port: '', username: '', password: '' });
+  }, []);
+
+  const closeModalAndReset = useCallback(() => {
+    setIsConnectorDialogOpen(false);
+    resetNewConnectorState();
+  }, [resetNewConnectorState]);
+
   const { data: connectorsResponse, isLoading: isLoadingConnectors } = useQuery({
     queryKey: ['connectors-list'],
     queryFn: priorityApi.getAllConnectors,
@@ -71,11 +80,8 @@ export function ConnectorsSection() {
     }
   });
 
-  // Lọc danh sách VMS: Nếu đang thêm mới thì loại bỏ các VMS đã tồn tại trong actualConnectors
-  const filteredVmsList = isViewingDetails 
-    ? vmsList 
-    : vmsList.filter((v: any) => !actualConnectors.some((c: any) => c.VmsID === v.VmsId));
-
+  // Lọc danh sách VMS: Theo yêu cầu, không cần loại bỏ các VMS đã tồn tại.
+  const filteredVmsList = vmsList;
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500 w-full h-full overflow-hidden">
       <div className="flex items-center justify-between shrink-0">
@@ -97,7 +103,7 @@ export function ConnectorsSection() {
               <div key={c.Id || i} className="bg-bg1 border border-border-dim rounded-xl p-5 flex flex-col gap-4 hover:border-psim-accent/30 transition-all">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-[14px] font-bold text-white">{c.VmsName}</h3>
+                    <h3 className="text-[14px] font-bold text-white">{c.Name}</h3>
                     <p className="text-[10px] font-mono mt-1 opacity-60 text-t-2">{c.IpServer}:{c.Port}</p>
                   </div>
                   <span className={cn("text-[9px] font-bold px-2 py-0.5 rounded border uppercase", c.Status === 'Connected' ? "bg-psim-green/10 text-psim-green border-psim-green/30" : "bg-psim-orange/10 text-psim-orange border-psim-orange/30")}>{c.Status}</span>
@@ -105,7 +111,7 @@ export function ConnectorsSection() {
                 <Progress value={c.Status === 'Connected' ? 100 : 0} className="h-1 bg-bg3" indicatorClassName={c.Status === 'Connected' ? "bg-psim-green" : "bg-psim-orange"} />
                 <div className="flex gap-2">
                   <button className="flex-1 h-8 rounded bg-psim-accent2 border border-border-dim text-[11px] font-bold text-white hover:border-psim-accent/30 shadow-lg shadow-psim-accent2/20 hover:scale-[1.02] transition-all" onClick={() => {
-                    setNewConnector({ id: c.Id, name: c.VmsName, vmsId: c.VmsID || 0, ip: c.IpServer, port: c.Port.toString(), username: c.Username, password: c.Password });
+                    setNewConnector({ id: c.Id, name: c.Name, vmsId: c.VmsID || 0, ip: c.IpServer, port: c.Port.toString(), username: c.Username, password: c.Password });
                     setIsViewingDetails(true); setIsConnectorDialogOpen(true);
                   }}>Chi tiết</button>
                   <button className="flex-1 h-8 rounded bg-bg2 border border-red-900/30 text-[11px] font-bold text-white hover:border-psim-red/50" onClick={() => setDeleteConfirmModal({ isOpen: true, id: c.Id, name: c.VmsName })}>Xóa</button>
@@ -126,32 +132,41 @@ export function ConnectorsSection() {
                 <h3 className="text-[18px] font-bold text-white uppercase tracking-tight">{isViewingDetails ? 'Chi tiết Connector' : 'Thêm Connector Mới'}</h3>
                 <p className="text-[11px] text-t-2 mt-1">Cấu hình thông số kết nối tới hệ thống VMS.</p>
               </div>
-              <button onClick={() => setIsConnectorDialogOpen(false)} className="text-t-2 hover:text-white transition-colors p-1"><X size={20} /></button>
+              <button onClick={closeModalAndReset} className="text-t-2 hover:text-white transition-colors p-1"><X size={20} /></button>
             </div>
             
             <div className="flex flex-col gap-6">
               <div className="space-y-2">
+                <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Tên hệ thống</label>
+                <input
+                  className="w-full bg-black/40 border border-white/10 rounded-xl h-12 px-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all"
+                  placeholder="Nhập tên hệ thống"
+                  value={newConnector.name}
+                  onChange={(e) => setNewConnector({...newConnector, name: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Loại hệ thống (VMS)</label>
-                <select 
-                  className="w-full bg-black/40 border border-white/10 rounded-xl h-12 px-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all appearance-none cursor-pointer" 
-                  value={newConnector.vmsId} 
+                <select
+                  className="w-full bg-black/40 border border-white/10 rounded-xl h-12 px-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all appearance-none cursor-pointer"
+                  value={newConnector.vmsId}
                   onChange={(e) => setNewConnector({...newConnector, vmsId: parseInt(e.target.value)})}
+                  disabled={isViewingDetails}
                 >
                   <option value={0} className="bg-[#161b2e]">-- Chọn VMS --</option>
                   {filteredVmsList.map((v: any) => (<option key={v.VmsId} value={v.VmsId} className="bg-[#161b2e]">{v.VmsName}</option>))}
                 </select>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Địa chỉ IP</label>
-                  <input 
-                    className="w-full bg-black/40 border border-white/10 rounded-xl h-12 px-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all font-mono" 
-                    placeholder="192.168.1.100" 
-                    value={newConnector.ip} 
+                  <input
+                    className="w-full bg-black/40 border border-white/10 rounded-xl h-12 px-4 text-[13px] text-white outline-none focus:border-psim-accent/50 transition-all font-mono"
+                    placeholder="192.168.1.100"
+                    value={newConnector.ip}
                     onChange={(e) => setNewConnector({...newConnector, ip: e.target.value})}
-                  />
-                </div>
+                  />                </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-t-2 uppercase tracking-widest px-1">Cổng (Port)</label>
                   <input 
@@ -199,7 +214,7 @@ export function ConnectorsSection() {
 
             <div className="mt-10 flex gap-4">
               <button 
-                onClick={() => setIsConnectorDialogOpen(false)}
+                onClick={closeModalAndReset}
                 className="flex-1 h-12 rounded-xl text-[11px] font-bold text-t-2 uppercase border border-white/10 hover:bg-white/5 transition-all"
               >
                 Hủy bỏ
@@ -207,23 +222,29 @@ export function ConnectorsSection() {
               <button 
                 className="flex-[2] h-12 bg-psim-accent text-bg0 rounded-xl font-bold uppercase tracking-widest text-[12px] shadow-lg shadow-psim-accent/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2" 
                 onClick={() => {
-                  const payload = { 
-                    Id: newConnector.id,
-                    IpServer: newConnector.ip, 
-                    Port: parseInt(newConnector.port), 
-                    Username: newConnector.username, 
-                    Password: newConnector.password, 
+                  const selectedVms = vmsList.find((v: any) => v.VmsId === newConnector.vmsId);
+                  const vmsName = selectedVms ? selectedVms.VmsName : 'Connector';
+
+                  const payload: any = {
+                    IpServer: newConnector.ip,
+                    Port: parseInt(newConnector.port) || 0,
+                    Username: newConnector.username,
+                    Password: newConnector.password,
                     VMSID: newConnector.vmsId,
-                    Name: newConnector.name || 'Connector',
+                    Name: newConnector.name || vmsName,
                     Status: 'Connected'
                   };
+
+                  if (isViewingDetails) {
+                    payload.Id = newConnector.id;
+                  }
+
                   if (isViewingDetails) {
                     updateConnectorMutation.mutate(payload);
                   } else {
                     connectorMutation.mutate(payload);
                   }
-                }}
-                disabled={connectorMutation.isPending || updateConnectorMutation.isPending}
+                }}                disabled={connectorMutation.isPending || updateConnectorMutation.isPending}
               >
                 {(connectorMutation.isPending || updateConnectorMutation.isPending) && <RefreshCcw size={14} className="animate-spin" />}
                 Lưu cấu hình

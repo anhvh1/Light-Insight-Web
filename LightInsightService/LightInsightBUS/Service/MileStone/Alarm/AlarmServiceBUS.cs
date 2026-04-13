@@ -10,6 +10,7 @@ using Microsoft.Extensions.Caching.Memory;
 using LightInsightDAL.Repositories.MileStone.General;
 using LightInsightModel.Connectors;
 using static Org.BouncyCastle.Math.EC.ECCurve;
+using static Mysqlx.Expect.Open.Types.Condition.Types;
 
 namespace LightInsightBUS.Service.MileStone.Alarm
 {
@@ -26,11 +27,11 @@ namespace LightInsightBUS.Service.MileStone.Alarm
             tocken = new GetAnalyticsEvents(cache);
         }
 
-        public async Task<List<string>> GetAlarmMessageDropdownAsync()
+        public async Task<List<string>> GetAlarmMessageDropdownAsync(Guid key)
         {
             // Lấy Token và cấu hình
-            var accessToken = await tocken.GetTokenAsync();
-            var config = tocken.GetVmsConfig(1);
+            var accessToken = await tocken.GetTokenAsync(key);
+            var config = tocken.GetVmsConfig(key);
             var baseUrl = $"http://{config.IpServer}:{config.Port}";
 
             // Gọi API của Milestone
@@ -53,14 +54,14 @@ namespace LightInsightBUS.Service.MileStone.Alarm
             return new List<string>();
         }
 
-        public async Task<List<AlarmData>> GetAlarmData(int page, int pageSize, AlarmFilter filter = null)
+        public async Task<List<AlarmData>> GetAlarmData(Guid key, int page, int pageSize, AlarmFilter filter = null)
         {
             var resultList = new List<AlarmData>();
 
             // 1. Lấy Token
-            var accessToken = await tocken.GetTokenAsync();
+            var accessToken = await tocken.GetTokenAsync(key);
 
-            var config = tocken.GetVmsConfig(1);
+            var config = tocken.GetVmsConfig(key);
             var baseUrl = $"http://{config.IpServer}:{config.Port}";
 
             // Xử lý logic trang: Frontend gửi lên 1, 2, 3... nhưng API Milestone đếm từ 0, 1, 2...

@@ -21,13 +21,13 @@ namespace LightInsightBUS.Service.MileStone.Camera
             tocken = new GetAnalyticsEvents(cache);
         }
 
-        public async Task<List<CameraDropDown>> GetCameraDropdownAsync()
+        public async Task<List<CameraDropDown>> GetCameraDropdownAsync(Guid key)
         {
             var resultList = new List<CameraDropDown>();
 
             // 1. Lấy Token và Config
-            var accessToken = await tocken.GetTokenAsync();
-            var config = tocken.GetVmsConfig(1);
+            var accessToken = await tocken.GetTokenAsync(key);
+            var config = tocken.GetVmsConfig(key);
             var baseUrl = $"http://{config.IpServer}:{config.Port}";
 
             // 2. Gọi External Service lấy cục raw JSON
