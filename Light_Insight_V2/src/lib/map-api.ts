@@ -41,6 +41,8 @@ export const mapApi = {
       PosY: number; 
       Icon: string; 
       VmsId: number; 
+      Connectorid?: string;
+      Type?: number;
       Rotation: number 
     }[] 
   }) => {

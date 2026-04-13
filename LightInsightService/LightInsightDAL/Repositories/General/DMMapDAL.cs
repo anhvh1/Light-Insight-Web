@@ -155,9 +155,15 @@ namespace LightInsightDAL.Repositories.General
                 var result = await cmd.ExecuteScalarAsync();
                 return result is bool && (bool)result;
             }
+            catch (PostgresException ex) // B?t riêng l?i t? Postgres
+            {
+                Console.WriteLine($"Postgres Error: {ex.MessageText}");
+                Console.WriteLine($"Detail: {ex.Detail}");
+                return false;
+            }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in ReplaceMarkersAsync: {ex.Message}");
+                Console.WriteLine($"General Error: {ex.Message}");
                 return false;
             }
         }
@@ -189,7 +195,9 @@ namespace LightInsightDAL.Repositories.General
                         Icon = reader.IsDBNull(6) ? null : reader.GetString(6),
                         CreatedAt = reader.GetDateTime(7),
                         VmsID = reader.GetInt32(8),
-                        Rotation = reader.GetDouble(9)
+                        Rotation = reader.GetDouble(9),
+                        Type = reader.IsDBNull(10) ? 0 : reader.GetInt32(10),
+                        Connectorid = reader.IsDBNull(11) ? (Guid?)null : reader.GetGuid(11),
                     });
                 }
                 return list;

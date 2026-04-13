@@ -312,9 +312,9 @@ namespace LightInsightBUS.ExternalServices.MileStone
 
             var allDevices = new List<GenericDeviceModel>();
 
-            allDevices.AddRange(cameras.Select(c => new GenericDeviceModel { Id = c.Id, Name = c.Name, Type = DeviceType.Camera }));
-            allDevices.AddRange(microphones.Select(m => new GenericDeviceModel { Id = m.Id, Name = m.Name, Type = DeviceType.Microphone }));
-            allDevices.AddRange(speakers.Select(s => new GenericDeviceModel { Id = s.Id, Name = s.Name, Type = DeviceType.Speaker }));
+            allDevices.AddRange(cameras.Select(c => new GenericDeviceModel { Id = c.Id, Name = c.Name, Type = DeviceType.Camera, Connectorid = key }));
+            allDevices.AddRange(microphones.Select(m => new GenericDeviceModel { Id = m.Id, Name = m.Name, Type = DeviceType.Microphone, Connectorid = key }));
+            allDevices.AddRange(speakers.Select(s => new GenericDeviceModel { Id = s.Id, Name = s.Name, Type = DeviceType.Speaker, Connectorid = key }));
 
             return allDevices;
         }

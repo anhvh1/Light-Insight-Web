@@ -54,7 +54,9 @@ namespace LightInsightBUS.Service.General
                     pos_y = m.PosY,
                     icon = m.Icon,
                     vms_id = m.VmsId,
-                    rotation = m.Rotation
+                    rotation = m.Rotation,
+                    type = m.Type, // Add this new property
+                    connectorid = m.Connectorid
                 }).ToList();
 
                 var jsonString = JsonSerializer.Serialize(dbMarkers);

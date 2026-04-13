@@ -76,6 +76,21 @@ export function MapView() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
 
+  // Create a map of deviceId -> highest priority alarm
+  const alarmsBySource = useMemo(() => {
+    const priorityOrder: { [key: string]: number } = { 'critical': 1, 'high': 2, 'medium': 3, 'low': 4 };
+    const map = new Map<string, Alarm>();
+    // Sort alarms to process higher priorities first
+    const sortedAlarms = [...alarms].sort((a, b) => (priorityOrder[a.pri] || 5) - (priorityOrder[b.pri] || 5));
+    
+    for (const alarm of sortedAlarms) {
+      if (alarm.src && !map.has(alarm.src)) { // Only store the highest-priority alarm for each source
+        map.set(alarm.src, alarm);
+      }
+    }
+    return map;
+  }, [alarms]);
+
   const handleDragStart = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -153,6 +168,13 @@ export function MapView() {
     };
   }, [isDragging, isPanning, activeMapUrl]);
 
+  const alarmStyles: { [key: string]: string } = {
+    critical: 'border-psim-red shadow-[0_0_15px_3px_var(--tw-shadow-color)] shadow-psim-red/50 animate-pulse',
+    high: 'border-psim-orange shadow-[0_0_15px_3px_var(--tw-shadow-color)] shadow-psim-orange/50 animate-pulse',
+    medium: 'border-psim-accent shadow-[0_0_15px_3px_var(--tw-shadow-color)] shadow-psim-accent/50',
+    low: 'border-psim-green',
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden font-sans select-none">
       {/* Header & Stats Bar */}
@@ -189,27 +211,32 @@ export function MapView() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Toolbar */}
         <div className="w-14 border-r border-white/5 flex flex-col items-center py-6 gap-4 bg-[#0a0f1d]/40">
-          <button 
-            onClick={handleZoomIn}
-            disabled={!activeMapUrl}
-            className="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white hover:bg-psim-orange hover:border-psim-orange hover:shadow-[0_0_15px_rgba(255,107,0,0.3)] transition-all font-bold disabled:opacity-20 disabled:grayscale"
-          >
-            +
-          </button>
-          <button 
-            onClick={handleZoomOut}
-            disabled={!activeMapUrl}
-            className="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white hover:bg-psim-orange hover:border-psim-orange hover:shadow-[0_0_15px_rgba(255,107,0,0.3)] transition-all font-bold disabled:opacity-20 disabled:grayscale"
-          >
-            -
-          </button>
+          <div className="flex flex-col bg-white/5 border border-white/10 rounded-lg overflow-hidden">
+            <button 
+              onClick={handleZoomIn}
+              disabled={!activeMapUrl}
+              className="w-9 h-9 flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all disabled:opacity-20 disabled:grayscale"
+              title="Phóng to"
+            >
+              <ZoomIn size={18} />
+            </button>
+            <div className="h-px bg-white/10 mx-2" />
+            <button 
+              onClick={handleZoomOut}
+              disabled={!activeMapUrl}
+              className="w-9 h-9 flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all disabled:opacity-20 disabled:grayscale"
+              title="Thu nhỏ"
+            >
+              <ZoomOut size={18} />
+            </button>
+          </div>
           <button 
             onClick={handleResetZoom}
             disabled={!activeMapUrl}
-            className="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-psim-accent hover:bg-psim-accent hover:text-bg0 transition-all font-bold disabled:opacity-20 disabled:grayscale"
+            className="w-9 h-9 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all disabled:opacity-20 disabled:grayscale"
             title="Reset (100%)"
           >
-            🎯
+            <Maximize2 size={18} />
           </button>
           
           <div className="flex-1" />
@@ -290,45 +317,51 @@ export function MapView() {
                  />
                  
                  {/* Map Markers (Cameras) */}
-                 {markers.map((m: any) => (
-                   <div 
-                     key={m.Id}
-                     className="absolute cursor-pointer group/marker z-10"
-                     style={{ 
-                       left: `${m.PosX}%`, 
-                       top: `${m.PosY}%`,
-                       transform: `translate(-50%, -50%)`
-                     }}
-                     title={m.CameraName}
-                   >
-                     <div className="relative flex flex-col items-center">
-                        {/* Camera Label (Visible on hover) */}
-                        <div className="bg-white border border-black/10 rounded px-2 py-0.5 mb-3 whitespace-nowrap shadow-xl z-30 opacity-0 group-hover/marker:opacity-100 transition-opacity pointer-events-none text-[9px] font-bold text-black uppercase">
-                          {m.CameraName}
-                        </div>
+                 {markers.map((m: any) => {
+                   const alarmForMarker = alarmsBySource.get(m.CameraName);
+                   return (
+                     <div 
+                       key={m.Id}
+                       className="absolute cursor-pointer group/marker z-10"
+                       style={{ 
+                         left: `${m.PosX}%`, 
+                         top: `${m.PosY}%`,
+                         transform: `translate(-50%, -50%)`
+                       }}
+                       title={m.CameraName}
+                     >
+                       <div className="relative flex flex-col items-center">
+                          {/* Camera Label (Visible on hover or if alarming) */}
+                          <div className={cn(
+                            "bg-white border border-black/10 rounded px-2 py-0.5 mb-3 whitespace-nowrap shadow-xl z-30 transition-opacity pointer-events-none text-[9px] font-bold text-black uppercase",
+                            alarmForMarker ? "opacity-100" : "opacity-0 group-hover/marker:opacity-100"
+                          )}>
+                            {m.CameraName}
+                          </div>
 
-                        {/* Rotation Container */}
-                        <div className="relative w-10 h-10 flex items-center justify-center" style={{ transform: `rotate(${m.Rotation || 0}deg)` }}>
-                          {/* Field of View (FoV) Cone */}
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 pointer-events-none">
-                            <div className="relative -top-[100px]">
-                              <svg width="140" height="100" viewBox="0 0 140 100" className="opacity-40">
-                                <path d="M70 100 L0 0 L140 0 Z" fill="rgba(0, 194, 255, 0.3)" stroke="rgba(0, 194, 255, 0.5)" strokeWidth="1" />
-                              </svg>
+                          {/* Rotation Container */}
+                          <div className="relative w-10 h-10 flex items-center justify-center" style={{ transform: `rotate(${m.Rotation || 0}deg)` }}>
+                            {/* Field of View (FoV) Cone */}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 pointer-events-none">
+                              <div className="relative -top-[100px]">
+                                <svg width="140" height="100" viewBox="0 0 140 100" className="opacity-40">
+                                  <path d="M70 100 L0 0 L140 0 Z" fill="rgba(0, 194, 255, 0.3)" stroke="rgba(0, 194, 255, 0.5)" strokeWidth="1" />
+                                </svg>
+                              </div>
+                            </div>
+
+                            {/* Camera Icon */}
+                            <div className={cn(
+                              "w-10 h-10 rounded-xl border-2 flex items-center justify-center bg-[#1a1f2e] text-white shadow-2xl transition-all group-hover/marker:scale-110",
+                              alarmForMarker ? alarmStyles[alarmForMarker.pri] : "border-psim-accent/50"
+                            )}>
+                              <Cctv size={22} className="-rotate-90" />
                             </div>
                           </div>
-
-                          {/* Camera Icon */}
-                          <div className={cn(
-                            "w-10 h-10 rounded-xl border flex items-center justify-center bg-[#1a1f2e] text-white shadow-2xl transition-all group-hover/marker:scale-110",
-                            m.VmsID === 0 ? "border-psim-orange/50" : "border-psim-accent/50"
-                          )}>
-                            <Cctv size={22} className="-rotate-90" />
-                          </div>
-                        </div>
+                       </div>
                      </div>
-                   </div>
-                 ))}
+                   );
+                 })}
                </div>
             </div>
           ) : (

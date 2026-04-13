@@ -32,5 +32,7 @@ namespace LightInsightModel.General
         public string? Icon { get; set; }
         public int VmsId { get; set; }
         public double Rotation { get; set; }
+        public int Type { get; set; }
+        public Guid Connectorid { get; set; }
     }
 }

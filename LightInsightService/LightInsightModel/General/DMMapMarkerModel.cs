@@ -49,5 +49,10 @@ namespace LightInsightModel.General
         [Required]
         [Column("vmsid")]
         public int VmsID { get; set; }
+        [Column("type")]
+        public int? Type { get; set; }
+        [Column("connectorid")]
+        public Guid? Connectorid { get; set; }
+
     }
 }
