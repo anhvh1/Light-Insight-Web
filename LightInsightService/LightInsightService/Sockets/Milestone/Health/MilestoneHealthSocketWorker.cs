@@ -6,6 +6,11 @@ using Microsoft.Extensions.Caching.Memory;
 using LightInsightModel.MileStone.General;
 using LightInsightModel.Connectors;
 using System.IO;
+using Microsoft.AspNetCore.SignalR;
+using LightInsightService.Sockets.General;
+using LightInsightUtiltites;
+using LightInsightModel.General;
+using LightInsightBUS.Interfaces.Connectors;
 
 namespace LightInsightService.Sockets.Milestone.Health
 {
@@ -13,13 +18,22 @@ namespace LightInsightService.Sockets.Milestone.Health
     {
         private readonly IMemoryCache _cache;
         private readonly ILogger<MilestoneHealthSocketWorker> _logger;
+        private readonly IHubContext<AuditLogHub> _hubContext;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly HttpClient _httpClient;
         private readonly List<MilestoneServerMetric> _metricsCache = new List<MilestoneServerMetric>();
+        private readonly Dictionary<string, Task> _activeConnections = new Dictionary<string, Task>();
 
-        public MilestoneHealthSocketWorker(IMemoryCache cache, ILogger<MilestoneHealthSocketWorker> logger)
+        public MilestoneHealthSocketWorker(
+            IMemoryCache cache, 
+            ILogger<MilestoneHealthSocketWorker> logger,
+            IHubContext<AuditLogHub> hubContext,
+            IServiceScopeFactory scopeFactory)
         {
             _cache = cache;
             _logger = logger;
+            _hubContext = hubContext;
+            _scopeFactory = scopeFactory;
             var handler = new HttpClientHandler();
             handler.ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
             _httpClient = new HttpClient(handler);
@@ -27,156 +41,240 @@ namespace LightInsightService.Sockets.Milestone.Health
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // Chạy song song: 1 luồng duy trì WebSocket, 1 luồng quét REST định kỳ
-            var wsTask = MaintainWebSocketConnection(stoppingToken);
+            _logger.LogInformation("[MilestoneHealth] Worker starting...");
             
             while (!stoppingToken.IsCancellationRequested)
             {
-                if (_cache.TryGetValue("VMS_1", out object cacheObj) && cacheObj is ConnectorListModel config)
+                try
                 {
-                    try
+                    using var scope = _scopeFactory.CreateScope();
+                    var connectorsService = scope.ServiceProvider.GetRequiredService<IConnectors>();
+                    var result = await connectorsService.GetAllConnectorsAsync();
+
+                    if (result.Status == 1 && result.Data is List<ConnectorListModel> connectorList)
                     {
-                        string token = await GetTokenAsync(config);
-                        if (!string.IsNullOrEmpty(token))
+                        var milestoneConnectors = connectorList
+                            .Where(c => c.Name.Contains("Milestone", StringComparison.OrdinalIgnoreCase) || 
+                                       (c.VmsName != null && c.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase)))
+                            .ToList();
+
+                        foreach (var vms in milestoneConnectors)
                         {
-                            await UpdateStaticData(config, token);
+                            string connectionId = vms.IpServer;
+                            if (!_activeConnections.ContainsKey(connectionId) || _activeConnections[connectionId].IsCompleted)
+                            {
+                                _logger.LogInformation($"[MilestoneHealth] Starting background task for: {vms.Name} ({vms.IpServer})");
+                                _activeConnections[connectionId] = Task.Run(() => MaintainWebSocketConnection(vms, stoppingToken), stoppingToken);
+                            }
+
+                            string token = await GetTokenAsync(vms);
+                            if (!string.IsNullOrEmpty(token))
+                            {
+                                await UpdateStaticData(vms, token);
+                            }
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError($"[MilestoneHealth] REST Scan Error: {ex.Message}");
-                    }
                 }
-                await Task.Delay(60000, stoppingToken); // Quét danh sách Servers/Disks mỗi 1 phút
-            }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"[MilestoneHealth] Main Loop Error: {ex.Message}");
+                }
 
-            await wsTask;
+                await Task.Delay(60000, stoppingToken); 
+            }
         }
 
-        private async Task MaintainWebSocketConnection(CancellationToken ct)
+        private async Task MaintainWebSocketConnection(ConnectorListModel config, CancellationToken ct)
         {
             while (!ct.IsCancellationRequested)
             {
-                if (_cache.TryGetValue("VMS_1", out object cacheObj) && cacheObj is ConnectorListModel config)
+                using var ws = new ClientWebSocket();
+
+                try
                 {
-                    using var ws = new ClientWebSocket();
-                    try
+                    _logger.LogInformation($"[MilestoneHealth] [{config.Name}] Attempting WS Connection to {config.IpServer}:{config.Port}...");
+                    string token = await GetTokenAsync(config);
+                    if (string.IsNullOrEmpty(token)) throw new Exception("Token failed");
+
+                    string wsUri = $"ws://{config.IpServer}:{config.Port}/api/ws/events/v1";
+                    ws.Options.SetRequestHeader("Authorization", $"Bearer {token}");
+
+                    await ws.ConnectAsync(new Uri(wsUri), ct);
+                    _logger.LogInformation($"[MilestoneHealth] [{config.Name}] [SUCCESS] WebSocket Connected.");
+
+                    var buffer = new byte[8192];
+
+                    // 1. START SESSION
+                    var startSessionCmd = new { command = "startSession", commandId = 1, sessionId = "", eventId = "" };
+                    await SendAsync(ws, startSessionCmd, config.Name, ct);
+                    await ReceiveAsync(ws, buffer, config.Name, ct);
+
+                    // 2. SUBSCRIBE EVENTS
+                    var subscribeCmd = new
                     {
-                        string token = await GetTokenAsync(config);
-                        if (string.IsNullOrEmpty(token)) throw new Exception("Token failed");
-
-                        // URL Events & States WebSocket của Milestone
-                        string wsUri = $"ws://{config.IpServer}:{config.Port}/api/ws/events/v1";
-                        ws.Options.SetRequestHeader("Authorization", $"Bearer {token}");
-                        await ws.ConnectAsync(new Uri(wsUri), ct);
-                        _logger.LogInformation($"[MilestoneHealth] WebSocket Connected to {config.IpServer}");
-
-                        // 1. Gửi bản tin Subscribe (Đăng ký nhận Performance và Camera status)
-                        var subMsg = new {
-                            type = "subscribe",
-                            subscriptions = new[] {
-                                new { type = "resourceEvent", resourceType = "cameras" },
-                                new { type = "resourceEvent", resourceType = "recordingServers" }
-                            }
-                        };
-                        byte[] subBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(subMsg));
-                        await ws.SendAsync(new ArraySegment<byte>(subBytes), WebSocketMessageType.Text, true, ct);
-
-                        // 2. Lắng nghe dữ liệu
-                        var buffer = new byte[1024 * 8];
-                        while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
+                        command = "addSubscription",
+                        commandId = 2,
+                        filters = new[]
                         {
-                            var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
-                            if (result.MessageType == WebSocketMessageType.Text)
-                            {
-                                string msg = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                                ProcessWsMessage(msg);
-                                _logger.LogWarning("WS RAW: {msg}", msg);
+                            new {
+                                modifier = "include",
+                                resourceTypes = new[] { "cameras", "recordingServers" },
+                                sourceIds = new string[] { },
+                                eventTypes = new string[] { }
                             }
                         }
-                    }
-                    catch (Exception ex)
+                    };
+                    await SendAsync(ws, subscribeCmd, config.Name, ct);
+                    await ReceiveAsync(ws, buffer, config.Name, ct);
+
+                    // 3. HEARTBEAT (Every 20s)
+                    _ = Task.Run(async () =>
                     {
-                        _logger.LogWarning($"[MilestoneHealth] WebSocket Reconnecting... {ex.Message}");
+                        while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
+                        {
+                            try {
+                                await Task.Delay(20000, ct);
+                                if (ws.State == WebSocketState.Open) {
+                                    await SendAsync(ws, new { command = "getState", commandId = 999 }, config.Name, ct);
+                                }
+                            } catch { break; }
+                        }
+                    }, ct);
+
+                    // 4. LISTEN LOOP
+                    while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
+                    {
+                        var msg = await ReceiveAsync(ws, buffer, config.Name, ct);
+                        if (string.IsNullOrEmpty(msg)) continue;
+                        await ProcessWsMessage(msg, config.Name);
                     }
                 }
-                await Task.Delay(5000, ct); // Thử kết nối lại sau 5s nếu sập
+                catch (Exception ex)
+                {
+                    _logger.LogError($"[MilestoneHealth] [{config.Name}] WS Error: {ex.Message}");
+                }
+
+                _logger.LogInformation($"[MilestoneHealth] [{config.Name}] Reconnecting in 10 seconds...");
+                await Task.Delay(10000, ct);
             }
         }
 
-        private void ProcessWsMessage(string json)
+        private async Task SendAsync(ClientWebSocket ws, object obj, string vmsName, CancellationToken ct)
+        {
+            var json = JsonSerializer.Serialize(obj);
+            var bytes = Encoding.UTF8.GetBytes(json);
+            await ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct);
+            _logger.LogInformation($"[MilestoneHealth] [{vmsName}] [WS SEND] --> {json}");
+        }
+
+        private async Task<string> ReceiveAsync(ClientWebSocket ws, byte[] buffer, string vmsName, CancellationToken ct)
+        {
+            try {
+                var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
+                if (result.MessageType == WebSocketMessageType.Close) return null;
+                var msg = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                _logger.LogInformation($"[MilestoneHealth] [{vmsName}] [WS RECV] <-- {msg}");
+                return msg;
+            } catch { return null; }
+        }
+
+        private async Task ProcessWsMessage(string json, string vmsName)
         {
             try {
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
-                if (!root.TryGetProperty("type", out var typeProp)) return;
+                
+                // 1. XỬ LÝ EVENT THỜI GIAN THỰC
+                if (root.TryGetProperty("type", out var typeProp) && typeProp.GetString() == "event") {
+                    var eventData = root.GetProperty("event");
+                    string eventType = eventData.GetProperty("id").GetString();
+                    string source = eventData.GetProperty("source").GetString();
 
-                string type = typeProp.GetString();
-                if (type == "event") {
-                    // Xử lý sự kiện Camera Offline, Server Error, v.v.
-                    _logger.LogInformation($"[MilestoneHealth] Received System Event: {json}");
-                } 
-                else if (type == "performanceCounter") {
-                    // Xử lý dữ liệu CPU/RAM thời gian thực
-                    _logger.LogInformation($"[MilestoneHealth] Received Performance Data: {json}");
-                    // Cập nhật vào _metricsCache tại đây...
+                    _logger.LogWarning($"[MilestoneHealth] [{vmsName}] [REAL-TIME EVENT] {eventType} | Source: {source}");
+
+                    AuditLogger.Log(
+                        "SYSTEM", "STATUS_CHANGE", 
+                        $"[{vmsName}] Device {source} status: {eventType}", 
+                        new { vmsName, source, eventType }, "System", "127.0.0.1"
+                    );
                 }
-            } catch { }
+                
+                // 2. XỬ LÝ PHẢN HỒI LỆNH (Gồm cả trạng thái ban đầu từ getState)
+                if (root.TryGetProperty("status", out var statusProp) && statusProp.GetInt32() == 200) {
+                    // Xử lý mảng 'states' trả về từ getState (Heartbeat/Init)
+                    if (root.TryGetProperty("states", out var statesArray)) {
+                        foreach (var stateItem in statesArray.EnumerateArray()) {
+                            string source = stateItem.GetProperty("source").GetString();
+                            string state = stateItem.GetProperty("state").GetString();
+                            
+                            _logger.LogInformation($"[MilestoneHealth] [{vmsName}] Initial State -> {source}: {state}");
+                            
+                            // Nếu thiết bị đang Offline, ghi nhận ngay vào Audit Log (tùy chọn)
+                            if (state.Contains("Lost") || state.Contains("Error")) {
+                                AuditLogger.Log("SYSTEM", "INITIAL_STATUS", $"[{vmsName}] {source} is currently {state}", new { source, state }, "System", "127.0.0.1");
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                _logger.LogError($"[MilestoneHealth] [{vmsName}] Error parsing WS message: {ex.Message}");
+            }
         }
 
-        // --- Logic REST (Giữ lại để lấy Disk Path và thông tin tĩnh) ---
         private async Task UpdateStaticData(ConnectorListModel config, string token)
         {
             string baseUrl = $"http://{config.IpServer}:{config.Port}/api/rest/v1";
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            var serversJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers");
-            using var doc = JsonDocument.Parse(serversJson);
-            
-            _metricsCache.Clear();
-            if (doc.RootElement.TryGetProperty("array", out var servers))
-            {
-                foreach (var server in servers.EnumerateArray())
+            try {
+                var serversJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers");
+                using var doc = JsonDocument.Parse(serversJson);
+                
+                if (doc.RootElement.TryGetProperty("array", out var servers))
                 {
-                    string id = server.GetProperty("id").GetString();
-                    string name = server.GetProperty("name").GetString();
-                    var metric = new MilestoneServerMetric { ServerId = id, ServerName = name, LastUpdate = DateTime.Now };
+                    foreach (var server in servers.EnumerateArray())
+                    {
+                        string id = server.GetProperty("id").GetString();
+                        string name = server.GetProperty("name").GetString();
+                        var metric = new MilestoneServerMetric { ServerId = id, ServerName = name, LastUpdate = DateTime.Now };
 
-                    // Logic lấy Disk (DriveInfo) - Giữ nguyên vì đang chạy rất tốt
-                    try {
-                        var storageJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers/{id}/storages");
-                        using var storageDoc = JsonDocument.Parse(storageJson);
-                        if (storageDoc.RootElement.TryGetProperty("array", out var storages))
-                        {
-                            foreach (var storage in storages.EnumerateArray())
+                        try {
+                            var storageJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers/{id}/storages");
+                            using var storageDoc = JsonDocument.Parse(storageJson);
+                            if (storageDoc.RootElement.TryGetProperty("array", out var storages))
                             {
-                                string sName = storage.GetProperty("name").GetString();
-                                string diskPath = storage.TryGetProperty("diskPath", out var dp) ? dp.GetString() : "";
-
-                                if (!string.IsNullOrEmpty(diskPath))
+                                foreach (var storage in storages.EnumerateArray())
                                 {
-                                    try {
-                                        string driveLetter = Path.GetPathRoot(diskPath);
-                                        var driveInfo = new DriveInfo(driveLetter);
-                                        if (driveInfo.IsReady) {
-                                            double t = driveInfo.TotalSize / (1024 * 1024 * 1024.0);
-                                            double f = driveInfo.AvailableFreeSpace / (1024 * 1024 * 1024.0);
-                                            metric.Disks.Add(new MilestoneDiskMetric {
-                                                DriveName = sName,
-                                                TotalSizeGb = (long)t,
-                                                FreeSpaceGb = (long)f,
-                                                UsagePercentage = Math.Round((t - f) * 100 / t, 1)
-                                            });
-                                        }
-                                    } catch { }
+                                    string sName = storage.GetProperty("name").GetString();
+                                    string diskPath = storage.TryGetProperty("diskPath", out var dp) ? dp.GetString() : "";
+                                    if (!string.IsNullOrEmpty(diskPath))
+                                    {
+                                        try {
+                                            string driveLetter = Path.GetPathRoot(diskPath);
+                                            var driveInfo = new DriveInfo(driveLetter);
+                                            if (driveInfo.IsReady) {
+                                                double t = driveInfo.TotalSize / (1024 * 1024 * 1024.0);
+                                                double f = driveInfo.AvailableFreeSpace / (1024 * 1024 * 1024.0);
+                                                metric.Disks.Add(new MilestoneDiskMetric {
+                                                    DriveName = sName, TotalSizeGb = (long)t, FreeSpaceGb = (long)f,
+                                                    UsagePercentage = Math.Round((t - f) * 100 / t, 1)
+                                                });
+                                            }
+                                        } catch { }
+                                    }
                                 }
                             }
+                        } catch { }
+                        
+                        lock(_metricsCache) {
+                            var existing = _metricsCache.FirstOrDefault(m => m.ServerId == id);
+                            if (existing != null) _metricsCache.Remove(existing);
+                            _metricsCache.Add(metric);
                         }
-                    } catch { }
-                    _metricsCache.Add(metric);
+                    }
                 }
-            }
-            _cache.Set("MILESTONE_SERVER_METRICS", _metricsCache);
+                _cache.Set("MILESTONE_SERVER_METRICS", _metricsCache);
+            } catch { }
         }
 
         private async Task<string> GetTokenAsync(ConnectorListModel config)

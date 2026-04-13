@@ -36,21 +36,25 @@ namespace LightInsightBUS.Service.General
                 var connectorsRes = await _connectorService.GetAllConnectorsAsync();
                 var connectorList = connectorsRes.Data as List<ConnectorListModel> ?? new List<ConnectorListModel>();
 
+                bool milestoneInfraFetched = false;
+
                 // Bước 2: Gọi Service riêng cho mỗi loại Connector (Bộ điều phối)
                 foreach (var config in connectorList)
                 {
                     if (config.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Gọi module Milestone chuyên biệt
+                        // Gọi module Milestone chuyên biệt cho từng connector (để lấy latency, camera count)
                         var health = await _milestoneProvider.GetHealthAsync(config);
                         result.Connectors.Add(health);
 
-                        // Lấy hạ tầng chi tiết cho Milestone
-                        var infra = await _milestoneProvider.GetInfrastructureAsync(config);
-                        result.Infrastructure.AddRange(infra);
+                        // Chỉ lấy hạ tầng Milestone (Server/Disk) MỘT LẦN DUY NHẤT cho toàn bộ hệ thống
+                        if (!milestoneInfraFetched)
+                        {
+                            var infra = await _milestoneProvider.GetInfrastructureAsync(config);
+                            result.Infrastructure.AddRange(infra);
+                            milestoneInfraFetched = true;
+                        }
                     }
-                    // TRONG TƯƠNG LAI: Thêm các hãng khác tại đây
-                    // else if (config.VmsName.Contains("BioStar")) { ... }
                 }
 
                 // Luôn thêm thông tin Server hiện tại (Management Server)
@@ -83,7 +87,7 @@ namespace LightInsightBUS.Service.General
             } catch { }
 
             return new InfrastructureHealth { 
-                Name = "Local Web Server", 
+                Name = "Web Server", 
                 Description = $"CPU {cpu} · RAM {ram} · Disk {disk}", 
                 Status = "ONLINE", 
                 Type = "server" 
