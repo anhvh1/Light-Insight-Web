@@ -318,7 +318,12 @@ export function AlarmConsole() {
                 <td className="py-2.5 px-3 align-middle text-[12px]"><TypeBadge type={alarm.type} /></td>
                 <td className="py-2.5 px-3 align-middle text-[12px]">
                   {alarm.title}
-                  {alarm.isNew && <span className="ml-1.5 text-[9px] bg-psim-red text-white px-[6px] py-[1px] rounded-[3px] font-mono">NEW</span>}
+                  {alarm.isNew && (
+                    <span
+                      className="ml-1.5 inline-block h-2 w-2 rounded-full bg-psim-red align-middle"
+                      title="Sự kiện mới"
+                    />
+                  )}
                   {alarm.corr > 1 && <span className="ml-1.5 text-[9px] bg-[rgba(155,109,255,0.2)] text-purple px-[5px] py-[1px] rounded-[3px] font-mono">+{alarm.corr} corr</span>}
                 </td>
                 <td className="py-2.5 px-3 align-middle text-[11px] text-t-2">{alarm.src}</td>

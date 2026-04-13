@@ -14,7 +14,10 @@ const priorityClasses: Record<string, string> = {
 };
 
 export function StatusPill({ priority, className, ...props }: StatusPillProps) {
-  const key = priority.toLowerCase();
+  const key = (priority ?? '').toLowerCase().trim();
+  const isUnset = !key || key === 'none';
+  if (isUnset) return null;
+
   return (
     <span
       className={cn(
