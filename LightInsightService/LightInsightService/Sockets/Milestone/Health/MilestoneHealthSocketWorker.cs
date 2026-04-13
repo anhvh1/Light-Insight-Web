@@ -102,12 +102,10 @@ namespace LightInsightService.Sockets.Milestone.Health
                     await ws.ConnectAsync(new Uri(wsUri), ct);
                     _logger.LogInformation($"[MilestoneHealth] [{config.Name}] [SUCCESS] WebSocket Connected.");
 
-                    var buffer = new byte[8192];
-
                     // 1. START SESSION
                     var startSessionCmd = new { command = "startSession", commandId = 1, sessionId = "", eventId = "" };
                     await SendAsync(ws, startSessionCmd, config.Name, ct);
-                    await ReceiveAsync(ws, buffer, config.Name, ct);
+                    await ReceiveAsync(ws, config.Name, ct); // Nhận phản hồi startSession
 
                     // 2. SUBSCRIBE EVENTS
                     var subscribeCmd = new
@@ -118,16 +116,16 @@ namespace LightInsightService.Sockets.Milestone.Health
                         {
                             new {
                                 modifier = "include",
-                                resourceTypes = new[] { "cameras", "recordingServers" },
-                                sourceIds = new string[] { },
-                                eventTypes = new string[] { }
+                                resourceTypes = new[] { "*" },
+                                sourceIds = new[] { "*" },
+                                eventTypes = new[] { "*" }
                             }
                         }
                     };
                     await SendAsync(ws, subscribeCmd, config.Name, ct);
-                    await ReceiveAsync(ws, buffer, config.Name, ct);
+                    await ReceiveAsync(ws, config.Name, ct); // Nhận phản hồi addSubscription
 
-                    // 3. HEARTBEAT (Every 20s)
+                    // 3. HEARTBEAT & INITIAL STATE
                     _ = Task.Run(async () =>
                     {
                         while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
@@ -144,7 +142,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                     // 4. LISTEN LOOP
                     while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
                     {
-                        var msg = await ReceiveAsync(ws, buffer, config.Name, ct);
+                        var msg = await ReceiveAsync(ws, config.Name, ct);
                         if (string.IsNullOrEmpty(msg)) continue;
                         await ProcessWsMessage(msg, config.Name);
                     }
@@ -167,13 +165,29 @@ namespace LightInsightService.Sockets.Milestone.Health
             _logger.LogInformation($"[MilestoneHealth] [{vmsName}] [WS SEND] --> {json}");
         }
 
-        private async Task<string> ReceiveAsync(ClientWebSocket ws, byte[] buffer, string vmsName, CancellationToken ct)
+        private async Task<string> ReceiveAsync(ClientWebSocket ws, string vmsName, CancellationToken ct)
         {
+            var buffer = new byte[8192];
+            using var ms = new MemoryStream();
+
             try {
-                var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
-                if (result.MessageType == WebSocketMessageType.Close) return null;
-                var msg = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                _logger.LogInformation($"[MilestoneHealth] [{vmsName}] [WS RECV] <-- {msg}");
+                WebSocketReceiveResult result;
+                do {
+                    result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
+                    if (result.MessageType == WebSocketMessageType.Close) return null;
+                    ms.Write(buffer, 0, result.Count);
+                } while (!result.EndOfMessage);
+
+                ms.Seek(0, SeekOrigin.Begin);
+                using var reader = new StreamReader(ms, Encoding.UTF8);
+                string msg = await reader.ReadToEndAsync();
+                
+                // Chỉ log ngắn gọn nếu message quá dài (như getState)
+                if (msg.Length > 500)
+                    _logger.LogInformation($"[MilestoneHealth] [{vmsName}] [WS RECV] <-- (Large Message: {msg.Length} bytes)");
+                else
+                    _logger.LogInformation($"[MilestoneHealth] [{vmsName}] [WS RECV] <-- {msg}");
+
                 return msg;
             } catch { return null; }
         }
@@ -186,39 +200,50 @@ namespace LightInsightService.Sockets.Milestone.Health
                 
                 // 1. XỬ LÝ EVENT THỜI GIAN THỰC
                 if (root.TryGetProperty("type", out var typeProp) && typeProp.GetString() == "event") {
-                    var eventData = root.GetProperty("event");
-                    string eventType = eventData.GetProperty("id").GetString();
-                    string source = eventData.GetProperty("source").GetString();
+                    if (root.TryGetProperty("events", out var eventsArray)) {
+                        foreach (var evt in eventsArray.EnumerateArray()) {
+                            string eventType = evt.GetProperty("type").GetString();
+                            string source = evt.GetProperty("source").GetString();
+                            _logger.LogWarning($"[MilestoneHealth] [{vmsName}] [EVENT] Source: {source} | Type: {eventType}");
 
-                    _logger.LogWarning($"[MilestoneHealth] [{vmsName}] [REAL-TIME EVENT] {eventType} | Source: {source}");
-
-                    AuditLogger.Log(
-                        "SYSTEM", "STATUS_CHANGE", 
-                        $"[{vmsName}] Device {source} status: {eventType}", 
-                        new { vmsName, source, eventType }, "System", "127.0.0.1"
-                    );
+                            AuditLogger.Log("SYSTEM", "STATUS_CHANGE", $"[{vmsName}] {source} status: {eventType}", new { source, eventType }, "System", "127.0.0.1");
+                        }
+                    }
                 }
                 
-                // 2. XỬ LÝ PHẢN HỒI LỆNH (Gồm cả trạng thái ban đầu từ getState)
+                // 2. XỬ LÝ PHẢN HỒI LỆNH (Gồm cả mảng states lớn)
                 if (root.TryGetProperty("status", out var statusProp) && statusProp.GetInt32() == 200) {
-                    // Xử lý mảng 'states' trả về từ getState (Heartbeat/Init)
                     if (root.TryGetProperty("states", out var statesArray)) {
+                        int offlineCount = 0;
                         foreach (var stateItem in statesArray.EnumerateArray()) {
                             string source = stateItem.GetProperty("source").GetString();
-                            string state = stateItem.GetProperty("state").GetString();
+                            string stateType = stateItem.GetProperty("type").GetString();
                             
-                            _logger.LogInformation($"[MilestoneHealth] [{vmsName}] Initial State -> {source}: {state}");
-                            
-                            // Nếu thiết bị đang Offline, ghi nhận ngay vào Audit Log (tùy chọn)
-                            if (state.Contains("Lost") || state.Contains("Error")) {
-                                AuditLogger.Log("SYSTEM", "INITIAL_STATUS", $"[{vmsName}] {source} is currently {state}", new { source, state }, "System", "127.0.0.1");
+                            // Milestone dùng GUID cho stateType, chúng ta cần map lại hoặc log ra
+                            // Một số stateType phổ biến biểu thị lỗi/mất kết nối
+                            if (IsErrorState(stateType)) {
+                                offlineCount++;
+                                _logger.LogInformation($"[MilestoneHealth] [{vmsName}] Device {source} is in error state: {stateType}");
                             }
+                        }
+                        if (offlineCount > 0) {
+                            _logger.LogWarning($"[MilestoneHealth] [{vmsName}] Found {offlineCount} devices in error state during sync.");
                         }
                     }
                 }
             } catch (Exception ex) {
-                _logger.LogError($"[MilestoneHealth] [{vmsName}] Error parsing WS message: {ex.Message}");
+                _logger.LogError($"[MilestoneHealth] [{vmsName}] Error parsing message: {ex.Message}");
             }
+        }
+
+        private bool IsErrorState(string stateGuid) {
+            // Danh sách GUID các trạng thái lỗi phổ biến của Milestone (CommunicationLost, v.v.)
+            string[] errorGuids = { 
+                "e14e849f-7355-4d03-97fe-77c292fe01c7", // CommunicationLost
+                "6f55a7a7-d21c-4629-ac18-af1975e395a2", // ConnectionLost
+                "839754e6-82af-44fc-9e2f-437413d602d6"  // Một dạng error khác
+            };
+            return errorGuids.Any(g => stateGuid.Contains(g));
         }
 
         private async Task UpdateStaticData(ConnectorListModel config, string token)
