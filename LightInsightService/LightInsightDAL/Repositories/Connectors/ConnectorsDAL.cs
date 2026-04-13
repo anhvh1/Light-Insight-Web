@@ -133,6 +133,11 @@ namespace LightInsightDAL.Repositories.Connectors
                 var result = await cmd.ExecuteScalarAsync();
                 return result is bool && (bool)result;
             }
+            catch (PostgresException)
+            {
+                // Re-throw to be handled by the BUS layer
+                throw;
+            }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error in UpdateConnectorAsync: {ex.Message}");
@@ -169,33 +174,26 @@ namespace LightInsightDAL.Repositories.Connectors
 
                 var result = await cmd.ExecuteScalarAsync();
 
-                // 🔥 SAFE CAST
-                if (result == null || result == DBNull.Value)
-                    return null;
-
                 if (result is Guid guid)
                     return guid;
 
-                // Trường hợp PostgreSQL trả về string
-                if (Guid.TryParse(result.ToString(), out Guid parsedGuid))
+                if (Guid.TryParse(result?.ToString(), out Guid parsedGuid))
                     return parsedGuid;
 
                 return null;
             }
-            catch (PostgresException ex)
+            catch (PostgresException)
             {
-                // lỗi từ PostgreSQL (constraint, function, ...)
-                Console.WriteLine($"Postgres error: {ex.MessageText}");
-                return null;
+                // Re-throw the specific postgres exception so the BUS layer can handle it.
+                throw;
             }
             catch (Exception ex)
             {
-                // lỗi hệ thống
-                Console.WriteLine($"System error: {ex.Message}");
+                Console.WriteLine($"System error in AddConnectorAsync: {ex.Message}");
+                // For other errors, return null or throw depending on desired behavior.
+                // Returning null is safer to prevent crashes if the BUS doesn't handle it.
                 return null;
             }
-
-
         }
     }
 }

@@ -27,8 +27,8 @@ export const mapApi = {
     return response.data || { Status: -1, Message: 'Delete failed' };
   },
 
-  getCameras: async (id: number) => {
-    const response = await apiClient.get<ApiResponse<any[]>>(`/DMMap/GetCamerasAsync?id=${id}`);
+  getAllDevices: async (key: string) => {
+    const response = await apiClient.get<ApiResponse<any[]>>(`/DMMap/GetAllDevicesAsync?key=${key}`);
     return response.data || { Data: [], Status: 0, Message: '' };
   },
 

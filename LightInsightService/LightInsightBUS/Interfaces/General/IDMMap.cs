@@ -15,6 +15,6 @@ namespace LightInsightBUS.Interfaces.General
         Task<BaseResultModel> SaveMarkersAsync(DMMapSaveMarkersModel model);
         Task<BaseResultModel> GetMarkersByMapIdAsync(Guid mapId);
         Task<BaseResultModel> DeleteMapImageAsync(Guid id);
-        Task<BaseResultModel> GetCamerasAsync(int id);
+        Task<BaseResultModel> GetAllDevicesAsync(Guid key);
     }
 }

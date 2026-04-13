@@ -21,9 +21,9 @@ namespace LightInsightService.Controllers.MileStone.General
             return Ok(data);
         }
         [HttpGet("AnalyticsEvents")]
-        public async Task<IActionResult> AnalyticsEvents()
+        public async Task<IActionResult> AnalyticsEvents(Guid key)
         {
-            var data = await _service.GetSimpleEventsAsync();
+            var data = await _service.GetSimpleEventsAsync(key);
             return Ok(data);
         }
         // ================= GET =================

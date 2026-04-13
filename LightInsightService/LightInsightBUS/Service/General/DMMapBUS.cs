@@ -271,23 +271,18 @@ namespace LightInsightBUS.Service.General
 
             return rootNodes;
         }
-        public async Task<BaseResultModel> GetCamerasAsync(int id)
+        public async Task<BaseResultModel> GetAllDevicesAsync(Guid key)
         {
             var result = new BaseResultModel();
-
             try
             {
-                if (id == 1)
-                {
-                    var cameras = await _getAnalyticsEvents.GetCamerasAsync();
-                    result.Data = cameras;
-                }
-                else
-                {
-                    result.Data = new List<CameraItem>();
-                }
+                // The 'id' parameter seems to be related to the VMS, which is handled inside GetAnalyticsEvents.
+                // We will call the new unified method.
+                var allDevices = await _getAnalyticsEvents.GetAllDevicesAsync(key);
+
                 result.Status = 1;
-                result.Message = "Lấy danh sách camera thành công.";
+                result.Message = "Lấy danh sách thiết bị thành công.";
+                result.Data = allDevices;
             }
             catch (Exception ex)
             {
@@ -295,7 +290,6 @@ namespace LightInsightBUS.Service.General
                 result.Message = ex.Message;
             }
             return result;
-
         }
 
         public async Task<BaseResultModel> DeleteMapImageAsync(Guid id)
