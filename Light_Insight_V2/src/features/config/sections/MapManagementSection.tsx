@@ -161,8 +161,8 @@ function MapTab({
 interface DeviceTabProps {
   isLoading: boolean;
   isLoadingConnectors: boolean;
-  selectedVmsId: number | null;
-  onVmsChange: (id: number | null) => void;
+  selectedSystemKey: string | null;
+  onSystemChange: (key: string | null) => void;
   actualConnectors: any[];
   deviceSearch: string;
   onDeviceSearchChange: (val: string) => void;
@@ -175,8 +175,8 @@ interface DeviceTabProps {
 function DeviceTab({
   isLoading,
   isLoadingConnectors,
-  selectedVmsId,
-  onVmsChange,
+  selectedSystemKey,
+  onSystemChange,
   actualConnectors,
   deviceSearch,
   onDeviceSearchChange,
@@ -191,13 +191,13 @@ function DeviceTab({
         <h3 className="text-[10px] font-bold text-t-2 uppercase tracking-widest">Kho thiết bị</h3>
         <select 
           className="bg-black/40 border border-white/10 rounded h-7 px-2 text-[10px] text-white outline-none focus:border-psim-orange/50 transition-all cursor-pointer min-w-[150px]"
-          value={selectedVmsId !== null ? selectedVmsId : ''}
-          onChange={(e) => onVmsChange(e.target.value !== '' ? parseInt(e.target.value) : null)}
+          value={selectedSystemKey || ''}
+          onChange={(e) => onSystemChange(e.target.value || null)}
           disabled={isLoadingConnectors}
         >
           <option value="" className="bg-[#161b2e]">{isLoadingConnectors ? 'Đang tải...' : '-- Hệ thống --'}</option>
           {actualConnectors.map((c: any) => (
-            <option key={c.Id} value={c.VmsID} className="bg-[#161b2e]">
+            <option key={c.Id} value={c.Id} className="bg-[#161b2e]">
               {c.Name}
             </option>
           ))}
@@ -228,7 +228,6 @@ function DeviceTab({
                 onDragStart={(e) => onDragStart(e, { 
                   id: String(cam.Id || ''), 
                   name: String(cam.Name || ''), 
-                  vmsId: selectedVmsId! 
                 })} 
                 className={cn(
                   "p-3 bg-white/5 border border-white/5 rounded-lg flex items-center justify-between transition-all", 
@@ -245,7 +244,7 @@ function DeviceTab({
         )}
         {cameras.length === 0 && !isLoading && (
           <div className="py-10 text-center opacity-20 text-[10px] uppercase font-bold tracking-widest">
-            {selectedVmsId ? "Không tìm thấy thiết bị" : "Vui lòng chọn hệ thống"}
+            {selectedSystemKey ? "Không tìm thấy thiết bị" : "Vui lòng chọn hệ thống"}
           </div>
         )}
       </div>
@@ -272,7 +271,7 @@ export function MapManagementSection() {
   const [mapSearch, setMapSearch] = useState('');
   const [deviceSearch, setDeviceSearch] = useState('');
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
-  const [selectedVmsId, setSelectedVmsId] = useState<number | null>(null);
+  const [selectedSystemKey, setSelectedSystemKey] = useState<string | null>(null);
   const [placedDevices, setPlacedDevices] = useState<{ 
     id: string; 
     name: string; 
@@ -321,12 +320,12 @@ export function MapManagementSection() {
   });
   const mapTree = mapTreeResponse?.Data || [];
 
-  const { data: camerasResponse, isLoading: isLoadingCameras } = useQuery({
-    queryKey: ['cameras', selectedVmsId],
-    queryFn: () => mapApi.getCameras(selectedVmsId!),
-    enabled: !!selectedVmsId
+  const { data: devicesResponse, isLoading: isLoadingDevices } = useQuery({
+    queryKey: ['devices', selectedSystemKey],
+    queryFn: () => mapApi.getAllDevices(selectedSystemKey!),
+    enabled: !!selectedSystemKey
   });
-  const cameras = camerasResponse?.Data || [];
+  const cameras = (devicesResponse?.Data || []).filter(d => d.Type === 1);
 
   const { data: markersResponse } = useQuery({
     queryKey: ['map-markers', selectedMapId],
@@ -599,8 +598,10 @@ export function MapManagementSection() {
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, device: { id: string; name: string; vmsId: number }) => {
-    setDraggingDevice(device);
+  const handleDragStart = (e: React.DragEvent, device: { id: string; name: string }) => {
+    const connector = actualConnectors.find(c => c.Id === selectedSystemKey);
+    const vmsId = connector?.VmsID || 0;
+    setDraggingDevice({ ...device, vmsId });
     e.dataTransfer.setData('deviceId', device.id);
   };
 
@@ -681,10 +682,10 @@ export function MapManagementSection() {
             />
           ) : (
             <DeviceTab 
-              isLoading={isLoadingCameras}
+              isLoading={isLoadingDevices}
               isLoadingConnectors={isLoadingConnectors}
-              selectedVmsId={selectedVmsId}
-              onVmsChange={setSelectedVmsId}
+              selectedSystemKey={selectedSystemKey}
+              onSystemChange={setSelectedSystemKey}
               actualConnectors={actualConnectors}
               deviceSearch={deviceSearch}
               onDeviceSearchChange={setDeviceSearch}
@@ -733,13 +734,15 @@ export function MapManagementSection() {
               <button 
                 disabled={!mapImage || placedDevices.filter(d => d.mapId === selectedMapId).length === 0 || saveMarkersMutation.isPending} 
                 onClick={() => {
+                  const selectedConnector = actualConnectors.find(c => c.Id === selectedSystemKey);
+                  const currentVmsId = selectedConnector?.VmsID || 0;
                   const markers = placedDevices.filter(d => d.mapId === selectedMapId).map(d => ({ 
                     CameraId: d.id, 
                     CameraName: d.name, 
                     PosX: d.x, 
                     PosY: d.y, 
                     Icon: 'Cctv', 
-                    VmsId: d.vmsId || (selectedVmsId !== null ? selectedVmsId : 0), 
+                    VmsId: d.vmsId || currentVmsId, 
                     Rotation: d.rotation 
                   }));
                   saveMarkersMutation.mutate({ MapId: selectedMapId!, Markers: markers });
