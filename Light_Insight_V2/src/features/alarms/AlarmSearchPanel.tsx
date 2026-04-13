@@ -9,6 +9,10 @@ type AlarmSearchPanelProps = {
   onApply: () => void;
   onClear: () => void;
   loading?: boolean;
+  /** PriorityName từ GET /Priorities/GetAll */
+  priorityOptions: string[];
+  selectedPriorityName?: string;
+  onChangeSelectedPriorityName: (value: string | undefined) => void;
   messages: string[];
   sources: string[];
   useFromTime: boolean;
@@ -19,7 +23,6 @@ type AlarmSearchPanelProps = {
   renderPanel?: boolean;
 };
 
-const PRIORITY_OPTIONS: AlarmFilters['priorityName'][] = ['Low', 'Medium', 'High'];
 const STATE_OPTIONS: AlarmFilters['stateName'][] = ['New', 'In progress', 'On hold', 'Closed'];
 
 export function AlarmSearchPanel(props: AlarmSearchPanelProps) {
@@ -31,6 +34,9 @@ export function AlarmSearchPanel(props: AlarmSearchPanelProps) {
     onApply,
     onClear,
     loading,
+    priorityOptions,
+    selectedPriorityName,
+    onChangeSelectedPriorityName,
     messages,
     sources,
     useFromTime,
@@ -75,16 +81,14 @@ export function AlarmSearchPanel(props: AlarmSearchPanelProps) {
 
             <select
               className="alarm-filter-control"
-              value={filters.priorityName ?? ''}
+              value={selectedPriorityName ?? ''}
               onChange={(e) =>
-                onChangeFilters({
-                  priorityName: (e.target.value || undefined) as AlarmFilters['priorityName'],
-                })
+                onChangeSelectedPriorityName(e.target.value || undefined)
               }
             >
               <option value="">-- Tất cả --</option>
-              {PRIORITY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
+              {priorityOptions.map((opt, index) => (
+                <option key={`${opt}-${index}`} value={opt}>
                   {opt}
                 </option>
               ))}

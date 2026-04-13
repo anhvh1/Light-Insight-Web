@@ -1,4 +1,4 @@
-import type { Alarm } from '@/types';
+import type { Alarm, PriorityMapping } from '@/types';
 
 export interface AlarmPayload {
   alarmId?: string;
@@ -50,7 +50,39 @@ function normalizeStatus(stateName?: string): string {
   return normalized || 'new';
 }
 
-function toAlarm(payload: AlarmPayload, isNew: boolean): Alarm {
+/** Bản ghi sau trong mảng mapping ghi đè nếu trùng tên sự kiện. */
+export function buildEventPriorityLookup(mappings: PriorityMapping[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const m of mappings) {
+    const pri = normalizePriority(m.PriorityName);
+    for (const ev of m.AnalyticsEvents ?? []) {
+      const key = ev.trim().toLowerCase();
+      if (key) map.set(key, pri);
+    }
+  }
+  return map;
+}
+
+export function resolveAlarmPriority(
+  payload: AlarmPayload,
+  lookup: ReadonlyMap<string, string> | undefined,
+): string {
+  if (lookup && lookup.size > 0) {
+    const eventName = (payload.message ?? payload.alarmName ?? '').trim();
+    if (eventName) {
+      const mapped = lookup.get(eventName.toLowerCase());
+      if (mapped) return mapped;
+    }
+  }
+  // Không fallback về priorityName từ Alarm/GetAll hoặc socket: không map được thì hiển thị NONE.
+  return 'none';
+}
+
+function toAlarm(
+  payload: AlarmPayload,
+  isNew: boolean,
+  lookup?: ReadonlyMap<string, string>,
+): Alarm {
   const id = payload.alarmId?.trim() || generateId();
   const statusByLevel: Record<number, { status: string; label: string }> = {
     1: { status: 'new', label: 'New' },
@@ -67,7 +99,8 @@ function toAlarm(payload: AlarmPayload, isNew: boolean): Alarm {
   return {
     id,
     title: payload.message ?? payload.alarmName ?? '',
-    pri: normalizePriority(payload.priorityName),
+    pri: resolveAlarmPriority(payload, lookup),
+    apiPriorityName: payload.priorityName,
     src: payload.source ?? '',
     status,
     statusLabel,
@@ -81,10 +114,16 @@ function toAlarm(payload: AlarmPayload, isNew: boolean): Alarm {
   };
 }
 
-export function normalizeSignalRAlarm(payload: AlarmPayload): Alarm {
-  return toAlarm(payload, true);
+export function normalizeSignalRAlarm(
+  payload: AlarmPayload,
+  lookup?: ReadonlyMap<string, string>,
+): Alarm {
+  return toAlarm(payload, true, lookup);
 }
 
-export function normalizeApiAlarm(payload: AlarmPayload): Alarm {
-  return toAlarm(payload, false);
+export function normalizeApiAlarm(
+  payload: AlarmPayload,
+  lookup?: ReadonlyMap<string, string>,
+): Alarm {
+  return toAlarm(payload, false, lookup);
 }

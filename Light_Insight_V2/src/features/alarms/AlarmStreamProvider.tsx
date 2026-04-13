@@ -1,8 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import * as signalR from '@microsoft/signalr';
 import type { Alarm } from '@/types';
 import { alarmApi, type AlarmFilters } from '@/lib/alarm-api';
-import { normalizeApiAlarm, normalizeSignalRAlarm, type AlarmPayload } from './alarm-mapper';
+import { priorityApi } from '@/lib/priority-api';
+import {
+  buildEventPriorityLookup,
+  normalizeApiAlarm,
+  normalizeSignalRAlarm,
+  resolveAlarmPriority,
+  type AlarmPayload,
+} from './alarm-mapper';
 
 const HUB_BASE_URL = import.meta.env.VITE_ALARM_HUB_URL;
 const HUB_URL = HUB_BASE_URL ? `${HUB_BASE_URL.replace(/\/$/, '')}/alarm-hub` : '';
@@ -47,6 +55,21 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   const filtersRef = useRef<AlarmFilters>({});
   const alarmsRef = useRef<Alarm[]>([]);
   const isAtTopRef = useRef(true);
+
+  const { data: mappingResponse } = useQuery({
+    queryKey: ['priority-mappings'],
+    queryFn: priorityApi.getAllMappings,
+  });
+
+  const priorityLookup = useMemo(
+    () => buildEventPriorityLookup(mappingResponse?.Data ?? []),
+    [mappingResponse?.Data],
+  );
+
+  const priorityLookupRef = useRef(priorityLookup);
+  useEffect(() => {
+    priorityLookupRef.current = priorityLookup;
+  }, [priorityLookup]);
 
   const clearBellCount = useCallback(() => {
     setBellCount(0);
@@ -138,7 +161,9 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
         pageSize: SERVER_PAGE_SIZE,
         ...activeFilters,
       });
-      const nextAlarms = rows.map(normalizeApiAlarm);
+      const nextAlarms = rows.map((row) =>
+        normalizeApiAlarm(row as AlarmPayload, priorityLookupRef.current),
+      );
       setAlarms(nextAlarms);
       setCurrentPage(1);
       currentPageRef.current = 1;
@@ -186,7 +211,9 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
         });
         lastRowsLength = rows.length;
         lastPageFetched = pageToFetch;
-        const incoming = rows.map(normalizeApiAlarm);
+        const incoming = rows.map((row) =>
+          normalizeApiAlarm(row as AlarmPayload, priorityLookupRef.current),
+        );
         const appended = incoming.filter((a) => !existingIds.has(a.id));
         for (const a of appended) {
           existingIds.add(a.id);
@@ -214,7 +241,7 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   }, [loading, canNextPage, currentPage, filters]);
 
   const addAlarm = useCallback((payload: AlarmPayload) => {
-    const alarm = normalizeSignalRAlarm(payload);
+    const alarm = normalizeSignalRAlarm(payload, priorityLookupRef.current);
     const activeFilters = filtersRef.current;
     if (!matchesFilters(alarm, payload, activeFilters)) {
       return;
@@ -241,6 +268,19 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     alarmsRef.current = alarms;
   }, [alarms]);
+
+  useEffect(() => {
+    if (priorityLookup.size === 0) return;
+    setAlarms((prev) =>
+      prev.map((a) => ({
+        ...a,
+        pri: resolveAlarmPriority(
+          { message: a.title, priorityName: a.apiPriorityName },
+          priorityLookup,
+        ),
+      })),
+    );
+  }, [priorityLookup]);
 
   useEffect(() => {
     if (!HUB_URL) {

@@ -6,6 +6,8 @@ export type AlarmType = 'ai' | 'lpr' | 'acs' | 'fire' | 'bms' | 'tech' | 'light'
 export interface Alarm {
   id: string;
   pri: string;
+  /** priorityName gốc từ API/socket — dùng làm fallback khi remap theo Priorities/GetAll */
+  apiPriorityName?: string;
   type: AlarmType;
   typeLabel?: string;
   title: string;

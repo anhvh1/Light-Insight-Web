@@ -75,12 +75,52 @@ export function AlarmConsole() {
   const [messages, setMessages] = useState<string[]>([]);
   const [sources, setSources] = useState<string[]>([]);
   const [loadingDicts, setLoadingDicts] = useState(false);
+  const [selectedPriorityName, setSelectedPriorityName] = useState<string | undefined>(undefined);
 
   const { data: connectorsResponse, isLoading: isLoadingConnectors } = useQuery({
     queryKey: ['connectors-list'],
     queryFn: priorityApi.getAllConnectors,
   });
   const connectors = connectorsResponse?.Data ?? [];
+
+  const { data: mappingResponse } = useQuery({
+    queryKey: ['priority-mappings'],
+    queryFn: priorityApi.getAllMappings,
+  });
+  const { priorityOptions, priorityToEvents } = useMemo(() => {
+    const rows = mappingResponse?.Data ?? [];
+    const map = new Map<string, string[]>();
+    const order = new Map<string, number>();
+    for (const r of rows) {
+      const name = (r.PriorityName ?? '').trim();
+      if (!name) continue;
+      const events = (r.AnalyticsEvents ?? [])
+        .map((x) => (typeof x === 'string' ? x.trim() : ''))
+        .filter((x): x is string => x.length > 0);
+      if (events.length === 0) continue;
+      const existing = map.get(name) ?? [];
+      map.set(name, [...existing, ...events]);
+      if (!order.has(name)) order.set(name, r.PriorityID ?? 0);
+    }
+    const options = [...map.keys()].sort((a, b) => {
+      const pa = order.get(a) ?? 0;
+      const pb = order.get(b) ?? 0;
+      if (pa !== pb) return pa - pb;
+      return a.localeCompare(b);
+    });
+    return { priorityOptions: options, priorityToEvents: map };
+  }, [mappingResponse?.Data]);
+
+  const selectedPriorityMessageCsv = useMemo(() => {
+    if (!selectedPriorityName) return undefined;
+    const events = priorityToEvents.get(selectedPriorityName) ?? [];
+    if (events.length === 0) return undefined;
+    return events
+      .map((ev) => ev.trim())
+      .filter((ev) => ev.length > 0)
+      .filter((ev, idx, arr) => arr.indexOf(ev) === idx)
+      .join(', ');
+  }, [priorityToEvents, selectedPriorityName]);
 
   useEffect(() => {
     isAutoScrollRef.current = isAutoScroll;
@@ -152,6 +192,7 @@ export function AlarmConsole() {
     setLocalFilters({
       ...defaultValues,
       ...filters,
+      source: typeof filters.source === 'string' ? filters.source : undefined,
       fromTime: filters.fromTime ?? defaultValues.fromTime,
       toTime: filters.toTime ?? defaultValues.toTime,
     });
@@ -189,6 +230,9 @@ export function AlarmConsole() {
       toTime: useToTime ? localFilters.toTime : undefined,
       key: selectedConnectorId,
     };
+    if (selectedPriorityMessageCsv) {
+      payload.message = selectedPriorityMessageCsv;
+    }
     await refreshAlarms(payload);
   };
 
@@ -204,6 +248,19 @@ export function AlarmConsole() {
   const handleConnectorClick = (id: string) => {
     setSelectedConnectorId(id);
     void refreshAlarms({ ...filters, key: id });
+  };
+
+  const handleChangeSelectedPriorityName = (value: string | undefined) => {
+    setSelectedPriorityName(value);
+    // Priority mapping sẽ dùng filter.message dạng CSV events, nên clear message dropdown để tránh xung đột UI.
+    setLocalFilters((prev) => ({ ...prev, message: undefined }));
+  };
+
+  const handleChangeFilters = (patch: Partial<AlarmFilters>) => {
+    if (Object.prototype.hasOwnProperty.call(patch, 'message') && patch.message) {
+      setSelectedPriorityName(undefined);
+    }
+    setLocalFilters((prev) => ({ ...prev, ...patch }));
   };
 
   const renderAlarmTable = () => (
@@ -507,12 +564,13 @@ export function AlarmConsole() {
               isOpen={showAdvancedFilter}
               onToggle={handleToggleAdvancedFilter}
               filters={localFilters}
-              onChangeFilters={(patch) =>
-                setLocalFilters((prev) => ({ ...prev, ...patch }))
-              }
+              onChangeFilters={handleChangeFilters}
               onApply={handleApplyFilters}
               onClear={handleClearFilters}
               loading={loading || loadingDicts}
+              priorityOptions={priorityOptions}
+              selectedPriorityName={selectedPriorityName}
+              onChangeSelectedPriorityName={handleChangeSelectedPriorityName}
               messages={messages}
               sources={sources}
               useFromTime={useFromTime}
@@ -561,12 +619,13 @@ export function AlarmConsole() {
                   isOpen={showAdvancedFilter}
                   onToggle={handleToggleAdvancedFilter}
                   filters={localFilters}
-                  onChangeFilters={(patch) =>
-                    setLocalFilters((prev) => ({ ...prev, ...patch }))
-                  }
+                  onChangeFilters={handleChangeFilters}
                   onApply={handleApplyFilters}
                   onClear={handleClearFilters}
                   loading={loading || loadingDicts}
+                  priorityOptions={priorityOptions}
+                  selectedPriorityName={selectedPriorityName}
+                  onChangeSelectedPriorityName={handleChangeSelectedPriorityName}
                   messages={messages}
                   sources={sources}
                   useFromTime={useFromTime}

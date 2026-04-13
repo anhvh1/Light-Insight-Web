@@ -17,10 +17,11 @@ export interface AlarmApiItem {
 export interface AlarmFilters {
   /** Connector Id — query param `key` for Milestone-backed alarm APIs */
   key?: string;
-  priorityName?: 'Low' | 'Medium' | 'High';
+  /** Giá trị từ API Priorities/Priority (PriorityName), ví dụ LOW, MEDIUM, HIGH, CRITICAL */
+  priorityName?: string;
   stateName?: 'New' | 'In progress' | 'On hold' | 'Closed';
   message?: string;
-  source?: string;
+  source?: string | string[];
   fromTime?: string;
   toTime?: string;
 }
