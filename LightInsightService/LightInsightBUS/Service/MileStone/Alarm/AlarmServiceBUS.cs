@@ -160,8 +160,19 @@ namespace LightInsightBUS.Service.MileStone.Alarm
             if (!string.IsNullOrEmpty(filter.priorityName))
                 queryParts.Add($"priority.name='{EscapeString(filter.priorityName)}'");
 
-            if (!string.IsNullOrEmpty(filter.message))
-                queryParts.Add($"message='{EscapeString(filter.message)}'");
+            if (!string.IsNullOrWhiteSpace(filter.message))
+            {
+                var messages = filter.message
+                    .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .Where(s => !string.IsNullOrEmpty(s));
+
+                if (messages.Any())
+                {
+                    var formattedValues = messages.Select(s => $"'{EscapeString(s)}'");
+                    queryParts.Add($"message=oneOf:({string.Join(",", formattedValues)})");
+                }
+            }
 
             if (!string.IsNullOrEmpty(filter.source))
                 queryParts.Add($"source.name='{EscapeString(filter.source)}'");
