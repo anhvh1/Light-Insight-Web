@@ -32,33 +32,27 @@ namespace LightInsightBUS.Service.General
             
             try
             {
-                // Bước 1: Lấy danh sách Connector đã cấu hình
                 var connectorsRes = await _connectorService.GetAllConnectorsAsync();
                 var connectorList = connectorsRes.Data as List<ConnectorListModel> ?? new List<ConnectorListModel>();
 
-                bool milestoneInfraFetched = false;
-
-                // Bước 2: Gọi Service riêng cho mỗi loại Connector (Bộ điều phối)
                 foreach (var config in connectorList)
                 {
-                    if (config.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase))
+                    if (config.VmsName != null && config.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Gọi module Milestone chuyên biệt cho từng connector (để lấy latency, camera count)
+                        // 1. Lấy trạng thái Connector (Health, Latency, Camera count)
                         var health = await _milestoneProvider.GetHealthAsync(config);
                         result.Connectors.Add(health);
 
-                        // Chỉ lấy hạ tầng Milestone (Server/Disk) MỘT LẦN DUY NHẤT cho toàn bộ hệ thống
-                        if (!milestoneInfraFetched)
-                        {
-                            var infra = await _milestoneProvider.GetInfrastructureAsync(config);
-                            result.Infrastructure.AddRange(infra);
-                            milestoneInfraFetched = true;
-                        }
+                        // 2. Lấy hạ tầng của riêng Connector này
+                        var infra = await _milestoneProvider.GetInfrastructureAsync(config);
+                        result.Infrastructure.AddRange(infra);
                     }
                 }
 
-                // Luôn thêm thông tin Server hiện tại (Management Server)
-                result.Infrastructure.Add(await GetLocalServerHealth());
+                // Luôn thêm thông tin Web Server nội bộ (không thuộc connector nào)
+                var localServer = await GetLocalServerHealth();
+                localServer.ConnectorId = "LOCAL"; 
+                result.Infrastructure.Add(localServer);
 
                 return new BaseResultModel { Status = 1, Message = "Success", Data = result };
             }

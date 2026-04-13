@@ -28,5 +28,6 @@ namespace LightInsightModel.General
         public string Description { get; set; }
         public string Status { get; set; }
         public string Type { get; set; } // server, storage, camera
+        public string ConnectorId { get; set; } // Dùng để lọc hạ tầng theo connector
     }
 }

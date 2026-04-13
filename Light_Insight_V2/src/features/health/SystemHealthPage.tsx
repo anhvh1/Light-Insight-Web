@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import * as signalR from '@microsoft/signalr';
 import { cn } from '@/lib/utils';
@@ -12,13 +12,21 @@ const AUDIT_HUB_URL = import.meta.env.VITE_ALARM_HUB_URL ? `${import.meta.env.VI
 
 export function SystemHealthPage() {
   const queryClient = useQueryClient();
+  const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
 
-  // 1. Fetch Health Status (30s polling)
+  // 1. Fetch Health Status
   const { data: healthResponse, isLoading: isLoadingHealth, refetch: refetchHealth, isRefetching: isRefetchingHealth } = useQuery({
     queryKey: ['system-health-status'],
     queryFn: systemHealthApi.getStatus,
     refetchInterval: 30000,
   });
+
+  // Tự động chọn Connector đầu tiên khi dữ liệu tải xong
+  useEffect(() => {
+    if (healthResponse?.Data?.Connectors?.length && !selectedConnectorId) {
+      setSelectedConnectorId(healthResponse.Data.Connectors[0].ApiInfo.split(':')[0]);
+    }
+  }, [healthResponse, selectedConnectorId]);
 
   // 2. Infinite Query for Audit Logs
   const { 
@@ -37,7 +45,6 @@ export function SystemHealthPage() {
     },
   });
 
-  // Flatten logs from all pages
   const auditLogs = useMemo(() => {
     return logsData?.pages.flatMap(page => page.Data || []) || [];
   }, [logsData]);
@@ -52,7 +59,6 @@ export function SystemHealthPage() {
       .build();
 
     connection.on('ReceiveAuditLog', (newLog: AuditLog) => {
-      // Manual cache update to insert log at the top
       queryClient.setQueryData(['audit-logs-infinite'], (old: any) => {
         if (!old) return old;
         const firstPage = old.pages[0];
@@ -90,7 +96,14 @@ export function SystemHealthPage() {
   };
 
   const connectors = healthResponse?.Data?.Connectors || [];
-  const infrastructure = healthResponse?.Data?.Infrastructure || [];
+  const allInfrastructure = healthResponse?.Data?.Infrastructure || [];
+
+  // LỌC INFRASTRUCTURE THEO CONNECTOR ĐANG CHỌN
+  const filteredInfrastructure = useMemo(() => {
+    return allInfrastructure.filter(item => 
+      item.ConnectorId === selectedConnectorId || item.ConnectorId === 'LOCAL'
+    );
+  }, [allInfrastructure, selectedConnectorId]);
 
   const StatusText = ({ status }: { status: string }) => {
     const isOnline = status === 'ONLINE' || status === 'STANDBY';
@@ -142,26 +155,47 @@ export function SystemHealthPage() {
             <div className="flex-1 overflow-y-auto px-3 pb-6 scrollbar-thin scrollbar-thumb-psim-accent/20">
               {isLoadingHealth && !isRefetchingHealth ? <div className="h-full flex items-center justify-center opacity-30 uppercase font-bold text-[11px] animate-pulse">Syncing...</div> : (
                 <div className="grid grid-cols-2 gap-2">
-                  {connectors.map((c, i) => (
-                    <div key={i} className={cn("bg-bg-2 border border-white/5 rounded-lg p-3 flex flex-col gap-1 shadow-sm hover:border-white/10 transition-all", c.Status === 'OFFLINE' && "opacity-60 grayscale-[0.5]")}>
-                      <div><h3 className={cn("text-[13px] font-semibold tracking-tight uppercase", c.Name.includes('Milestone') ? "text-psim-green" : c.Name.includes('BioStar') ? "text-psim-accent" : c.Name.includes('BMS') ? "text-purple" : "text-t1")}>{c.Name}</h3><p className="text-[10px] text-t-2 font-mono mt-0.5">{c.ApiInfo}</p></div>
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[11px]"><span className="text-t-2">Latency</span><span className={cn("font-mono font-bold", c.Status === 'SLOW' ? "text-psim-orange" : "text-psim-green")}>{c.Latency}</span></div>
-                        <div className="flex justify-between text-[11px]"><span className="text-t-2">{c.StatsLabel}</span><span className="font-semibold text-t1">{c.Stats}</span></div>
-                        <div className="flex justify-between text-[11px] items-center"><span className="text-t-2">Status</span><StatusText status={c.Status} /></div>
+                  {connectors.map((c, i) => {
+                    const connectorIp = c.ApiInfo.split(':')[0];
+                    const isSelected = selectedConnectorId === connectorIp;
+                    return (
+                      <div 
+                        key={i} 
+                        onClick={() => setSelectedConnectorId(connectorIp)}
+                        className={cn(
+                          "bg-bg-2 border rounded-lg p-3 flex flex-col gap-1 shadow-sm transition-all cursor-pointer",
+                          isSelected ? "border-psim-green shadow-psim-green/10" : "border-white/5 hover:border-white/10",
+                          c.Status === 'OFFLINE' && "opacity-60 grayscale-[0.5]"
+                        )}
+                      >
+                        <div className="flex justify-between items-start">
+                          <h3 className={cn("text-[13px] font-semibold tracking-tight uppercase", c.Name.includes('Milestone') ? "text-psim-green" : "text-t1")}>{c.Name}</h3>
+                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-psim-green animate-pulse" />}
+                        </div>
+                        <p className="text-[10px] text-t-2 font-mono mt-0.5">{c.ApiInfo}</p>
+                        <div className="space-y-1 mt-1">
+                          <div className="flex justify-between text-[11px]"><span className="text-t-2">Latency</span><span className={cn("font-mono font-bold", c.Status === 'SLOW' ? "text-psim-orange" : "text-psim-green")}>{c.Latency}</span></div>
+                          <div className="flex justify-between text-[11px]"><span className="text-t-2">{c.StatsLabel}</span><span className="font-semibold text-t1">{c.Stats}</span></div>
+                          <div className="flex justify-between text-[11px] items-center"><span className="text-t-2">Status</span><StatusText status={c.Status} /></div>
+                        </div>
+                        <div className="h-1 bg-bg4 rounded-full mt-1 overflow-hidden">
+                          <div className={cn("h-full rounded-full transition-all duration-1000", c.HealthPercentage > 80 ? "bg-psim-green" : c.HealthPercentage > 50 ? "bg-psim-orange" : "bg-psim-red")} style={{ width: `${c.HealthPercentage}%` }} />
+                        </div>
                       </div>
-                      <div className="h-1 bg-bg4 rounded-full mt-1 overflow-hidden"><div className={cn("h-full rounded-full transition-all duration-1000", c.HealthPercentage > 80 ? "bg-psim-green" : c.HealthPercentage > 50 ? "bg-psim-orange" : "bg-psim-red")} style={{ width: `${c.HealthPercentage}%` }} /></div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden border-t border-white/5">
-            <div className="sticky top-0 bg-bg-0 z-10 px-3 py-3 shrink-0"><h2 className="text-[10px] font-mono font-bold text-t-2 uppercase tracking-[0.12em]">Infrastructure</h2></div>
+            <div className="sticky top-0 bg-bg-0 z-10 px-3 py-3 shrink-0 flex items-center justify-between">
+              <h2 className="text-[10px] font-mono font-bold text-t-2 uppercase tracking-[0.12em]">Infrastructure</h2>
+              <span className="text-[9px] font-bold text-psim-accent bg-psim-accent/10 px-2 py-0.5 rounded uppercase">{selectedConnectorId || 'Global'} View</span>
+            </div>
             <div className="flex-1 overflow-y-auto px-3 pb-6 scrollbar-thin scrollbar-thumb-psim-accent/20">
               <div className="flex flex-col gap-1">
-                {infrastructure.map((item, i) => (
+                {filteredInfrastructure.length > 0 ? filteredInfrastructure.map((item, i) => (
                   <div key={i} className="flex items-center gap-3 px-3 py-2 bg-bg-2 border border-white/[0.03] rounded-[6px] hover:border-psim-accent/20 transition-all group">
                     <div className="text-[15px] grayscale group-hover:grayscale-0 transition-all shrink-0">{item.Type === 'camera' ? '📷' : item.Type === 'storage' ? '💾' : '🖥️'}</div>
                     <div className="flex-1 min-w-0">
@@ -170,7 +204,9 @@ export function SystemHealthPage() {
                     </div>
                     <StatusBadge status={item.Status} />
                   </div>
-                ))}
+                )) : (
+                  <div className="py-10 text-center opacity-20 text-[11px] uppercase font-bold tracking-widest italic">No infrastructure data for this connector</div>
+                )}
               </div>
             </div>
           </div>

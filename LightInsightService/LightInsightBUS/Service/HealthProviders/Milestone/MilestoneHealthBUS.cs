@@ -25,15 +25,52 @@ namespace LightInsightBUS.Service.HealthProviders.Milestone
 
         public async Task<ConnectorHealth> GetHealthAsync(ConnectorListModel config)
         {
+            // 1. ƯU TIÊN LẤY DỮ LIỆU TỪ CACHE REAL-TIME CỦA SOCKET WORKER
+            if (_cache.TryGetValue($"HEALTH_STATE_{config.IpServer}", out MilestoneLiveState liveState))
+            {
+                // TÍNH TOÁN ĐIỂM SỐ (Health Score)
+                int score = 0;
+                string status = liveState.Status; // "ONLINE" hoặc "OFFLINE" từ worker
+
+                if (status == "ONLINE")
+                {
+                    // Nếu latency cao, chuyển trạng thái thành SLOW
+                    if (liveState.LatencyMs > 500) status = "SLOW";
+
+                    // Tỷ lệ camera online (0-100)
+                    score = liveState.TotalCameras > 0 
+                        ? (liveState.OnlineCameras * 100 / liveState.TotalCameras) 
+                        : 100;
+
+                    // Phạt theo độ trễ (Latency)
+                    if (liveState.LatencyMs > 500) score -= 20;
+                    else if (liveState.LatencyMs > 200) score -= 10;
+                }
+
+                return new ConnectorHealth
+                {
+                    Name = config.Name,
+                    ApiInfo = $"{config.IpServer}:{config.Port}",
+                    Status = status, // Sẽ trả về ONLINE, OFFLINE, hoặc SLOW
+                    Latency = $"{liveState.LatencyMs}ms",
+                    HealthPercentage = Math.Max(0, score),
+                    StatsLabel = "Cameras",
+                    Stats = $"{liveState.OnlineCameras} / {liveState.TotalCameras}",
+                    Description = $"Real-time: {liveState.OnlineCameras}/{liveState.TotalCameras} cams online, {liveState.LatencyMs}ms latency"
+                };
+            }
+
+            // 2. FALLBACK NẾU CACHE CHƯA CÓ (Dùng REST trực tiếp)
             var health = new ConnectorHealth
             {
-                Name = config.VmsName,
+                Name = config.Name,
                 ApiInfo = $"{config.IpServer}:{config.Port}",
                 Status = "OFFLINE",
                 Latency = "0ms",
                 HealthPercentage = 0,
                 StatsLabel = "Cameras",
-                Stats = "0 / 0"
+                Stats = "0 / 0",
+                Description = "Polling via REST (Fallback)"
             };
 
             var sw = Stopwatch.StartNew();
@@ -78,28 +115,37 @@ namespace LightInsightBUS.Service.HealthProviders.Milestone
 
         public async Task<List<InfrastructureHealth>> GetInfrastructureAsync(ConnectorListModel config)
         {
+            // 1. ƯU TIÊN LẤY DỮ LIỆU TỪ CACHE REAL-TIME (Do SocketWorker cập nhật)
+            if (_cache.TryGetValue($"HEALTH_STATE_{config.IpServer}", out MilestoneLiveState liveState) && liveState.Infrastructure?.Count > 0)
+            {
+                return liveState.Infrastructure;
+            }
+
             var infra = new List<InfrastructureHealth>();
             
-            // 1. Lấy dữ liệu Metrics từ Cache (do Background Worker nạp)
-            if (_cache.TryGetValue("MILESTONE_SERVER_METRICS", out List<MilestoneServerMetric> metrics))
+            // 2. LẤY DỮ LIỆU TỪ CACHE METRICS CHI TIẾT (Nếu có - ví dụ CPU/RAM từ worker khác)
+            string cacheKey = $"MILESTONE_INFRA_{config.IpServer}";
+
+            if (_cache.TryGetValue(cacheKey, out List<MilestoneServerMetric> metrics))
             {
                 foreach (var m in metrics)
                 {
                     infra.Add(new InfrastructureHealth {
                         Name = m.ServerName,
-                        Description = $"CPU {m.CpuUsage}% · RAM {m.RamUsage}% · Disk {m.Disks.FirstOrDefault()?.UsagePercentage}%",
+                        Description = $"Last update: {m.LastUpdate:HH:mm:ss}",
                         Status = "ONLINE",
-                        Type = "server"
+                        Type = "server",
+                        ConnectorId = config.IpServer // Thêm ID Connector để Frontend lọc
                     });
 
-                    // Thêm thông tin Disk chi tiết nếu cần
                     foreach (var disk in m.Disks)
                     {
                         infra.Add(new InfrastructureHealth {
                             Name = $"Storage: {disk.DriveName}",
-                            Description = $"Free {disk.FreeSpaceGb}GB / {disk.TotalSizeGb}GB",
+                            Description = $"Free {disk.FreeSpaceGb}GB / {disk.TotalSizeGb}GB ({disk.UsagePercentage}%)",
                             Status = disk.UsagePercentage > 90 ? "SLOW" : "ONLINE",
-                            Type = "storage"
+                            Type = "storage",
+                            ConnectorId = config.IpServer
                         });
                     }
                 }
@@ -111,25 +157,9 @@ namespace LightInsightBUS.Service.HealthProviders.Milestone
                     Name = "Milestone Management Server",
                     Description = $"VMS System @ {config.IpServer}",
                     Status = "ONLINE",
-                    Type = "server"
+                    Type = "server",
+                    ConnectorId = config.IpServer
                 });
-            }
-
-            // 2. Lấy danh sách Camera Offline (giữ nguyên logic cũ hoặc mở rộng từ cache trạng thái)
-            string token = await GetTokenInternalAsync(config);
-            if (!string.IsNullOrEmpty(token))
-            {
-                var cameras = await GetCamerasInternalAsync(config, token);
-                var offlineCameras = cameras.Where(c => !c.enabled).ToList();
-                foreach (var cam in offlineCameras)
-                {
-                    infra.Add(new InfrastructureHealth {
-                        Name = cam.name,
-                        Description = "Connection Lost",
-                        Status = "OFFLINE",
-                        Type = "camera"
-                    });
-                }
             }
 
             return infra;

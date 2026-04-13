@@ -11,6 +11,7 @@ using LightInsightService.Sockets.General;
 using LightInsightUtiltites;
 using LightInsightModel.General;
 using LightInsightBUS.Interfaces.Connectors;
+using System.Diagnostics;
 
 namespace LightInsightService.Sockets.Milestone.Health
 {
@@ -21,8 +22,10 @@ namespace LightInsightService.Sockets.Milestone.Health
         private readonly IHubContext<AuditLogHub> _hubContext;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly HttpClient _httpClient;
-        private readonly List<MilestoneServerMetric> _metricsCache = new List<MilestoneServerMetric>();
+        
+        private static readonly Dictionary<string, MilestoneLiveState> _globalStates = new Dictionary<string, MilestoneLiveState>();
         private readonly Dictionary<string, Task> _activeConnections = new Dictionary<string, Task>();
+        private readonly Dictionary<string, (string Name, string Category)> _eventDefinitions = new Dictionary<string, (string, string)>();
 
         public MilestoneHealthSocketWorker(
             IMemoryCache cache, 
@@ -54,122 +57,235 @@ namespace LightInsightService.Sockets.Milestone.Health
                     if (result.Status == 1 && result.Data is List<ConnectorListModel> connectorList)
                     {
                         var milestoneConnectors = connectorList
-                            .Where(c => c.Name.Contains("Milestone", StringComparison.OrdinalIgnoreCase) || 
-                                       (c.VmsName != null && c.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase)))
+                            .Where(c => c.VmsName != null && c.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase))
                             .ToList();
 
                         foreach (var vms in milestoneConnectors)
                         {
-                            string connectionId = vms.IpServer;
-                            if (!_activeConnections.ContainsKey(connectionId) || _activeConnections[connectionId].IsCompleted)
-                            {
-                                _logger.LogInformation($"[MilestoneHealth] Starting background task for: {vms.Name} ({vms.IpServer})");
-                                _activeConnections[connectionId] = Task.Run(() => MaintainWebSocketConnection(vms, stoppingToken), stoppingToken);
+                            string cid = vms.IpServer;
+                            if (!_globalStates.ContainsKey(cid)) {
+                                _globalStates[cid] = new MilestoneLiveState { Name = vms.Name, Status = "OFFLINE" };
                             }
 
-                            string token = await GetTokenAsync(vms);
-                            if (!string.IsNullOrEmpty(token))
+                            if (!_activeConnections.ContainsKey(cid) || _activeConnections[cid].IsCompleted)
                             {
+                                _activeConnections[cid] = Task.Run(() => MaintainWebSocketConnection(vms, stoppingToken), stoppingToken);
+                            }
+
+                            // Quét dữ liệu tĩnh qua REST
+                            string token = await GetTokenAsync(vms);
+                            if (!string.IsNullOrEmpty(token)) {
+                                await FetchEventDefinitions(vms, token);
                                 await UpdateStaticData(vms, token);
                             }
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError($"[MilestoneHealth] Main Loop Error: {ex.Message}");
-                }
-
+                catch (Exception ex) { _logger.LogError($"Main Loop Error: {ex.Message}"); }
                 await Task.Delay(60000, stoppingToken); 
             }
         }
 
+        private async Task FetchEventDefinitions(ConnectorListModel config, string token)
+        {
+            try {
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                var json = await _httpClient.GetStringAsync($"http://{config.IpServer}:{config.Port}/api/rest/v1/eventTypes");
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("array", out var array)) {
+                    foreach (var item in array.EnumerateArray()) {
+                        string id = item.GetProperty("id").GetString();
+                        string name = item.GetProperty("name").GetString();
+                        string cat = item.TryGetProperty("category", out var c) ? c.GetString() : "Unknown";
+                        _eventDefinitions[id] = (name, cat);
+                    }
+                }
+            } catch { }
+        }
+
         private async Task MaintainWebSocketConnection(ConnectorListModel config, CancellationToken ct)
         {
+            string cid = config.IpServer;
             while (!ct.IsCancellationRequested)
             {
                 using var ws = new ClientWebSocket();
-
                 try
                 {
-                    _logger.LogInformation($"[MilestoneHealth] [{config.Name}] Attempting WS Connection to {config.IpServer}:{config.Port}...");
                     string token = await GetTokenAsync(config);
                     if (string.IsNullOrEmpty(token)) throw new Exception("Token failed");
 
-                    string wsUri = $"ws://{config.IpServer}:{config.Port}/api/ws/events/v1";
                     ws.Options.SetRequestHeader("Authorization", $"Bearer {token}");
+                    await ws.ConnectAsync(new Uri($"ws://{config.IpServer}:{config.Port}/api/ws/events/v1"), ct);
+                    
+                    _globalStates[cid].Status = "ONLINE";
 
-                    await ws.ConnectAsync(new Uri(wsUri), ct);
-                    _logger.LogInformation($"[MilestoneHealth] [{config.Name}] [SUCCESS] WebSocket Connected.");
+                    // 1. Start Session
+                    await SendAsync(ws, new { command = "startSession", commandId = 1, sessionId = "", eventId = "" }, config.Name, ct);
+                    await ReceiveAsync(ws, config.Name, ct);
+                    
+                    // Sync Camera count
+                    var cameras = await GetCamerasViaRest(config, token);
+                    _globalStates[cid].TotalCameras = cameras.Count;
+                    _globalStates[cid].OnlineCameras = cameras.Count(c => c.Enabled);
 
-                    // 1. START SESSION
-                    var startSessionCmd = new { command = "startSession", commandId = 1, sessionId = "", eventId = "" };
-                    await SendAsync(ws, startSessionCmd, config.Name, ct);
-                    await ReceiveAsync(ws, config.Name, ct); // Nhận phản hồi startSession
+                    // 2. Subscribe
+                    await SendAsync(ws, new { command = "addSubscription", commandId = 2, filters = new[] { new { modifier = "include", resourceTypes = new[] { "*" }, sourceIds = new[] { "*" }, eventTypes = new[] { "*" } } } }, config.Name, ct);
+                    await ReceiveAsync(ws, config.Name, ct);
 
-                    // 2. SUBSCRIBE EVENTS
-                    var subscribeCmd = new
-                    {
-                        command = "addSubscription",
-                        commandId = 2,
-                        filters = new[]
-                        {
-                            new {
-                                modifier = "include",
-                                resourceTypes = new[] { "*" },
-                                sourceIds = new[] { "*" },
-                                eventTypes = new[] { "*" }
-                            }
-                        }
-                    };
-                    await SendAsync(ws, subscribeCmd, config.Name, ct);
-                    await ReceiveAsync(ws, config.Name, ct); // Nhận phản hồi addSubscription
-
-                    // 3. HEARTBEAT & INITIAL STATE
+                    // 3. Heartbeat
                     _ = Task.Run(async () =>
                     {
                         while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
                         {
                             try {
-                                await Task.Delay(20000, ct);
-                                if (ws.State == WebSocketState.Open) {
-                                    await SendAsync(ws, new { command = "getState", commandId = 999 }, config.Name, ct);
-                                }
+                                var sw = Stopwatch.StartNew();
+                                await SendAsync(ws, new { command = "getState", commandId = 999 }, config.Name, ct);
+                                await ReceiveAsync(ws, config.Name, ct); 
+                                sw.Stop();
+                                _globalStates[cid].LatencyMs = sw.ElapsedMilliseconds;
+                                await PushUpdate(cid);
+                                await Task.Delay(15000, ct); 
                             } catch { break; }
                         }
                     }, ct);
 
-                    // 4. LISTEN LOOP
+                    // 4. Listen Loop
                     while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
                     {
                         var msg = await ReceiveAsync(ws, config.Name, ct);
                         if (string.IsNullOrEmpty(msg)) continue;
-                        await ProcessWsMessage(msg, config.Name);
+                        await ProcessWsMessage(msg, cid);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError($"[MilestoneHealth] [{config.Name}] WS Error: {ex.Message}");
+                    _globalStates[cid].Status = "OFFLINE";
+                    await PushUpdate(cid);
+                    _logger.LogWarning($"[{config.Name}] WS disconnected: {ex.Message}");
                 }
-
-                _logger.LogInformation($"[MilestoneHealth] [{config.Name}] Reconnecting in 10 seconds...");
                 await Task.Delay(10000, ct);
             }
         }
 
-        private async Task SendAsync(ClientWebSocket ws, object obj, string vmsName, CancellationToken ct)
+        private async Task ProcessWsMessage(string json, string cid)
         {
-            var json = JsonSerializer.Serialize(obj);
-            var bytes = Encoding.UTF8.GetBytes(json);
-            await ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct);
-            _logger.LogInformation($"[MilestoneHealth] [{vmsName}] [WS SEND] --> {json}");
+            try {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("type", out var typeProp) && typeProp.GetString() == "event") {
+                    if (root.TryGetProperty("events", out var eventsArray)) {
+                        foreach (var evt in eventsArray.EnumerateArray()) {
+                            string eventTypeId = evt.GetProperty("type").GetString();
+                            string source = evt.GetProperty("source").GetString();
+                            
+                            // Map ID to Name
+                            string eventName = _eventDefinitions.ContainsKey(eventTypeId) ? _eventDefinitions[eventTypeId].Name : eventTypeId;
+                            
+                            if (source.Contains("cameras")) {
+                                if (IsErrorState(eventTypeId)) _globalStates[cid].OnlineCameras--;
+                                else if (eventName.Contains("Established") || eventName.Contains("Started")) _globalStates[cid].OnlineCameras++;
+                                _globalStates[cid].OnlineCameras = Math.Clamp(_globalStates[cid].OnlineCameras, 0, _globalStates[cid].TotalCameras);
+                            }
+
+                            string cleanSource = source.Split('/').LastOrDefault() ?? source;
+                            AuditLogger.Log("SYSTEM", "STATUS_CHANGE", $"[{_globalStates[cid].Name}] {cleanSource} status: {eventName}", new { source, eventTypeId, eventName }, "System", "127.0.0.1");
+                        }
+                        await PushUpdate(cid);
+                    }
+                }
+            } catch { }
         }
 
-        private async Task<string> ReceiveAsync(ClientWebSocket ws, string vmsName, CancellationToken ct)
+        private async Task PushUpdate(string cid)
         {
+            var state = _globalStates[cid];
+            await _hubContext.Clients.All.SendAsync("HealthUpdate", state);
+            _cache.Set($"HEALTH_STATE_{cid}", state);
+        }
+
+        private async Task UpdateStaticData(ConnectorListModel config, string token)
+        {
+            string cid = config.IpServer;
+            string baseUrl = $"http://{config.IpServer}:{config.Port}/api/rest/v1";
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            try {
+                var serversJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers");
+                using var doc = JsonDocument.Parse(serversJson);
+                var newInfra = new List<InfrastructureHealth>();
+
+                if (doc.RootElement.TryGetProperty("array", out var servers)) {
+                    foreach (var s in servers.EnumerateArray()) {
+                        string id = s.GetProperty("id").GetString();
+                        string name = s.GetProperty("name").GetString();
+                        bool enabled = s.TryGetProperty("enabled", out var en) ? en.GetBoolean() : true;
+
+                        // Server Item
+                        newInfra.Add(new InfrastructureHealth { 
+                            Name = name, 
+                            Type = "server", 
+                            Status = enabled ? "ONLINE" : "OFFLINE", 
+                            Description = $"Last update: {DateTime.Now:HH:mm:ss}",
+                            ConnectorId = cid
+                        });
+
+                        // Storage Item
+                        try {
+                            var diskJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers/{id}/storages");
+                            using var dDoc = JsonDocument.Parse(diskJson);
+                            if (dDoc.RootElement.TryGetProperty("array", out var disks)) {
+                                foreach (var d in disks.EnumerateArray()) {
+                                    newInfra.Add(new InfrastructureHealth { 
+                                        Name = $"Storage: {d.GetProperty("name").GetString()}", 
+                                        Type = "storage", 
+                                        Status = "ONLINE", 
+                                        Description = "Monitoring active",
+                                        ConnectorId = cid
+                                    });
+                                }
+                            }
+                        } catch { }
+                    }
+                }
+                _globalStates[cid].Infrastructure = newInfra;
+                await PushUpdate(cid);
+            } catch { }
+        }
+
+        private async Task<List<(string Id, bool Enabled)>> GetCamerasViaRest(ConnectorListModel config, string token)
+        {
+            var list = new List<(string, bool)>();
+            try {
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                var json = await _httpClient.GetStringAsync($"http://{config.IpServer}:{config.Port}/api/rest/v1/cameras");
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("array", out var array)) {
+                    foreach (var item in array.EnumerateArray()) {
+                        list.Add((item.GetProperty("id").GetString(), item.TryGetProperty("enabled", out var e) ? e.GetBoolean() : true));
+                    }
+                }
+            } catch { }
+            return list;
+        }
+
+        private bool IsErrorState(string guid) 
+        {
+            if (_eventDefinitions.TryGetValue(guid, out var def))
+            {
+                string name = def.Name.ToLower();
+                return name.Contains("lost") || name.Contains("failed") || name.Contains("error") || name.Contains("stopped");
+            }
+            return guid.Contains("e14e849f") || guid.Contains("6f55a7a7") || guid.Contains("839754e6");
+        }
+
+        private async Task SendAsync(ClientWebSocket ws, object obj, string vmsName, CancellationToken ct) {
+            var json = JsonSerializer.Serialize(obj);
+            await ws.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(json)), WebSocketMessageType.Text, true, ct);
+        }
+
+        private async Task<string> ReceiveAsync(ClientWebSocket ws, string vmsName, CancellationToken ct) {
             var buffer = new byte[8192];
             using var ms = new MemoryStream();
-
             try {
                 WebSocketReceiveResult result;
                 do {
@@ -177,136 +293,13 @@ namespace LightInsightService.Sockets.Milestone.Health
                     if (result.MessageType == WebSocketMessageType.Close) return null;
                     ms.Write(buffer, 0, result.Count);
                 } while (!result.EndOfMessage);
-
-                ms.Seek(0, SeekOrigin.Begin);
-                using var reader = new StreamReader(ms, Encoding.UTF8);
-                string msg = await reader.ReadToEndAsync();
-                
-                // Chỉ log ngắn gọn nếu message quá dài (như getState)
-                if (msg.Length > 500)
-                    _logger.LogInformation($"[MilestoneHealth] [{vmsName}] [WS RECV] <-- (Large Message: {msg.Length} bytes)");
-                else
-                    _logger.LogInformation($"[MilestoneHealth] [{vmsName}] [WS RECV] <-- {msg}");
-
-                return msg;
+                return Encoding.UTF8.GetString(ms.ToArray());
             } catch { return null; }
         }
 
-        private async Task ProcessWsMessage(string json, string vmsName)
-        {
+        private async Task<string> GetTokenAsync(ConnectorListModel config) {
             try {
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-                
-                // 1. XỬ LÝ EVENT THỜI GIAN THỰC
-                if (root.TryGetProperty("type", out var typeProp) && typeProp.GetString() == "event") {
-                    if (root.TryGetProperty("events", out var eventsArray)) {
-                        foreach (var evt in eventsArray.EnumerateArray()) {
-                            string eventType = evt.GetProperty("type").GetString();
-                            string source = evt.GetProperty("source").GetString();
-                            _logger.LogWarning($"[MilestoneHealth] [{vmsName}] [EVENT] Source: {source} | Type: {eventType}");
-
-                            AuditLogger.Log("SYSTEM", "STATUS_CHANGE", $"[{vmsName}] {source} status: {eventType}", new { source, eventType }, "System", "127.0.0.1");
-                        }
-                    }
-                }
-                
-                // 2. XỬ LÝ PHẢN HỒI LỆNH (Gồm cả mảng states lớn)
-                if (root.TryGetProperty("status", out var statusProp) && statusProp.GetInt32() == 200) {
-                    if (root.TryGetProperty("states", out var statesArray)) {
-                        int offlineCount = 0;
-                        foreach (var stateItem in statesArray.EnumerateArray()) {
-                            string source = stateItem.GetProperty("source").GetString();
-                            string stateType = stateItem.GetProperty("type").GetString();
-                            
-                            // Milestone dùng GUID cho stateType, chúng ta cần map lại hoặc log ra
-                            // Một số stateType phổ biến biểu thị lỗi/mất kết nối
-                            if (IsErrorState(stateType)) {
-                                offlineCount++;
-                                _logger.LogInformation($"[MilestoneHealth] [{vmsName}] Device {source} is in error state: {stateType}");
-                            }
-                        }
-                        if (offlineCount > 0) {
-                            _logger.LogWarning($"[MilestoneHealth] [{vmsName}] Found {offlineCount} devices in error state during sync.");
-                        }
-                    }
-                }
-            } catch (Exception ex) {
-                _logger.LogError($"[MilestoneHealth] [{vmsName}] Error parsing message: {ex.Message}");
-            }
-        }
-
-        private bool IsErrorState(string stateGuid) {
-            // Danh sách GUID các trạng thái lỗi phổ biến của Milestone (CommunicationLost, v.v.)
-            string[] errorGuids = { 
-                "e14e849f-7355-4d03-97fe-77c292fe01c7", // CommunicationLost
-                "6f55a7a7-d21c-4629-ac18-af1975e395a2", // ConnectionLost
-                "839754e6-82af-44fc-9e2f-437413d602d6"  // Một dạng error khác
-            };
-            return errorGuids.Any(g => stateGuid.Contains(g));
-        }
-
-        private async Task UpdateStaticData(ConnectorListModel config, string token)
-        {
-            string baseUrl = $"http://{config.IpServer}:{config.Port}/api/rest/v1";
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-            try {
-                var serversJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers");
-                using var doc = JsonDocument.Parse(serversJson);
-                
-                if (doc.RootElement.TryGetProperty("array", out var servers))
-                {
-                    foreach (var server in servers.EnumerateArray())
-                    {
-                        string id = server.GetProperty("id").GetString();
-                        string name = server.GetProperty("name").GetString();
-                        var metric = new MilestoneServerMetric { ServerId = id, ServerName = name, LastUpdate = DateTime.Now };
-
-                        try {
-                            var storageJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers/{id}/storages");
-                            using var storageDoc = JsonDocument.Parse(storageJson);
-                            if (storageDoc.RootElement.TryGetProperty("array", out var storages))
-                            {
-                                foreach (var storage in storages.EnumerateArray())
-                                {
-                                    string sName = storage.GetProperty("name").GetString();
-                                    string diskPath = storage.TryGetProperty("diskPath", out var dp) ? dp.GetString() : "";
-                                    if (!string.IsNullOrEmpty(diskPath))
-                                    {
-                                        try {
-                                            string driveLetter = Path.GetPathRoot(diskPath);
-                                            var driveInfo = new DriveInfo(driveLetter);
-                                            if (driveInfo.IsReady) {
-                                                double t = driveInfo.TotalSize / (1024 * 1024 * 1024.0);
-                                                double f = driveInfo.AvailableFreeSpace / (1024 * 1024 * 1024.0);
-                                                metric.Disks.Add(new MilestoneDiskMetric {
-                                                    DriveName = sName, TotalSizeGb = (long)t, FreeSpaceGb = (long)f,
-                                                    UsagePercentage = Math.Round((t - f) * 100 / t, 1)
-                                                });
-                                            }
-                                        } catch { }
-                                    }
-                                }
-                            }
-                        } catch { }
-                        
-                        lock(_metricsCache) {
-                            var existing = _metricsCache.FirstOrDefault(m => m.ServerId == id);
-                            if (existing != null) _metricsCache.Remove(existing);
-                            _metricsCache.Add(metric);
-                        }
-                    }
-                }
-                _cache.Set("MILESTONE_SERVER_METRICS", _metricsCache);
-            } catch { }
-        }
-
-        private async Task<string> GetTokenAsync(ConnectorListModel config)
-        {
-            try {
-                string url = $"http://{config.IpServer}:{config.Port}/API/IDP/connect/token";
-                var request = new HttpRequestMessage(HttpMethod.Post, url);
+                var request = new HttpRequestMessage(HttpMethod.Post, $"http://{config.IpServer}:{config.Port}/API/IDP/connect/token");
                 request.Content = new FormUrlEncodedContent(new[] {
                     new KeyValuePair<string, string>("grant_type", "password"),
                     new KeyValuePair<string, string>("username", config.Username),
@@ -315,9 +308,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                 });
                 var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode) return null;
-                var json = await response.Content.ReadAsStringAsync();
-                using var doc = JsonDocument.Parse(json);
-                return doc.RootElement.GetProperty("access_token").GetString();
+                return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("access_token").GetString();
             } catch { return null; }
         }
     }
