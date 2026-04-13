@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AlarmType } from '@/types';
+import { useQuery } from '@tanstack/react-query';
 import { StatusPill, TypeBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
+import { priorityApi } from '@/lib/priority-api';
 import { useAlarmSignalR } from './useAlarmSignalR';
 import { AlarmSearchPanel } from './AlarmSearchPanel';
 import { alarmApi, type AlarmFilters } from '@/lib/alarm-api';
@@ -64,16 +65,22 @@ export function AlarmConsole() {
   }, []);
 
   const [activeTab, setActiveTab] = useState<string>('all');
-  const [filterType, setFilterType] = useState<AlarmType | 'all'>('all');
+  const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
+  const connectorInitDoneRef = useRef(false);
   const [selectedAlarmId, setSelectedAlarmId] = useState<string | null>(null);
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
   const [localFilters, setLocalFilters] = useState<AlarmFilters>(getDefaultFilterValues());
   const [useFromTime, setUseFromTime] = useState(false);
   const [useToTime, setUseToTime] = useState(false);
   const [messages, setMessages] = useState<string[]>([]);
-  const [sources, setSources] = useState<Array<{ id: string; name: string }>>([]);
+  const [sources, setSources] = useState<string[]>([]);
   const [loadingDicts, setLoadingDicts] = useState(false);
-  const [dictLoaded, setDictLoaded] = useState(false);
+
+  const { data: connectorsResponse, isLoading: isLoadingConnectors } = useQuery({
+    queryKey: ['connectors-list'],
+    queryFn: priorityApi.getAllConnectors,
+  });
+  const connectors = connectorsResponse?.Data ?? [];
 
   useEffect(() => {
     isAutoScrollRef.current = isAutoScroll;
@@ -96,10 +103,9 @@ export function AlarmConsole() {
     () =>
       alarms.filter((alarm) => {
         const matchesTab = activeTab === 'all' || alarm.status === activeTab;
-        const matchesType = filterType === 'all' || alarm.type === filterType;
-        return matchesTab && matchesType;
+        return matchesTab;
       }),
-    [activeTab, alarms, filterType]
+    [activeTab, alarms]
   );
 
   const tabs: Array<{ value: string; label: string }> = [
@@ -109,8 +115,6 @@ export function AlarmConsole() {
     { value: 'on hold', label: 'On hold' },
     { value: 'close', label: 'Close' },
   ];
-  const filterTypes: (AlarmType | 'all')[] = ['all', 'ai', 'lpr', 'acs', 'fire', 'bms', 'tech', 'light'];
-
   const handleAcknowledge = () => {
     if (!selectedAlarmId) return;
     setSelectedAlarmId(null);
@@ -131,12 +135,17 @@ export function AlarmConsole() {
       ...prev,
       stateName,
     }));
-    await refreshAlarms({ ...filters, stateName });
+    await refreshAlarms({ ...filters, stateName, key: selectedConnectorId ?? undefined });
   };
 
   useEffect(() => {
-    void refreshAlarms(EMPTY_FILTERS);
-  }, [refreshAlarms]);
+    if (!connectors.length || connectorInitDoneRef.current) return;
+    const firstId = connectors[0]?.Id ?? (connectors[0] as { id?: string })?.id;
+    if (!firstId) return;
+    connectorInitDoneRef.current = true;
+    setSelectedConnectorId(firstId);
+    void refreshAlarms({ ...EMPTY_FILTERS, key: firstId });
+  }, [connectors, refreshAlarms]);
 
   useEffect(() => {
     const defaultValues = getDefaultFilterValues();
@@ -149,46 +158,52 @@ export function AlarmConsole() {
   }, [filters]);
 
   const loadDictionaries = useCallback(async () => {
-    if (dictLoaded || loadingDicts) return;
+    if (!selectedConnectorId) return;
     setLoadingDicts(true);
     try {
       const [msg, src] = await Promise.all([
-        alarmApi.getMessages(),
-        alarmApi.getSources(),
+        alarmApi.getMessages(selectedConnectorId),
+        alarmApi.getSources(selectedConnectorId),
       ]);
       setMessages(msg);
       setSources(src);
-      setDictLoaded(true);
     } finally {
       setLoadingDicts(false);
     }
-  }, [dictLoaded, loadingDicts]);
+  }, [selectedConnectorId]);
+
+  useEffect(() => {
+    if (!selectedConnectorId || !showAdvancedFilter) return;
+    void loadDictionaries();
+  }, [selectedConnectorId, showAdvancedFilter, loadDictionaries]);
 
   const handleToggleAdvancedFilter = () => {
-    setShowAdvancedFilter((prev) => {
-      const next = !prev;
-      if (next) {
-        void loadDictionaries();
-      }
-      return next;
-    });
+    setShowAdvancedFilter((prev) => !prev);
   };
 
   const handleApplyFilters = async () => {
+    if (!selectedConnectorId) return;
     const payload: AlarmFilters = {
       ...localFilters,
       fromTime: useFromTime ? localFilters.fromTime : undefined,
       toTime: useToTime ? localFilters.toTime : undefined,
+      key: selectedConnectorId,
     };
     await refreshAlarms(payload);
   };
 
   const handleClearFilters = async () => {
+    if (!selectedConnectorId) return;
     setLocalFilters(getDefaultFilterValues());
     setUseFromTime(false);
     setUseToTime(false);
-    await refreshAlarms(EMPTY_FILTERS);
+    await refreshAlarms({ ...EMPTY_FILTERS, key: selectedConnectorId });
     setShowAdvancedFilter(false);
+  };
+
+  const handleConnectorClick = (id: string) => {
+    setSelectedConnectorId(id);
+    void refreshAlarms({ ...filters, key: id });
   };
 
   const renderAlarmTable = () => (
@@ -507,19 +522,34 @@ export function AlarmConsole() {
               showTrigger
               renderPanel={false}
             />
-            <div className="flex gap-1">
-              {filterTypes.map(type => (
-                <button
-                  key={type}
-                  className={cn(
-                    "px-2.5 py-1 rounded-md text-[11px] cursor-pointer border border-border-dim bg-bg2 font-mono transition-colors",
-                    filterType === type ? 'bg-psim-accent/15 text-psim-accent border-psim-accent/30' : 'text-t2 hover:bg-bg3 hover:text-t1'
-                  )}
-                  onClick={() => setFilterType(type)}
-                >
-                  {type.toUpperCase()}
-                </button>
-              ))}
+            <div className="flex gap-1 flex-wrap items-center min-h-[28px]">
+              {isLoadingConnectors ? (
+                <span className="text-[10px] text-t2 font-mono px-1">Đang tải connector...</span>
+              ) : connectors.length === 0 ? (
+                <span className="text-[10px] text-t2 font-mono px-1">Chưa có connector</span>
+              ) : (
+                connectors.map((c: { Id?: string; id?: string; Name?: string; name?: string }) => {
+                  const id = c.Id ?? c.id ?? '';
+                  const name = c.Name ?? c.name ?? id;
+                  if (!id) return null;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      title={name}
+                      className={cn(
+                        'max-w-[140px] px-2.5 py-1 rounded-md text-[11px] cursor-pointer border border-border-dim bg-bg2 transition-colors truncate',
+                        selectedConnectorId === id
+                          ? 'bg-psim-accent/15 text-psim-accent border-psim-accent/30'
+                          : 'text-t2 hover:bg-bg3 hover:text-t1'
+                      )}
+                      onClick={() => handleConnectorClick(id)}
+                    >
+                      {name}
+                    </button>
+                  );
+                })
+              )}
             </div>
             <button className="ml-auto px-3 py-1.5 text-[11px] font-medium rounded-md bg-psim-red/15 text-psim-red border border-psim-red/30 hover:bg-psim-red/25 transition-colors">🔕 Mute All</button>
             <button className="px-3 py-1.5 text-[11px] font-medium rounded-md bg-bg3 text-t1 border border-border-dim hover:bg-bg4 transition-colors">⬇ Export</button>

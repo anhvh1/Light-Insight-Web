@@ -10,7 +10,7 @@ type AlarmSearchPanelProps = {
   onClear: () => void;
   loading?: boolean;
   messages: string[];
-  sources: Array<{ id: string; name: string }>;
+  sources: string[];
   useFromTime: boolean;
   useToTime: boolean;
   onToggleUseFromTime: () => void;
@@ -144,9 +144,9 @@ export function AlarmSearchPanel(props: AlarmSearchPanelProps) {
               onChange={(e) => onChangeFilters({ source: e.target.value || undefined })}
             >
               <option value="">-- Tất cả --</option>
-              {sources.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
+              {sources.map((name, index) => (
+                <option key={`${name}-${index}`} value={name}>
+                  {name}
                 </option>
               ))}
             </select>
