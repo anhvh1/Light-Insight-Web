@@ -1,38 +1,44 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as signalR from '@microsoft/signalr';
 import type { Alarm } from '@/types';
-import { normalizeSignalRAlarm, type AlarmPayload } from '../alarms/alarm-mapper';
+import { normalizeSignalRAlarm, type AlarmPayload } from './map-alarm-mapper';
 
 const HUB_BASE_URL = import.meta.env.VITE_ALARM_HUB_URL;
 const HUB_URL = HUB_BASE_URL ? `${HUB_BASE_URL.replace(/\/$/, '')}/alarm-hub` : '';
 
 const HUB_EVENT_NAME = 'ReceiveAlarm';
-const MAX_ALARMS = 500; // Increased for map view
+const MAX_LATEST_ALARMS = 10;
 
 type MapAlarmStreamContextValue = {
-  alarms: Alarm[];
+  latestAlarms: Alarm[];
+  totalAlarmCount: number;
   connected: boolean;
 };
 
 const MapAlarmStreamContext = createContext<MapAlarmStreamContextValue | null>(null);
 
 export function MapAlarmStreamProvider({ children }: { children: ReactNode }) {
-  const [alarms, setAlarms] = useState<Alarm[]>([]);
+  const [latestAlarms, setLatestAlarms] = useState<Alarm[]>([]);
+  const [totalAlarmCount, setTotalAlarmCount] = useState(0);
   const [connected, setConnected] = useState(false);
 
   const addAlarm = useCallback((payload: AlarmPayload) => {
     const alarm = normalizeSignalRAlarm(payload);
 
-    // If alarm has no location, don't add it to the map stream
-    if (!alarm.loc) {
+    // If alarm has no location or source, don't add it to the map stream as it can't be placed
+    if (!alarm.loc || !alarm.src) {
       return;
     }
+    
+    setTotalAlarmCount(prev => prev + 1);
 
-    setAlarms((prev) => {
-      // Remove existing alarm with same ID to avoid duplicates and show movement
-      const withoutDuplicate = prev.filter((item) => item.id !== alarm.id);
-      // Add the new or updated alarm to the front
-      return [alarm, ...withoutDuplicate].slice(0, MAX_ALARMS);
+    setLatestAlarms((prev) => {
+      // Add the new alarm to the front
+      const newAlarms = [alarm, ...prev];
+      // Remove duplicates by ID, keeping the newest one (which is first)
+      const uniqueAlarms = Array.from(new Map(newAlarms.map(a => [a.id, a])).values());
+      // Enforce the max size
+      return uniqueAlarms.slice(0, MAX_LATEST_ALARMS);
     });
   }, []);
 
@@ -68,10 +74,11 @@ export function MapAlarmStreamProvider({ children }: { children: ReactNode }) {
   
   const value = useMemo(
     () => ({
-      alarms,
+      latestAlarms,
+      totalAlarmCount,
       connected,
     }),
-    [alarms, connected]
+    [latestAlarms, totalAlarmCount, connected]
   );
 
   return (

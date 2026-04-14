@@ -11,6 +11,9 @@ using LightInsightDAL.Repositories.MileStone.General;
 using LightInsightModel.Connectors;
 using static Org.BouncyCastle.Math.EC.ECCurve;
 using static Mysqlx.Expect.Open.Types.Condition.Types;
+using System.Net.Http.Headers;
+using System.Text.Json;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace LightInsightBUS.Service.MileStone.Alarm
 {
@@ -134,7 +137,7 @@ namespace LightInsightBUS.Service.MileStone.Alarm
                         source = camName, // Lấy tên camera từ logic Cache bên trên
                         stateLevel = item.state?.level ?? 0,
                         stateName = item.state?.name ?? "Unknown",
-
+                        cameraid = camId,
                         // Chuyển UTC Time về Local Time và Format theo DD-MM-YYYY HH:mm:ss
                         time = item.time.ToLocalTime().ToString("dd-MM-yyyy HH:mm:ss"),
 
@@ -204,6 +207,57 @@ namespace LightInsightBUS.Service.MileStone.Alarm
         private string EscapeString(string input)
         {
             return input?.Replace("'", "''");
+        }
+        public async Task<List<AlarmModel>> GetAlarmsAsync(Guid key, List<string> cameraIds, DateTime startTime, DateTime endTime)
+        {
+            string cacheKey = $"TOKEN_{key}";
+            //if (!_cache.TryGetValue(cacheKey, out VMSModel vmsData))
+            //{
+            //    throw new Exception($"VMS connection details for VMS ID '{key}' not found in cache.");
+            //}
+            // 1. Lấy Token
+            var accessToken = await tocken.GetTokenAsync(key);
+
+            var config = tocken.GetVmsConfig(key);
+            var baseUrl = $"http://{config.IpServer}:{config.Port}";
+
+            try
+            {
+                var handler = new HttpClientHandler();
+                handler.ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
+
+                using (var client = new HttpClient(handler))
+                {
+                    client.BaseAddress = new Uri(baseUrl);
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+                    var sourceIds = string.Join(",", cameraIds.ConvertAll(id => $"'cameras/{id}'"));
+                    var filter = $"source.id=oneOf:({sourceIds})&time=gt:'{startTime:o}'&lt:'{endTime:o}'";
+                    var endpoint = $"/api/rest/v1/alarms?{filter}";
+
+                    HttpResponseMessage response = await client.GetAsync(endpoint);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string jsonResponse = await response.Content.ReadAsStringAsync();
+                        var alarmResponse = JsonSerializer.Deserialize<AlarmResponseModel>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        return alarmResponse?.Array ?? new List<AlarmModel>();
+                    }
+                    else
+                    {
+                        var errorContent = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine($"API Error: {response.StatusCode} - {errorContent}");
+                        throw new HttpRequestException($"Failed to retrieve alarms from Milestone. Status: {response.StatusCode}, Details: {errorContent}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error fetching alarms: " + ex.Message);
+                throw;
+            }
         }
     }
 }

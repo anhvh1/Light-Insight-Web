@@ -155,7 +155,7 @@ namespace LightInsightDAL.Repositories.General
                 var result = await cmd.ExecuteScalarAsync();
                 return result is bool && (bool)result;
             }
-            catch (PostgresException ex) // B?t riêng l?i t? Postgres
+            catch (PostgresException ex) // B?t riï¿½ng l?i t? Postgres
             {
                 Console.WriteLine($"Postgres Error: {ex.MessageText}");
                 Console.WriteLine($"Detail: {ex.Detail}");
@@ -205,6 +205,37 @@ namespace LightInsightDAL.Repositories.General
             catch (Exception ex)
             {
                 Console.WriteLine($"Error in GetMarkersByMapIdAsync: {ex.Message}");
+                return list;
+            }
+        }
+
+        public async Task<List<DMMapMarkerStatisticModel>> StatisticMarkerByTypeAsync(Guid mapId)
+        {
+            var list = new List<DMMapMarkerStatisticModel>();
+            try
+            {
+                await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
+                await conn.OpenAsync();
+
+                var sql = "SELECT * FROM public.fn_statistic_marker_by_type(@p_map_id)";
+
+                await using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("p_map_id", mapId);
+
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    list.Add(new DMMapMarkerStatisticModel
+                    {
+                        MarkerType = reader.GetInt32(0),
+                        TotalCount = reader.GetInt64(1)
+                    });
+                }
+                return list;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in StatisticMarkerByTypeAsync: {ex.Message}");
                 return list;
             }
         }

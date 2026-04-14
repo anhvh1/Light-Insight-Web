@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, createContext, useContext, useCallback, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { 
@@ -14,24 +14,38 @@ import {
   Maximize2,
   Activity,
   Cctv,
-  RefreshCcw
+  RefreshCcw,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { mapApi } from '@/lib/map-api';
+import type { MapTreeNode, Alarm } from '@/types';
 import { useAlarmStream } from '@/features/alarms/AlarmStreamProvider';
-import type { MapTreeNode } from '@/types';
 
-export function MapView() {
-  const { alarms, bellCount } = useAlarmStream();
-  
-  const criticalCount = alarms.filter(a => a.pri === 'critical').length;
+// --- HELPER FUNCTION ---
 
-  const stats = [
-    { label: 'ACTIVE ALARMS', val: alarms.length.toString(), sub: `${criticalCount} critical`, color: 'text-psim-red' },
-    { label: 'CAMERA ACTIVE', val: '47', sub: '/ 52 total', color: 'text-psim-green' },
-    { label: 'GUARDS ON DUTY', val: '8', sub: 'Night Shift', color: 'text-psim-orange' },
-    { label: 'ACCESS EVENTS/H', val: '142', sub: '↑ normal', color: 'text-psim-accent' },
-    { label: 'LPR SCAN/H', val: '38', sub: '2 mismatch', color: 'text-teal' },
-  ];
+function findFirstMap(nodes: MapTreeNode[]): MapTreeNode | null {
+  for (const node of nodes) {
+    // A node is considered a map if it has a path. This is the most reliable check.
+    if (node.MapImagePath) {
+      return node;
+    }
+    // If not, recurse into its children.
+    if (node.Children && node.Children.length > 0) {
+      const foundInChild = findFirstMap(node.Children);
+      if (foundInChild) {
+        return foundInChild;
+      }
+    }
+  }
+  return null;
+}
+
+// --- THE ACTUAL MAP VIEW COMPONENT (Consumes the context) ---
+
+function MapViewInternal() {
+  // Use the central alarm stream
+  const { alarms: allAlarms } = useAlarmStream();
 
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
   const [selectedMapName, setSelectedMapName] = useState<string | null>(null);
@@ -67,6 +81,56 @@ export function MapView() {
   });
   const markers = markersResponse?.Data || [];
 
+  // --- AUTO-SELECT FIRST MAP ---
+  useEffect(() => {
+    // If a map isn't already selected and the tree has finished loading and is not empty
+    if (!selectedMapId && !isLoadingTree && mapTree.length > 0) {
+      const firstMap = findFirstMap(mapTree);
+      if (firstMap) {
+        setSelectedMapId(firstMap.Id);
+        setSelectedMapName(firstMap.Name);
+        setActiveMapMapUrl(firstMap.MapImagePath);
+      }
+    }
+  }, [mapTree, isLoadingTree, selectedMapId]);
+
+
+  // Extract CameraNames from the markers for efficient lookup
+  const cameraNamesOnActiveMap = useMemo(() => {
+    return new Set(markers.map(marker => marker.CameraName));
+  }, [markers]);
+
+
+  // --- DERIVED STATE FROM CENTRAL ALARM STREAM ---
+
+  // 1. Filter for alarms relevant to the map (must have a source AND that source must be a camera on the active map)
+  const mapAlarms = useMemo(() => {
+    return allAlarms.filter(alarm => 
+      alarm.src && cameraNamesOnActiveMap.has(alarm.src)
+    );
+  }, [allAlarms, cameraNamesOnActiveMap]);
+
+  // 2. Get the 10 most recent alarms for the live feed
+  const latestAlarms = useMemo(() => {
+    // The `allAlarms` from the hook are already sorted by time, newest first.
+    return mapAlarms.slice(0, 10);
+  }, [mapAlarms]);
+
+  // 3. Get the total count of map-relevant alarms
+  const totalAlarmCount = useMemo(() => {
+    return mapAlarms.length;
+  }, [mapAlarms]);
+  
+  const criticalCount = latestAlarms.filter(a => a.pri === 'critical').length;
+
+  const stats = [
+    { label: 'ACTIVE ALARMS', val: totalAlarmCount.toString(), sub: `${criticalCount} critical`, color: 'text-psim-red' },
+    { label: 'CAMERA ACTIVE', val: '47', sub: '/ 52 total', color: 'text-psim-green' },
+    { label: 'GUARDS ON DUTY', val: '8', sub: 'Night Shift', color: 'text-psim-orange' },
+    { label: 'ACCESS EVENTS/H', val: '142', sub: '↑ normal', color: 'text-psim-accent' },
+    { label: 'LPR SCAN/H', val: '38', sub: '2 mismatch', color: 'text-teal' },
+  ];
+
   // Draggable Toolbar States
   const [isExpanded, setIsExpanded] = useState(true);
   const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 120 });
@@ -76,20 +140,42 @@ export function MapView() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
 
-  // Create a map of deviceId -> highest priority alarm
+  const [dismissedAlarmIds, setDismissedAlarmIds] = useState<Set<string>>(new Set());
+  const scheduledAlarmsRef = useRef<Set<string>>(new Set());
+
+  // Handle auto-dismiss after 5s
+  useEffect(() => {
+    mapAlarms.forEach(alarm => {
+      if (!scheduledAlarmsRef.current.has(alarm.id)) {
+        scheduledAlarmsRef.current.add(alarm.id);
+        setTimeout(() => {
+          setDismissedAlarmIds(prev => {
+            const next = new Set(prev);
+            next.add(alarm.id);
+            return next;
+          });
+        }, 5000);
+      }
+    });
+  }, [mapAlarms]);
+
+  // Create a map of deviceId -> highest priority alarm (that hasn't been dismissed)
   const alarmsBySource = useMemo(() => {
     const priorityOrder: { [key: string]: number } = { 'critical': 1, 'high': 2, 'medium': 3, 'low': 4 };
+    
+    // Filter out dismissed alarms first
+    const activeMapAlarms = mapAlarms.filter(a => !dismissedAlarmIds.has(a.id));
+    
     const map = new Map<string, Alarm>();
-    // Sort alarms to process higher priorities first
-    const sortedAlarms = [...alarms].sort((a, b) => (priorityOrder[a.pri] || 5) - (priorityOrder[b.pri] || 5));
+    const sortedAlarms = [...activeMapAlarms].sort((a, b) => (priorityOrder[a.pri] || 5) - (priorityOrder[b.pri] || 5));
     
     for (const alarm of sortedAlarms) {
-      if (alarm.src && !map.has(alarm.src)) { // Only store the highest-priority alarm for each source
+      if (alarm.src && !map.has(alarm.src)) {
         map.set(alarm.src, alarm);
       }
     }
     return map;
-  }, [alarms]);
+  }, [mapAlarms, dismissedAlarmIds]);
 
   const handleDragStart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -128,12 +214,11 @@ export function MapView() {
 
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
-      // 1. Toolbar Dragging
       if (isDragging && mapContainerRef.current && toolbarRef.current) {
         const containerRect = mapContainerRef.current.getBoundingClientRect();
         const toolbarRect = toolbarRef.current.getBoundingClientRect();
         const dx = e.clientX - dragStartRef.current.mouseX;
-        const dy = e.clientY - dragStartRef.current.mouseY;
+        const dy = e.clientY - dragStartRef.current. mouseY;
         let newRight = dragStartRef.current.startX - dx;
         let newTop = dragStartRef.current.startY + dy;
         newRight = Math.max(8, Math.min(containerRect.width - toolbarRect.width - 8, newRight));
@@ -142,7 +227,6 @@ export function MapView() {
         return;
       }
 
-      // 2. Map Panning
       if (isPanningRef.current && activeMapUrl) {
         const dx = e.clientX - panningStartRef.current.mouseX;
         const dy = e.clientY - panningStartRef.current.mouseY;
@@ -189,7 +273,7 @@ export function MapView() {
             )}
           </div>
           <div className="text-[10px] text-t2 font-mono flex gap-4">
-            <span><span className="text-psim-red">●</span> {bellCount} alarms active</span>
+            <span><span className="text-psim-red">●</span> {totalAlarmCount} alarms active</span>
             <span>47/52 cameras online</span>
           </div>
         </div>
@@ -211,36 +295,6 @@ export function MapView() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Toolbar */}
         <div className="w-14 border-r border-white/5 flex flex-col items-center py-6 gap-4 bg-[#0a0f1d]/40">
-          <div className="flex flex-col bg-white/5 border border-white/10 rounded-lg overflow-hidden">
-            <button 
-              onClick={handleZoomIn}
-              disabled={!activeMapUrl}
-              className="w-9 h-9 flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all disabled:opacity-20 disabled:grayscale"
-              title="Phóng to"
-            >
-              <ZoomIn size={18} />
-            </button>
-            <div className="h-px bg-white/10 mx-2" />
-            <button 
-              onClick={handleZoomOut}
-              disabled={!activeMapUrl}
-              className="w-9 h-9 flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all disabled:opacity-20 disabled:grayscale"
-              title="Thu nhỏ"
-            >
-              <ZoomOut size={18} />
-            </button>
-          </div>
-          <button 
-            onClick={handleResetZoom}
-            disabled={!activeMapUrl}
-            className="w-9 h-9 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all disabled:opacity-20 disabled:grayscale"
-            title="Reset (100%)"
-          >
-            <Maximize2 size={18} />
-          </button>
-          
-          <div className="flex-1" />
-
           <button 
             onClick={() => setShowLegend(!showLegend)}
             className={cn(
@@ -251,7 +305,7 @@ export function MapView() {
           >
             <Activity size={18} />
           </button>
-          <button className="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-t3 hover:text-white transition-all"><Maximize2 size={18} /></button>
+          <div className="flex-1" />
         </div>
 
         {/* Map Canvas */}
@@ -276,6 +330,36 @@ export function MapView() {
             } 
           }} 
         >
+          {/* Zoom Controls Overlay */}
+          {activeMapUrl && (
+            <div className="absolute bottom-6 right-6 flex flex-col gap-2 z-50">
+              <div className="flex flex-col bg-[#161b2e]/90 border border-white/10 rounded-lg overflow-hidden shadow-2xl backdrop-blur-md">
+                <button 
+                  onClick={handleZoomIn}
+                  className="w-10 h-10 flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all"
+                  title="Phóng to"
+                >
+                  <ZoomIn size={20} />
+                </button>
+                <div className="h-px bg-white/10 mx-2" />
+                <button 
+                  onClick={handleZoomOut}
+                  className="w-10 h-10 flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all"
+                  title="Thu nhỏ"
+                >
+                  <ZoomOut size={20} />
+                </button>
+              </div>
+              <button 
+                onClick={handleResetZoom}
+                className="w-10 h-10 bg-[#161b2e]/90 border border-white/10 rounded-lg flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all shadow-2xl backdrop-blur-md"
+                title="Reset (100%)"
+              >
+                <Maximize2 size={20} />
+              </button>
+            </div>
+          )}
+
           {/* Legend (Bottom Center - Slim Pill Style) */}
           {showLegend && (
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#0a0f1d]/80 backdrop-blur-2xl border border-white/10 rounded-full px-6 py-2.5 z-20 flex items-center gap-8 shadow-[0_10px_40px_rgba(0,0,0,0.5)] transition-all hover:bg-[#0a0f1d]/95 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -328,7 +412,15 @@ export function MapView() {
                          top: `${m.PosY}%`,
                          transform: `translate(-50%, -50%)`
                        }}
-                       title={m.CameraName}
+                       onClick={() => {
+                         if (alarmForMarker) {
+                           setDismissedAlarmIds(prev => {
+                             const next = new Set(prev);
+                             next.add(alarmForMarker.id);
+                             return next;
+                           });
+                         }
+                       }}
                      >
                        <div className="relative flex flex-col items-center">
                           {/* Camera Label (Visible on hover or if alarming) */}
@@ -468,10 +560,10 @@ export function MapView() {
               <div className="w-2 h-2 rounded-full bg-psim-accent animate-pulse shadow-[0_0_8px_var(--accent)]" />
               <span className="text-[11px] font-black tracking-[0.1em] uppercase text-white">Live Event</span>
             </div>
-            <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-psim-accent/10 text-psim-accent rounded border border-psim-accent/20">{alarms.length} ALERTS</span>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-psim-accent/10 text-psim-accent rounded border border-psim-accent/20">{totalAlarmCount} ALERTS</span>
           </div>
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 custom-scrollbar">
-            {alarms.slice(0, 20).map((alarm) => (
+            {latestAlarms.map((alarm) => (
               <div key={alarm.id} className="p-3.5 bg-white/[0.03] border border-white/5 rounded-xl hover:bg-white/[0.06] transition-all cursor-pointer group relative overflow-hidden">
                 <div className={cn(
                   "absolute left-0 top-0 bottom-0 w-1 transition-transform origin-top scale-y-0 group-hover:scale-y-100",
@@ -496,7 +588,7 @@ export function MapView() {
                 </div>
               </div>
             ))}
-            {alarms.length === 0 && (
+            {latestAlarms.length === 0 && (
               <div className="flex flex-col items-center justify-center py-20 opacity-20 gap-3">
                 <Activity size={32} />
                 <span className="text-[10px] font-bold uppercase tracking-widest">No active events</span>
@@ -510,6 +602,12 @@ export function MapView() {
       </div>
     </div>
   );
+}
+
+// --- 3. PAGE WRAPPER (This is the component to be exported and used in routes) ---
+
+export function MapView() {
+  return <MapViewInternal />;
 }
 
 // --- TREE COMPONENT ---

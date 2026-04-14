@@ -88,5 +88,12 @@ namespace LightInsightService.Controllers.General
             var result = await _dmMapBUS.GetAllDevicesAsync(key);
             return Ok(result);
         }
+
+        [HttpGet("Statistic/{mapId}")]
+        public async Task<IActionResult> StatisticMarkerByType(Guid mapId)
+        {
+            var result = await _dmMapBUS.StatisticMarkerByTypeAsync(mapId);
+            return Ok(result);
+        }
     }
 }
