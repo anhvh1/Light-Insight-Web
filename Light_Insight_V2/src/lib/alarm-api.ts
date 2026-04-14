@@ -21,7 +21,7 @@ export interface AlarmFilters {
   priorityName?: string;
   stateName?: 'New' | 'In progress' | 'On hold' | 'Closed';
   message?: string;
-  source?: string | string[];
+  source?: string;
   fromTime?: string;
   toTime?: string;
 }
