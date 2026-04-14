@@ -29,5 +29,20 @@ namespace LightInsightModel.General
         public string Status { get; set; }
         public string Type { get; set; } // server, storage, camera
         public string ConnectorId { get; set; } // Dùng để lọc hạ tầng theo connector
+
+        // Hardware Metrics
+        public double? CpuUsage { get; set; }
+        public double? RamUsage { get; set; }
+        public double? DiskUsage { get; set; } // Overall or Main disk
+        public List<InfrastructureDisk> Disks { get; set; } = new List<InfrastructureDisk>();
+    }
+
+    public class InfrastructureDisk
+    {
+        public string DriveName { get; set; }
+        public string VolumeLabel { get; set; }
+        public long TotalSize { get; set; }
+        public long FreeSpace { get; set; }
+        public double UsagePercentage { get; set; }
     }
 }

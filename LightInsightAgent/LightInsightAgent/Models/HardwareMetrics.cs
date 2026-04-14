@@ -5,21 +5,19 @@ namespace LightInsightAgent.Models
 {
     public class HardwareMetrics
     {
-        public string? ServerId { get; set; } // The ID or IP of the machine sending the report
+        public string? ServerId { get; set; }
+        public string? ServerName { get; set; }
         public double CpuUsage { get; set; }
-        public long TotalRam { get; set; }
-        public long AvailableRam { get; set; }
-        public double RamUsagePercentage { get; set; }
+        public double RamUsage { get; set; } // Match Backend: RamUsage
         public List<DiskMetric> Disks { get; set; } = new List<DiskMetric>();
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+        public DateTime LastUpdate { get; set; } // Match Backend: LastUpdate
     }
 
     public class DiskMetric
     {
         public string? DriveName { get; set; }
-        public string? VolumeLabel { get; set; }
-        public long TotalSize { get; set; }
-        public long FreeSpace { get; set; }
         public double UsagePercentage { get; set; }
+        public long TotalSizeGb { get; set; } // Match Backend: TotalSizeGb
+        public long FreeSpaceGb { get; set; } // Match Backend: FreeSpaceGb
     }
 }

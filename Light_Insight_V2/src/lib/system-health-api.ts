@@ -23,6 +23,9 @@ export interface InfrastructureHealth {
   Status: string;
   Type: string;
   ConnectorId: string;
+  CpuUsage?: number;
+  RamUsage?: number;
+  DiskUsage?: number;
 }
 
 export interface AuditLog {

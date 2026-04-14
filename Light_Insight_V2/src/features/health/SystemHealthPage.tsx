@@ -10,6 +10,49 @@ import { systemHealthApi, type AuditLog } from '@/lib/system-health-api';
 
 const AUDIT_HUB_URL = import.meta.env.VITE_ALARM_HUB_URL ? `${import.meta.env.VITE_ALARM_HUB_URL.replace(/\/$/, '')}/audit-log-hub` : '';
 
+const StatusText = ({ status }: { status: string }) => {
+  const isOnline = status === 'ONLINE' || status === 'CHỜ';
+  const isOffline = status === 'OFFLINE';
+  return (
+    <span className={cn(
+      "text-[10px] font-bold font-mono whitespace-nowrap uppercase tracking-wider",
+      isOnline ? "text-psim-green" : isOffline ? "text-psim-red" : "text-psim-orange"
+    )}>
+      {status}
+    </span>
+  );
+};
+
+const StatusBadge = ({ status }: { status: string }) => {
+  const isOnline = status === 'ONLINE' || status === 'CHỜ';
+  const isOffline = status === 'OFFLINE';
+  return (
+    <span className={cn(
+      "px-2 py-0.5 rounded-[4px] text-[10px] font-bold font-mono border whitespace-nowrap uppercase tracking-wider",
+      isOnline ? "bg-psim-green/15 text-psim-green border-psim-green/30" :
+      isOffline ? "bg-psim-red/15 text-psim-red border-psim-red/30" :
+      "bg-psim-orange/15 text-psim-orange border-psim-orange/30"
+    )}>
+      {status}
+    </span>
+  );
+};
+
+const UsageBar = ({ label, value, colorClass }: { label: string, value: number, colorClass: string }) => (
+  <div className="flex flex-col gap-0.5 mt-1.5 first:mt-2">
+    <div className="flex justify-between items-center text-[9px] font-mono font-bold uppercase tracking-tighter">
+      <span className="text-t-2">{label}</span>
+      <span className={cn("text-t-1", value > 90 ? "text-psim-red" : value > 70 ? "text-psim-orange" : "text-psim-green")}>{value}%</span>
+    </div>
+    <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+      <div 
+        className={cn("h-full rounded-full transition-all duration-500", colorClass)} 
+        style={{ width: `${Math.min(value, 100)}%` }} 
+      />
+    </div>
+  </div>
+);
+
 export function SystemHealthPage() {
   const queryClient = useQueryClient();
   const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
@@ -76,6 +119,28 @@ export function SystemHealthPage() {
       });
     });
 
+    connection.on('ReceiveAgentMetrics', (report: any) => {
+      const sId = report.serverId || report.ServerId;
+      const cpu = report.cpuUsage || report.CpuUsage;
+      const ram = report.ramUsage || report.RamUsage;
+      const disks = report.disks || report.Disks || [];
+      queryClient.setQueryData(['system-health-status'], (old: any) => {
+        if (!old || !old.Data) return old;
+        const newInfra = old.Data.Infrastructure.map((item: any) => {
+          if (item.Name.toLowerCase() === sId.toLowerCase()) {
+            return {
+              ...item,
+              CpuUsage: cpu,
+              RamUsage: ram,
+              Description: `CPU ${cpu}% • RAM ${ram}% • Disks: ${disks.length}`
+            };
+          }
+          return item;
+        });
+        return { ...old, Data: { ...old.Data, Infrastructure: newInfra } };
+      });
+    });
+
     connection.start().catch(err => console.error('Audit Hub Connection Failed: ', err));
 
     return () => {
@@ -104,34 +169,6 @@ export function SystemHealthPage() {
       item.ConnectorId === selectedConnectorId || item.ConnectorId === 'LOCAL'
     );
   }, [allInfrastructure, selectedConnectorId]);
-
-  const StatusText = ({ status }: { status: string }) => {
-    const isOnline = status === 'ONLINE' || status === 'CHỜ';
-    const isOffline = status === 'OFFLINE';
-    return (
-      <span className={cn(
-        "text-[10px] font-bold font-mono whitespace-nowrap uppercase tracking-wider",
-        isOnline ? "text-psim-green" : isOffline ? "text-psim-red" : "text-psim-orange"
-      )}>
-        {status}
-      </span>
-    );
-  };
-
-  const StatusBadge = ({ status }: { status: string }) => {
-    const isOnline = status === 'ONLINE' || status === 'CHỜ';
-    const isOffline = status === 'OFFLINE';
-    return (
-      <span className={cn(
-        "px-2 py-0.5 rounded-[4px] text-[10px] font-bold font-mono border whitespace-nowrap uppercase tracking-wider",
-        isOnline ? "bg-psim-green/15 text-psim-green border-psim-green/30" :
-        isOffline ? "bg-psim-red/15 text-psim-red border-psim-red/30" :
-        "bg-psim-orange/15 text-psim-orange border-psim-orange/30"
-      )}>
-        {status}
-      </span>
-    );
-  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden font-sans">
@@ -195,16 +232,24 @@ export function SystemHealthPage() {
             </div>
             <div className="flex-1 overflow-y-auto px-3 pb-6 scrollbar-thin scrollbar-thumb-psim-accent/20">
               <div className="flex flex-col gap-1">
-                {filteredInfrastructure.length > 0 ? filteredInfrastructure.map((item, i) => (
+                {filteredInfrastructure.length > 0 ? filteredInfrastructure.map((item, i) => {
+                  return (
                   <div key={i} className="flex items-center gap-3 px-3 py-2 bg-bg-2 border border-white/[0.03] rounded-[6px] hover:border-psim-accent/20 transition-all group">
                     <div className="text-[15px] grayscale group-hover:grayscale-0 transition-all shrink-0">{item.Type === 'camera' ? '📷' : item.Type === 'storage' ? '💾' : '🖥️'}</div>
                     <div className="flex-1 min-w-0">
                       <div className={cn("text-[12px] font-semibold tracking-tight truncate uppercase", item.Status === 'OFFLINE' ? "text-psim-red" : "text-t1")}>{item.Name}</div>
                       <div className="text-[10px] text-t-2 font-mono uppercase tracking-tighter">{item.Description}</div>
+                      
+                      {item.Type === 'server' && item.CpuUsage !== undefined && item.CpuUsage !== null && (
+                        <div className="grid grid-cols-2 gap-x-4">
+                          <UsageBar label="CPU" value={item.CpuUsage} colorClass={item.CpuUsage > 80 ? "bg-psim-red" : "bg-psim-green"} />
+                          <UsageBar label="RAM" value={item.RamUsage || 0} colorClass={(item.RamUsage || 0) > 80 ? "bg-psim-red" : "bg-psim-green"} />
+                        </div>
+                      )}
                     </div>
                     <StatusBadge status={item.Status} />
                   </div>
-                )) : (
+                )}) : (
                   <div className="py-10 text-center opacity-20 text-[11px] uppercase font-bold tracking-widest italic">Không có dữ liệu hạ tầng cho kết nối này</div>
                 )}
               </div>

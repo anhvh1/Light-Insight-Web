@@ -7,5 +7,6 @@ namespace LightInsightBUS.Interfaces.General
     public interface ISystemHealth
     {
         Task<BaseResultModel> GetSystemHealth();
+        Task<BaseResultModel> ReportMetrics(MilestoneServerMetric report);
     }
 }

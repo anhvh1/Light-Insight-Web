@@ -54,7 +54,12 @@ namespace LightInsightAgent.Services
                 {
                     // 1. Collect Metrics
                     var metrics = await _metricsService.GetCurrentMetricsAsync();
-                    metrics.ServerId = _machineName; // Identify this machine
+                    metrics.ServerId = _machineName;   // Unique ID
+                    metrics.ServerName = _machineName; // Display Name
+
+                    // Log what we are sending
+                    string jsonBody = System.Text.Json.JsonSerializer.Serialize(metrics);
+                    _logger.LogInformation("Sending Metrics: {Json}", jsonBody);
 
                     // 2. Push to Backend
                     string endpoint = $"{_settings.BaseUrl.TrimEnd('/')}/api/SystemHealth/Report";

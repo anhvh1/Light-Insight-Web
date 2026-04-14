@@ -45,16 +45,15 @@ namespace LightInsightAgent.Services
                 
                 // Get RAM
                 float availableMb = _ramCounter.NextValue();
-                metrics.AvailableRam = (long)availableMb;
                 
-                // To get Total RAM on Windows without WMI, we can use P/Invoke or just omit it for now.
-                // But for a better UI, we should try to get it.
                 MEMORYSTATUSEX memStatus = new MEMORYSTATUSEX();
                 if (GlobalMemoryStatusEx(memStatus))
                 {
-                    metrics.TotalRam = (long)(memStatus.ullTotalPhys / (1024 * 1024));
-                    metrics.RamUsagePercentage = Math.Round(100.0 * (metrics.TotalRam - metrics.AvailableRam) / metrics.TotalRam, 2);
+                    long totalRamMb = (long)(memStatus.ullTotalPhys / (1024 * 1024));
+                    metrics.RamUsage = Math.Round(100.0 * (totalRamMb - availableMb) / totalRamMb, 2);
                 }
+
+                metrics.LastUpdate = DateTime.Now;
 
                 // Get Disks
                 foreach (var drive in DriveInfo.GetDrives())
@@ -64,14 +63,13 @@ namespace LightInsightAgent.Services
                         var disk = new DiskMetric
                         {
                             DriveName = drive.Name,
-                            VolumeLabel = drive.VolumeLabel,
-                            TotalSize = drive.TotalSize / (1024 * 1024 * 1024), // GB
-                            FreeSpace = drive.AvailableFreeSpace / (1024 * 1024 * 1024), // GB
+                            TotalSizeGb = drive.TotalSize / (1024 * 1024 * 1024), // GB
+                            FreeSpaceGb = drive.AvailableFreeSpace / (1024 * 1024 * 1024), // GB
                         };
                         
-                        if (disk.TotalSize > 0)
+                        if (disk.TotalSizeGb > 0)
                         {
-                            disk.UsagePercentage = Math.Round(100.0 * (disk.TotalSize - disk.FreeSpace) / disk.TotalSize, 2);
+                            disk.UsagePercentage = Math.Round(100.0 * (disk.TotalSizeGb - disk.FreeSpaceGb) / disk.TotalSizeGb, 2);
                         }
                         
                         metrics.Disks.Add(disk);

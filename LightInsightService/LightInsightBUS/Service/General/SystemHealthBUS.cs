@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Runtime.InteropServices;
 using LightInsightBUS.ExternalServices.MileStone;
+using Microsoft.Extensions.Caching.Memory;
+using System.Linq;
 
 namespace LightInsightBUS.Service.General
 {
@@ -18,12 +20,18 @@ namespace LightInsightBUS.Service.General
         private readonly IConnectors _connectorService;
         private readonly MilestoneHealthBUS _milestoneProvider;
         private readonly MilestoneSystemProber _systemProber;
+        private readonly IMemoryCache _cache;
 
-        public SystemHealthBUS(IConnectors connectorService, MilestoneHealthBUS milestoneProvider, MilestoneSystemProber systemProber)
+        public SystemHealthBUS(
+            IConnectors connectorService, 
+            MilestoneHealthBUS milestoneProvider, 
+            MilestoneSystemProber systemProber,
+            IMemoryCache cache)
         {
             _connectorService = connectorService;
             _milestoneProvider = milestoneProvider;
             _systemProber = systemProber;
+            _cache = cache;
         }
 
         public async Task<BaseResultModel> GetSystemHealth()
@@ -45,6 +53,13 @@ namespace LightInsightBUS.Service.General
 
                         // 2. Lấy hạ tầng của riêng Connector này
                         var infra = await _milestoneProvider.GetInfrastructureAsync(config);
+                        
+                        // 3. Merge dữ liệu từ Agent nếu có
+                        foreach(var item in infra)
+                        {
+                            MergeAgentMetrics(item);
+                        }
+
                         result.Infrastructure.AddRange(infra);
                     }
                 }
@@ -59,6 +74,43 @@ namespace LightInsightBUS.Service.General
             catch (Exception ex)
             {
                 return new BaseResultModel { Status = -1, Message = "Error: " + ex.Message };
+            }
+        }
+
+        public async Task<BaseResultModel> ReportMetrics(MilestoneServerMetric report)
+        {
+            if (string.IsNullOrEmpty(report.ServerId)) return new BaseResultModel { Status = -1, Message = "ServerId is required" };
+
+            report.LastUpdate = DateTime.Now;
+            
+            // Lưu vào Cache (Hết hạn sau 10 phút nếu không có report mới)
+            _cache.Set($"AGENT_METRIC_{report.ServerId}", report, TimeSpan.FromMinutes(10));
+
+            return new BaseResultModel { Status = 1, Message = "Report received" };
+        }
+
+        private void MergeAgentMetrics(InfrastructureHealth item)
+        {
+            if (item.Type != "server" && item.Type != "storage") return;
+
+            // Key dựa trên tên máy (WIN-...)
+            if (_cache.TryGetValue($"AGENT_METRIC_{item.Name}", out MilestoneServerMetric metrics))
+            {
+                item.CpuUsage = metrics.CpuUsage;
+                item.RamUsage = metrics.RamUsage;
+                
+                if (item.Type == "server")
+                {
+                    item.Description = $"CPU {metrics.CpuUsage}% · RAM {metrics.RamUsage}% · Disks: {metrics.Disks.Count}";
+                }
+                
+                // Map disks cho storage nếu cần (matching logic can be complex, here we just attach the full list)
+                item.Disks = metrics.Disks.Select(d => new InfrastructureDisk {
+                    DriveName = d.DriveName,
+                    UsagePercentage = d.UsagePercentage,
+                    TotalSize = d.TotalSizeGb,
+                    FreeSpace = d.FreeSpaceGb
+                }).ToList();
             }
         }
 
