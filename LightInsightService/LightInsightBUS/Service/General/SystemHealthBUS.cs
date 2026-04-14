@@ -98,6 +98,8 @@ namespace LightInsightBUS.Service.General
             {
                 item.CpuUsage = metrics.CpuUsage;
                 item.RamUsage = metrics.RamUsage;
+                item.TotalRamGb = metrics.TotalRamGb;
+                item.FreeRamGb = metrics.FreeRamGb;
                 
                 if (item.Type == "server")
                 {

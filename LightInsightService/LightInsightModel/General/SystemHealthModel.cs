@@ -33,6 +33,8 @@ namespace LightInsightModel.General
         // Hardware Metrics
         public double? CpuUsage { get; set; }
         public double? RamUsage { get; set; }
+        public double? TotalRamGb { get; set; }
+        public double? FreeRamGb { get; set; }
         public double? DiskUsage { get; set; } // Overall or Main disk
         public List<InfrastructureDisk> Disks { get; set; } = new List<InfrastructureDisk>();
     }

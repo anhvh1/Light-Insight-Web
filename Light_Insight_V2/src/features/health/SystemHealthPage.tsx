@@ -38,13 +38,16 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-const UsageBar = ({ label, value, colorClass }: { label: string, value: number, colorClass: string }) => (
+const UsageBar = ({ label, value, colorClass, detail }: { label: string, value: number, colorClass: string, detail?: string }) => (
   <div className="flex flex-col gap-0.5 mt-1.5 first:mt-2">
-    <div className="flex justify-between items-center text-[9px] font-mono font-bold uppercase tracking-tighter">
-      <span className="text-t-2">{label}</span>
+    <div className="flex justify-between items-end text-[9px] font-mono font-bold uppercase tracking-tighter">
+      <div className="flex flex-col">
+        <span className="text-t-2 leading-none">{label}</span>
+        {detail && <span className="text-[8px] opacity-40 font-normal normal-case mt-0.5 leading-none">{detail}</span>}
+      </div>
       <span className={cn("text-t-1", value > 90 ? "text-psim-red" : value > 70 ? "text-psim-orange" : "text-psim-green")}>{value}%</span>
     </div>
-    <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+    <div className="h-1 bg-white/5 rounded-full overflow-hidden mt-0.5">
       <div 
         className={cn("h-full rounded-full transition-all duration-500", colorClass)} 
         style={{ width: `${Math.min(value, 100)}%` }} 
@@ -123,7 +126,17 @@ export function SystemHealthPage() {
       const sId = report.serverId || report.ServerId;
       const cpu = report.cpuUsage || report.CpuUsage;
       const ram = report.ramUsage || report.RamUsage;
-      const disks = report.disks || report.Disks || [];
+      const totalRam = report.totalRamGb || report.TotalRamGb;
+      const freeRam = report.freeRamGb || report.FreeRamGb;
+      const rawDisks = report.disks || report.Disks || [];
+      
+      const disks = rawDisks.map((d: any) => ({
+        DriveName: d.driveName || d.DriveName,
+        UsagePercentage: d.usagePercentage || d.UsagePercentage,
+        TotalSize: d.totalSizeGb || d.TotalSizeGb,
+        FreeSpace: d.freeSpaceGb || d.FreeSpaceGb
+      }));
+
       queryClient.setQueryData(['system-health-status'], (old: any) => {
         if (!old || !old.Data) return old;
         const newInfra = old.Data.Infrastructure.map((item: any) => {
@@ -132,6 +145,9 @@ export function SystemHealthPage() {
               ...item,
               CpuUsage: cpu,
               RamUsage: ram,
+              TotalRamGb: totalRam,
+              FreeRamGb: freeRam,
+              Disks: disks,
               Description: `CPU ${cpu}% • RAM ${ram}% • Disks: ${disks.length}`
             };
           }
@@ -243,7 +259,36 @@ export function SystemHealthPage() {
                       {item.Type === 'server' && item.CpuUsage !== undefined && item.CpuUsage !== null && (
                         <div className="grid grid-cols-2 gap-x-4">
                           <UsageBar label="CPU" value={item.CpuUsage} colorClass={item.CpuUsage > 80 ? "bg-psim-red" : "bg-psim-green"} />
-                          <UsageBar label="RAM" value={item.RamUsage || 0} colorClass={(item.RamUsage || 0) > 80 ? "bg-psim-red" : "bg-psim-green"} />
+                          <UsageBar 
+                            label="RAM" 
+                            value={item.RamUsage || 0} 
+                            colorClass={(item.RamUsage || 0) > 80 ? "bg-psim-red" : "bg-psim-green"}
+                            detail={item.TotalRamGb ? `${item.FreeRamGb}GB free / ${item.TotalRamGb}GB` : undefined}
+                          />
+                          {item.Disks?.map((disk, di) => (
+                            <UsageBar 
+                              key={di} 
+                              label={`Disk ${disk.DriveName}`} 
+                              value={disk.UsagePercentage} 
+                              colorClass={disk.UsagePercentage > 90 ? "bg-psim-red" : "bg-psim-green"}
+                              detail={`${disk.FreeSpace}GB free / ${disk.TotalSize}GB`}
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      {item.Type === 'storage' && item.Disks && item.Disks.length > 0 && (
+                        <div className="mt-1">
+                          {/* Try to find matching disk if the storage name contains a drive letter like (C:) */}
+                          {item.Disks.filter(d => item.Name.includes(d.DriveName.replace('\\','')) || item.Disks!.length === 1).map((disk, di) => (
+                            <UsageBar 
+                              key={di} 
+                              label="Usage" 
+                              value={disk.UsagePercentage} 
+                              colorClass={disk.UsagePercentage > 90 ? "bg-psim-red" : "bg-psim-green"}
+                              detail={`${disk.FreeSpace}GB free / ${disk.TotalSize}GB`}
+                            />
+                          ))}
                         </div>
                       )}
                     </div>

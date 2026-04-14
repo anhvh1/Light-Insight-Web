@@ -17,6 +17,14 @@ export interface ConnectorHealth {
   HealthPercentage: number;
 }
 
+export interface InfrastructureDisk {
+  DriveName: string;
+  VolumeLabel?: string;
+  TotalSize: number;
+  FreeSpace: number;
+  UsagePercentage: number;
+}
+
 export interface InfrastructureHealth {
   Name: string;
   Description: string;
@@ -25,7 +33,10 @@ export interface InfrastructureHealth {
   ConnectorId: string;
   CpuUsage?: number;
   RamUsage?: number;
+  TotalRamGb?: number;
+  FreeRamGb?: number;
   DiskUsage?: number;
+  Disks?: InfrastructureDisk[];
 }
 
 export interface AuditLog {

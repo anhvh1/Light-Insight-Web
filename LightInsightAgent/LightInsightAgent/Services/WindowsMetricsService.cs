@@ -45,11 +45,13 @@ namespace LightInsightAgent.Services
                 
                 // Get RAM
                 float availableMb = _ramCounter.NextValue();
+                metrics.FreeRamGb = Math.Round(availableMb / 1024.0, 2);
                 
                 MEMORYSTATUSEX memStatus = new MEMORYSTATUSEX();
                 if (GlobalMemoryStatusEx(memStatus))
                 {
-                    long totalRamMb = (long)(memStatus.ullTotalPhys / (1024 * 1024));
+                    double totalRamMb = memStatus.ullTotalPhys / (1024.0 * 1024.0);
+                    metrics.TotalRamGb = Math.Round(totalRamMb / 1024.0, 2);
                     metrics.RamUsage = Math.Round(100.0 * (totalRamMb - availableMb) / totalRamMb, 2);
                 }
 

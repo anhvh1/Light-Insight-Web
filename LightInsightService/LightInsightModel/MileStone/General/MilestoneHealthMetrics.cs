@@ -9,6 +9,8 @@ namespace LightInsightModel.MileStone.General
         public string ServerName { get; set; }
         public double CpuUsage { get; set; }
         public double RamUsage { get; set; }
+        public double TotalRamGb { get; set; }
+        public double FreeRamGb { get; set; }
         public List<MilestoneDiskMetric> Disks { get; set; } = new List<MilestoneDiskMetric>();
         public DateTime LastUpdate { get; set; }
     }
