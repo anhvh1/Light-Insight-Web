@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 using LightInsightBUS.Interfaces.MileStone.Alarm;
+using LightInsightModel.MileStone.General;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,7 +12,6 @@ namespace LightInsightService.Controllers.MileStone.Alarm
 {
     [ApiController]
     [Route("api/milestone")]
-    [Authorize] // Requires authentication for all actions in this controller
     public class AlarmsController : ControllerBase
     {
         private readonly IAlarmService _alarmService;
@@ -24,26 +24,26 @@ namespace LightInsightService.Controllers.MileStone.Alarm
         public class GetAlarmsRequest
         {
             [Required]
-            public List<string> CameraIds { get; set; }
-
-            [Required]
-            public DateTime StartTime { get; set; }
-
-            [Required]
-            public DateTime EndTime { get; set; }
+            public Guid MapId { get; set; }
+            public int Page { get; set; }
+            public int Size { get; set; }
         }
 
         [HttpGet("GetAlarms")]
-        public async Task<IActionResult> GetAlarms([FromQuery] Guid key,[FromQuery] GetAlarmsRequest request)
+        public async Task<IActionResult> GetAlarms([FromQuery] GetAlarmsRequest request)
         {
             try
             {
-                if (request.CameraIds == null || !request.CameraIds.Any())
+                if (request.MapId == Guid.Empty)
                 {
-                    return BadRequest("CameraIds list cannot be empty.");
+                    return BadRequest("MapId cannot be empty.");
                 }
-                var alarms = await _alarmService.GetAlarmsAsync(key, request.CameraIds, request.StartTime, request.EndTime);
-                return Ok(alarms);
+                var alarms = await _alarmService.GetAlarmsAsync(request.MapId, request.Page, request.Size);
+                var result = new BaseResultModel();
+                result.Data = alarms;
+                result.Message = "Thành công";
+                result.Status = 1;
+                return Ok(result);
             }
             catch (Exception ex)
             {

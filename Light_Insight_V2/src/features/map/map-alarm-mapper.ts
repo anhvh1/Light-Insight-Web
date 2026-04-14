@@ -12,6 +12,8 @@ export interface AlarmPayload {
   stateName?: string;
   time?: string;
   type?: string;
+  connectorName?: string;
+  ipadress?: string;
 }
 
 let counter = 0;
@@ -78,6 +80,8 @@ function toAlarm(payload: AlarmPayload, isNew: boolean): Alarm {
     loc: payload.location ?? '',
     corr: 0,
     isNew,
+    connectorName: payload.connectorName,
+    ipadress: payload.ipadress,
   };
 }
 

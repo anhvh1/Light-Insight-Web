@@ -36,6 +36,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
                 {
                     return new ConnectorsModel
                     {
+                        Name = listModel.Name,
                         IpServer = listModel.IpServer,
                         Port = listModel.Port,
                         Username = listModel.Username,

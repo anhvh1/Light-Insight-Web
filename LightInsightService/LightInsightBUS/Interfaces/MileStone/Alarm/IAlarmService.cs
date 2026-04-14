@@ -12,6 +12,6 @@ namespace LightInsightBUS.Interfaces.MileStone.Alarm
     {
         Task<List<AlarmData>> GetAlarmData(Guid key,int page, int pageSize, AlarmFilter filter = null);
         Task<List<string>> GetAlarmMessageDropdownAsync(Guid key);
-        Task<List<AlarmModel>> GetAlarmsAsync(Guid key, List<string> cameraIds, DateTime startTime, DateTime endTime);
+        Task<List<AlarmData>> GetAlarmsAsync(Guid mapId, int page, int size);
     }
 }

@@ -17,6 +17,8 @@ export interface Alarm {
   time: string;
   corr: number;
   isNew: boolean;
+  connectorName?: string;
+  ipadress?: string;
 }
 
 export interface Incident {

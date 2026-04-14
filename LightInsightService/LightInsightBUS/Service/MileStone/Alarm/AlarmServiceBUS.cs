@@ -15,6 +15,9 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
+using LightInsightDAL.Repositories.General;
+using LightInsightModel.General;
+
 namespace LightInsightBUS.Service.MileStone.Alarm
 {
     public class AlarmServiceBUS : IAlarmService
@@ -24,10 +27,12 @@ namespace LightInsightBUS.Service.MileStone.Alarm
         private static GetCameras camera = new GetCameras();
         private readonly GetAnalyticsEvents tocken;
         private readonly IMemoryCache _cache;
+        private readonly DMMapDAL _dmMapDAL = new DMMapDAL();
 
         public AlarmServiceBUS(IMemoryCache cache)
         {
             tocken = new GetAnalyticsEvents(cache);
+            _cache = cache;
         }
 
         public async Task<List<string>> GetAlarmMessageDropdownAsync(Guid key)
@@ -208,56 +213,109 @@ namespace LightInsightBUS.Service.MileStone.Alarm
         {
             return input?.Replace("'", "''");
         }
-        public async Task<List<AlarmModel>> GetAlarmsAsync(Guid key, List<string> cameraIds, DateTime startTime, DateTime endTime)
+        public async Task<List<AlarmData>> GetAlarmsAsync(Guid mapId, int page, int size)
         {
-            string cacheKey = $"TOKEN_{key}";
-            //if (!_cache.TryGetValue(cacheKey, out VMSModel vmsData))
-            //{
-            //    throw new Exception($"VMS connection details for VMS ID '{key}' not found in cache.");
-            //}
-            // 1. Lấy Token
-            var accessToken = await tocken.GetTokenAsync(key);
-
-            var config = tocken.GetVmsConfig(key);
-            var baseUrl = $"http://{config.IpServer}:{config.Port}";
-
+            var resultList = new List<AlarmData>();
             try
             {
-                var handler = new HttpClientHandler();
-                handler.ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
+                // 1. Lấy tất cả markers từ MapId
+                var markers = await _dmMapDAL.GetMarkersByMapIdAsync(mapId);
+                
+                if (markers == null || !markers.Any()) return resultList;
 
-                using (var client = new HttpClient(handler))
+                // Thiết lập thời gian từ đầu ngày đến cuối ngày theo giờ địa phương, sau đó chuyển sang UTC
+                DateTime now = DateTime.Now;
+                DateTime startTime = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0).ToUniversalTime();
+                DateTime endTime = new DateTime(now.Year, now.Month, now.Day, 23, 59, 59).ToUniversalTime();
+
+                // 2. Nhóm theo Connectorid (chỉ lấy những marker có Connectorid)
+                var groupedByConnector = markers
+                    .Where(m => m.Connectorid.HasValue)
+                    .GroupBy(m => m.Connectorid.Value);
+
+                // TẠO BỘ NHỚ ĐỆM (CACHE) ĐỂ LƯU TÊN CAMERA TRONG PHẠM VI REQUEST
+                // Key: cameraId | Value: Tên camera
+                Dictionary<string, string> cameraCache = new Dictionary<string, string>();
+
+                foreach (var group in groupedByConnector)
                 {
-                    client.BaseAddress = new Uri(baseUrl);
-                    client.DefaultRequestHeaders.Accept.Clear();
-                    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                    Guid connectorId = group.Key;
+                    
+                    // 3. Lấy cấu hình VMS từ cache theo connectorId để kiểm tra VmsID
+                    var config = tocken.GetVmsConfig(connectorId);
+                    
+                    // Nếu không tìm thấy cấu hình hoặc VmsID không phải là 1 (Milestone) thì bỏ qua
+                    if (config == null || config.VMSID != 1) continue;
 
-                    var sourceIds = string.Join(",", cameraIds.ConvertAll(id => $"'cameras/{id}'"));
-                    var filter = $"source.id=oneOf:({sourceIds})&time=gt:'{startTime:o}'&lt:'{endTime:o}'";
-                    var endpoint = $"/api/rest/v1/alarms?{filter}";
+                    var cameraIds = group.Select(m => m.CameraId).Distinct().ToList();
+                    if (!cameraIds.Any()) continue;
 
-                    HttpResponseMessage response = await client.GetAsync(endpoint);
+                    // 4. Lấy Token
+                    var accessToken = await tocken.GetTokenAsync(connectorId);
+                    if (string.IsNullOrEmpty(accessToken)) continue;
 
-                    if (response.IsSuccessStatusCode)
+                    var baseUrl = $"http://{config.IpServer}:{config.Port}";
+
+                    // 5. Gọi Milestone API lấy danh sách báo động
+                    var alarms = await alarm.GetAlarmsAsync(baseUrl, accessToken, cameraIds, startTime, endTime, page, size);
+
+                    // 6. Map dữ liệu sang AlarmData (giống GetAlarmData)
+                    foreach (var item in alarms)
                     {
-                        string jsonResponse = await response.Content.ReadAsStringAsync();
-                        var alarmResponse = JsonSerializer.Deserialize<AlarmResponseModel>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                        return alarmResponse?.Array ?? new List<AlarmModel>();
-                    }
-                    else
-                    {
-                        var errorContent = await response.Content.ReadAsStringAsync();
-                        Console.WriteLine($"API Error: {response.StatusCode} - {errorContent}");
-                        throw new HttpRequestException($"Failed to retrieve alarms from Milestone. Status: {response.StatusCode}, Details: {errorContent}");
+                        string camName = "Unknown Camera";
+                        string camId = item.CameraId;
+
+                        // Logic lấy tên camera giống GetAlarmData
+                        if (!string.IsNullOrEmpty(camId))
+                        {
+                            if (cameraCache.ContainsKey(camId))
+                            {
+                                camName = cameraCache[camId];
+                            }
+                            else
+                            {
+                                // Gọi API lấy thông tin camera
+                                string rawCameraJson = camera.GetCameraById(baseUrl, accessToken, camId);
+                                if (!string.IsNullOrEmpty(rawCameraJson))
+                                {
+                                    var cameraDataResponse = JsonConvert.DeserializeObject<MilestoneCameraResponse>(rawCameraJson);
+                                    if (cameraDataResponse?.data != null)
+                                    {
+                                        camName = cameraDataResponse.data.name;
+                                        cameraCache[camId] = camName;
+                                    }
+                                }
+                            }
+                        }
+
+                        var feItem = new AlarmData
+                        {
+                            alarmId = item.Id,
+                            alarmName = item.Name,
+                            location = "", // Để trống như yêu cầu
+                            message = item.Message,
+                            priorityLevel = item.Priority?.Level ?? 0,
+                            priorityName = item.Priority?.Name ?? "Unknown",
+                            source = camName, // Sử dụng tên camera đã lấy được
+                            stateLevel = item.State?.Level ?? 0,
+                            stateName = item.State?.Name ?? "Unknown",
+                            cameraid = camId,
+                            time = item.Time.ToLocalTime().ToString("dd-MM-yyyy HH:mm:ss"),
+                            type = item.LegacyType,
+                            connectorName = config.Name,
+                            ipadress = config.IpServer
+                        };
+
+                        resultList.Add(feItem);
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error fetching alarms: " + ex.Message);
-                throw;
+                Console.WriteLine("Error fetching alarms by mapId: " + ex.Message);
             }
+
+            return resultList;
         }
     }
 }

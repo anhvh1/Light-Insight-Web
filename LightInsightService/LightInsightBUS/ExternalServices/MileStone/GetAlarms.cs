@@ -11,7 +11,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
 {
     class GetAlarms
     {
-        public async Task<List<AlarmModel>> GetAlarmsAsync(string baseUrl, string token, List<string> cameraIds, DateTime startTime, DateTime endTime)
+        public async Task<List<AlarmModel>> GetAlarmsAsync(string baseUrl, string token, List<string> cameraIds, DateTime startTime, DateTime endTime, int page, int size)
         {
             try
             {
@@ -27,8 +27,8 @@ namespace LightInsightBUS.ExternalServices.MileStone
 
                     var sourceIds = string.Join(",", cameraIds.ConvertAll(id => $"'cameras/{id}'"));
                     var filter = $"source.id=oneOf:({sourceIds})&time=gt:'{startTime:o}',lt:'{endTime:o}'";
-                    var endpoint = $"/api/rest/v1/alarms?{filter}";
-                    
+                    var endpoint = $"/api/rest/v1/alarms?{filter}&page={page}&size={size}";
+
                     HttpResponseMessage response = await client.GetAsync(endpoint);
 
                     if (response.IsSuccessStatusCode)
@@ -81,7 +81,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
                     {
                         endpoint += $"&{filterQuery}";
                     }
-                    
+
                     HttpResponseMessage response = client.GetAsync(endpoint).Result;
 
                     if (response.IsSuccessStatusCode)

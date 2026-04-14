@@ -16,11 +16,14 @@ import {
   Cctv,
   RefreshCcw,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  X
 } from 'lucide-react';
 import { mapApi } from '@/lib/map-api';
 import type { MapTreeNode, Alarm } from '@/types';
 import { useAlarmStream } from '@/features/alarms/AlarmStreamProvider';
+
+import { normalizeApiAlarm } from '@/features/alarms/alarm-mapper';
 
 // --- HELPER FUNCTION ---
 
@@ -41,6 +44,35 @@ function findFirstMap(nodes: MapTreeNode[]): MapTreeNode | null {
   return null;
 }
 
+function findMapById(nodes: MapTreeNode[], id: string): MapTreeNode | null {
+  for (const node of nodes) {
+    if (node.Id === id) return node;
+    if (node.Children && node.Children.length > 0) {
+      const found = findMapById(node.Children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function filterMapTree(nodes: MapTreeNode[], query: string): MapTreeNode[] {
+  if (!query) return nodes;
+  const lowerQuery = query.toLowerCase();
+  
+  return nodes.map(node => {
+    const isMatch = node.Name.toLowerCase().includes(lowerQuery);
+    if (node.Children && node.Children.length > 0) {
+      const filteredChildren = filterMapTree(node.Children, query);
+      if (isMatch || filteredChildren.length > 0) {
+        return { ...node, Children: filteredChildren };
+      }
+    } else if (isMatch) {
+      return node;
+    }
+    return null;
+  }).filter(Boolean) as MapTreeNode[];
+}
+
 // --- THE ACTUAL MAP VIEW COMPONENT (Consumes the context) ---
 
 function MapViewInternal() {
@@ -51,6 +83,31 @@ function MapViewInternal() {
   const [selectedMapName, setSelectedMapName] = useState<string | null>(null);
   const [activeMapUrl, setActiveMapMapUrl] = useState<string | null>(null);
   const [showLegend, setShowLegend] = useState(true);
+
+  // Modal States
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalAlarms, setModalAlarms] = useState<Alarm[]>([]);
+  const [modalPage, setModalPage] = useState(0);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const modalScrollRef = useRef<HTMLDivElement>(null);
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsModalOpen(false);
+    };
+    if (isModalOpen) {
+        window.addEventListener('keydown', handleEsc);
+        document.body.style.overflow = 'hidden';
+    } else {
+        document.body.style.overflow = 'unset';
+    }
+    return () => {
+        window.removeEventListener('keydown', handleEsc);
+        document.body.style.overflow = 'unset';
+    };
+  }, [isModalOpen]);
 
   // Zoom & Pan States
   const [zoomScale, setZoomScale] = useState(1);
@@ -81,15 +138,71 @@ function MapViewInternal() {
   });
   const markers = markersResponse?.Data || [];
 
-  // --- AUTO-SELECT FIRST MAP ---
+  const { data: historicalAlarmsResponse } = useQuery({
+    queryKey: ['map-historical-alarms', selectedMapId],
+    queryFn: () => mapApi.getMilestoneAlarms(selectedMapId!, 0, 20),
+    enabled: !!selectedMapId,
+    select: (res) => (res.Data || []).map(normalizeApiAlarm)
+  });
+  const historicalAlarms = historicalAlarmsResponse || [];
+
+  // --- MODAL DATA FETCHING ---
+  const fetchModalAlarms = useCallback(async (page: number, append = false) => {
+    if (!selectedMapId) return;
+    setIsFetchingMore(true);
+    try {
+      const res = await mapApi.getMilestoneAlarms(selectedMapId, page, 20);
+      const newAlarms = (res.Data || []).map(normalizeApiAlarm);
+      
+      if (newAlarms.length < 20) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
+
+      setModalAlarms(prev => append ? [...prev, ...newAlarms] : newAlarms);
+      setModalPage(page);
+    } catch (error) {
+      console.error('Failed to fetch modal alarms:', error);
+    } finally {
+      setIsFetchingMore(false);
+    }
+  }, [selectedMapId]);
+
+  const handleOpenModal = () => {
+    setIsModalOpen(true);
+    setModalAlarms([]);
+    setModalPage(0);
+    setHasMore(true);
+    void fetchModalAlarms(0);
+  };
+
+  const handleModalScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (!hasMore || isFetchingMore) return;
+    const target = e.currentTarget;
+    if (target.scrollHeight - target.scrollTop <= target.clientHeight + 50) {
+      void fetchModalAlarms(modalPage + 1, true);
+    }
+  };
+
+  // --- AUTO-SELECT MAP ---
   useEffect(() => {
     // If a map isn't already selected and the tree has finished loading and is not empty
     if (!selectedMapId && !isLoadingTree && mapTree.length > 0) {
-      const firstMap = findFirstMap(mapTree);
-      if (firstMap) {
-        setSelectedMapId(firstMap.Id);
-        setSelectedMapName(firstMap.Name);
-        setActiveMapMapUrl(firstMap.MapImagePath);
+      const savedMapId = localStorage.getItem('lastSelectedMapId');
+      let targetMap = savedMapId ? findMapById(mapTree, savedMapId) : null;
+      
+      if (!targetMap) {
+        targetMap = findFirstMap(mapTree);
+      }
+
+      if (targetMap) {
+        setSelectedMapId(targetMap.Id);
+        setSelectedMapName(targetMap.Name);
+        setActiveMapMapUrl(targetMap.MapImagePath);
+        if (!savedMapId) {
+          localStorage.setItem('lastSelectedMapId', targetMap.Id);
+        }
       }
     }
   }, [mapTree, isLoadingTree, selectedMapId]);
@@ -101,30 +214,85 @@ function MapViewInternal() {
   }, [markers]);
 
 
-  // --- DERIVED STATE FROM CENTRAL ALARM STREAM ---
+  // --- DERIVED STATE FROM CENTRAL ALARM STREAM + HISTORICAL ---
 
   // 1. Filter for alarms relevant to the map (must have a source AND that source must be a camera on the active map)
   const mapAlarms = useMemo(() => {
-    return allAlarms.filter(alarm => 
+    const realtimeMapAlarms = allAlarms.filter(alarm => 
       alarm.src && cameraNamesOnActiveMap.has(alarm.src)
     );
-  }, [allAlarms, cameraNamesOnActiveMap]);
+    
+    // Combine and remove duplicates by ID
+    const combined = [...realtimeMapAlarms, ...historicalAlarms];
+    const uniqueMap = new Map<string, Alarm>();
+    combined.forEach(a => {
+      if (!uniqueMap.has(a.id)) {
+        uniqueMap.set(a.id, a);
+      }
+    });
+    
+    return Array.from(uniqueMap.values());
+  }, [allAlarms, historicalAlarms, cameraNamesOnActiveMap]);
 
-  // 2. Get the 10 most recent alarms for the live feed
+  // 2. Get the 6 most recent alarms for the live feed
   const latestAlarms = useMemo(() => {
     // The `allAlarms` from the hook are already sorted by time, newest first.
-    return mapAlarms.slice(0, 10);
+    return mapAlarms.slice(0, 6);
   }, [mapAlarms]);
 
-  // 3. Get the total count of map-relevant alarms
-  const totalAlarmCount = useMemo(() => {
-    return mapAlarms.length;
-  }, [mapAlarms]);
-  
-  const criticalCount = latestAlarms.filter(a => a.pri === 'critical').length;
+  // 3. Daily Alarm Counters
+  const [dailyAlarmCount, setDailyAlarmCount] = useState(0);
+  const [dailyCriticalCount, setDailyCriticalCount] = useState(0);
+  const processedAlarmsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!selectedMapId) return;
+    
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format based on local time
+    const storageKey = `map_alarms_daily_${selectedMapId}`;
+    const dateKey = `map_alarms_date_${selectedMapId}`;
+    
+    const savedDate = localStorage.getItem(dateKey);
+    if (savedDate !== today) {
+      localStorage.setItem(dateKey, today);
+      localStorage.setItem(storageKey + '_total', '0');
+      localStorage.setItem(storageKey + '_critical', '0');
+      setDailyAlarmCount(0);
+      setDailyCriticalCount(0);
+      processedAlarmsRef.current.clear(); // Reset processed alarms on a new day
+    } else {
+      setDailyAlarmCount(parseInt(localStorage.getItem(storageKey + '_total') || '0', 10));
+      setDailyCriticalCount(parseInt(localStorage.getItem(storageKey + '_critical') || '0', 10));
+    }
+
+    let newTotal = parseInt(localStorage.getItem(storageKey + '_total') || '0', 10);
+    let newCritical = parseInt(localStorage.getItem(storageKey + '_critical') || '0', 10);
+    let updated = false;
+
+    allAlarms.forEach(alarm => {
+      // Only process NEW alarms from hub that belong to the current map's cameras
+      if (alarm.isNew && alarm.src && cameraNamesOnActiveMap.has(alarm.src)) {
+        if (!processedAlarmsRef.current.has(alarm.id)) {
+          processedAlarmsRef.current.add(alarm.id);
+          newTotal += 1;
+          if (alarm.pri === 'critical') {
+            newCritical += 1;
+          }
+          updated = true;
+        }
+      }
+    });
+
+    if (updated) {
+      localStorage.setItem(storageKey + '_total', newTotal.toString());
+      localStorage.setItem(storageKey + '_critical', newCritical.toString());
+      setDailyAlarmCount(newTotal);
+      setDailyCriticalCount(newCritical);
+    }
+  }, [allAlarms, selectedMapId, cameraNamesOnActiveMap]);
 
   const stats = [
-    { label: 'ACTIVE ALARMS', val: totalAlarmCount.toString(), sub: `${criticalCount} critical`, color: 'text-psim-red' },
+    { label: 'ACTIVE ALARMS', val: dailyAlarmCount.toString(), sub: `${dailyCriticalCount} critical`, color: 'text-psim-red' },
     { label: 'CAMERA ACTIVE', val: '47', sub: '/ 52 total', color: 'text-psim-green' },
     { label: 'GUARDS ON DUTY', val: '8', sub: 'Night Shift', color: 'text-psim-orange' },
     { label: 'ACCESS EVENTS/H', val: '142', sub: '↑ normal', color: 'text-psim-accent' },
@@ -133,6 +301,7 @@ function MapViewInternal() {
 
   // Draggable Toolbar States
   const [isExpanded, setIsExpanded] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 120 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ mouseX: 0, mouseY: 0, startX: 0, startY: 0 });
@@ -259,8 +428,122 @@ function MapViewInternal() {
     low: 'border-psim-green',
   };
 
+  const filteredMapTree = useMemo(() => filterMapTree(mapTree, searchQuery), [mapTree, searchQuery]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden font-sans select-none">
+      {/* Custom Tailwind Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/80 backdrop-blur-md" 
+            onClick={() => setIsModalOpen(false)} 
+          />
+          
+          {/* Modal Content */}
+          <div className="relative w-[1200px] h-[80vh] bg-[#0a0f1d] border border-white/10 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+            {/* Modal Header */}
+            <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-psim-orange/10 flex items-center justify-center text-psim-orange shadow-inner">
+                   <Activity size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-heading font-bold uppercase tracking-widest text-white leading-none mb-1">
+                    Nhật ký sự kiện
+                  </h2>
+                  <p className="text-[11px] font-bold text-psim-orange uppercase tracking-tighter opacity-70">
+                    Bản đồ: {selectedMapName}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-psim-red hover:text-white flex items-center justify-center transition-all group"
+              >
+                <X size={20} className="group-hover:rotate-90 transition-transform duration-300 text-t3 group-hover:text-white" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div 
+              ref={modalScrollRef}
+              onScroll={handleModalScroll}
+              className="flex-1 overflow-y-auto custom-scrollbar bg-[#05070a]/50"
+            >
+              {/* Table Header */}
+              <div className="sticky top-0 z-20 grid grid-cols-[120px_120px_1fr_200px_150px_150px] gap-6 px-8 py-4 bg-[#161b2e] border-b border-white/10 text-[10px] font-heading font-bold uppercase tracking-widest text-t3">
+                <div>Thời gian</div>
+                <div>Mức độ</div>
+                <div>Nội dung sự kiện</div>
+                <div>Nguồn</div>
+                <div>Hệ thống</div>
+                <div>Địa chỉ IP</div>
+              </div>
+
+              <div className="flex flex-col min-h-full">
+                {modalAlarms.map((alarm, idx) => (
+                  <div 
+                    key={alarm.id + idx} 
+                    className="grid grid-cols-[120px_120px_1fr_200px_150px_150px] gap-6 px-8 py-4 border-b border-white/[0.03] hover:bg-white/[0.03] transition-all items-center group/row"
+                  >
+                    <div className="text-[12px] font-mono text-t2 font-semibold group-hover/row:text-white transition-colors">
+                      {alarm.time}
+                    </div>
+                    <div>
+                      <span className={cn(
+                        "text-[10px] font-heading font-bold px-3 py-1 rounded-lg uppercase tracking-wider border inline-block text-center min-w-[80px]",
+                        alarm.pri === 'critical' ? "border-psim-red/40 bg-psim-red/10 text-psim-red" : "border-psim-orange/40 bg-psim-orange/10 text-psim-orange"
+                      )}>
+                        {alarm.pri}
+                      </span>
+                    </div>
+                    <div className="text-[14px] font-medium text-white/90 group-hover/row:text-psim-accent transition-colors truncate" title={alarm.title}>
+                      {alarm.title}
+                    </div>
+                    <div className="text-[13px] font-medium text-t2 group-hover/row:text-white transition-colors truncate flex items-center gap-2" title={alarm.src}>
+                      <Cctv size={14} className="opacity-50" />
+                      <span className="truncate">{alarm.src || '---'}</span>
+                    </div>
+                    <div className="text-[13px] font-medium text-t2 group-hover/row:text-white transition-colors truncate" title={alarm.connectorName}>
+                      {alarm.connectorName || '---'}
+                    </div>
+                    <div className="text-[12px] font-mono text-t3 group-hover/row:text-white transition-colors truncate" title={alarm.ipadress}>
+                      {alarm.ipadress || '---'}
+                    </div>
+                  </div>
+                ))}
+
+                {isFetchingMore && (
+                  <div className="p-10 flex flex-col items-center justify-center gap-3 text-psim-orange">
+                    <RefreshCcw size={24} className="animate-spin" />
+                    <span className="text-[11px] font-heading font-bold uppercase tracking-[0.2em]">Đang đồng bộ dữ liệu...</span>
+                  </div>
+                )}
+                
+                {!hasMore && modalAlarms.length > 0 && (
+                  <div className="py-12 flex flex-col items-center justify-center gap-4 opacity-30">
+                    <div className="h-px w-24 bg-white/20" />
+                    <span className="text-[10px] font-heading font-bold uppercase tracking-[0.3em]">Hết danh sách sự kiện</span>
+                    <div className="h-px w-24 bg-white/20" />
+                  </div>
+                )}
+
+                {modalAlarms.length === 0 && !isFetchingMore && (
+                  <div className="flex-1 flex flex-col items-center justify-center opacity-20 py-40 gap-6">
+                    <div className="w-20 h-20 rounded-full border-2 border-dashed border-white flex items-center justify-center">
+                       <Activity size={40} />
+                    </div>
+                    <span className="text-[14px] font-heading font-bold uppercase tracking-[0.4em]">Trống dữ liệu</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header & Stats Bar */}
       <div className="px-3 py-3 border-b border-border-dim bg-bg0/50">
         <div className="flex items-center justify-between mb-4">
@@ -273,7 +556,7 @@ function MapViewInternal() {
             )}
           </div>
           <div className="text-[10px] text-t2 font-mono flex gap-4">
-            <span><span className="text-psim-red">●</span> {totalAlarmCount} alarms active</span>
+            <span><span className="text-psim-red">●</span> {dailyAlarmCount} alarms active</span>
             <span>47/52 cameras online</span>
           </div>
         </div>
@@ -521,7 +804,14 @@ function MapViewInternal() {
                 <>
                   <div className="relative mb-3 px-1">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-t3" size={12} />
-                    <input className="w-full bg-black/40 border border-white/5 rounded-xl h-9 pl-10 text-[11px] text-white outline-none focus:border-psim-orange/30 transition-all" placeholder="Tìm kiếm vị trí..." />
+                    <input 
+                      className="w-full bg-black/40 border border-white/5 rounded-xl h-9 pl-10 text-[11px] text-white outline-none focus:border-psim-orange/30 transition-all select-text" 
+                      placeholder="Tìm kiếm vị trí..." 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    />
                   </div>
 
                   <div className="flex flex-col gap-1 overflow-y-auto max-h-[350px] pr-1 custom-scrollbar">
@@ -530,8 +820,12 @@ function MapViewInternal() {
                         <RefreshCcw size={20} className="animate-spin text-psim-orange" />
                         <span className="text-[10px] font-bold uppercase">Syncing...</span>
                       </div>
+                    ) : filteredMapTree.length === 0 ? (
+                      <div className="py-10 text-center text-[10px] text-t3 font-bold uppercase tracking-widest opacity-50">
+                        Không tìm thấy kết quả
+                      </div>
                     ) : (
-                      mapTree.map((node: MapTreeNode) => (
+                      filteredMapTree.map((node: MapTreeNode) => (
                         <TreeItem 
                           key={node.Id} 
                           node={node} 
@@ -541,6 +835,7 @@ function MapViewInternal() {
                             setSelectedMapId(n.Id);
                             setSelectedMapName(n.Name);
                             setActiveMapMapUrl(n.MapImagePath);
+                            localStorage.setItem('lastSelectedMapId', n.Id);
                           }} 
  
                         />
@@ -560,7 +855,7 @@ function MapViewInternal() {
               <div className="w-2 h-2 rounded-full bg-psim-accent animate-pulse shadow-[0_0_8px_var(--accent)]" />
               <span className="text-[11px] font-black tracking-[0.1em] uppercase text-white">Live Event</span>
             </div>
-            <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-psim-accent/10 text-psim-accent rounded border border-psim-accent/20">{totalAlarmCount} ALERTS</span>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-psim-accent/10 text-psim-accent rounded border border-psim-accent/20">{dailyAlarmCount} ALERTS</span>
           </div>
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 custom-scrollbar">
             {latestAlarms.map((alarm) => (
@@ -580,11 +875,8 @@ function MapViewInternal() {
                     {alarm.time}
                   </span>
                 </div>
-                <div className="text-[12px] font-bold leading-tight group-hover:text-psim-accent transition-colors mb-2 text-t1">
+                <div className="text-[12px] font-bold leading-tight group-hover:text-psim-accent transition-colors text-t1">
                   {alarm.title}
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-t3 font-medium">
-                  <MapPin size={10} className="text-psim-accent" /> {alarm.loc}
                 </div>
               </div>
             ))}
@@ -595,8 +887,11 @@ function MapViewInternal() {
               </div>
             )}
           </div>
-          <button className="m-4 h-11 text-[10px] font-black border border-white/10 hover:border-psim-orange/50 hover:bg-psim-orange/5 rounded-xl transition-all text-t2 flex items-center justify-center gap-2 uppercase tracking-widest group">
-            Global Activity Logs <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          <button 
+            onClick={handleOpenModal}
+            className="m-4 h-11 text-[10px] font-black border border-white/10 hover:border-psim-orange/50 hover:bg-psim-orange/5 rounded-xl transition-all text-t2 flex items-center justify-center gap-2 uppercase tracking-widest group"
+          >
+            Xem thêm <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
       </div>
