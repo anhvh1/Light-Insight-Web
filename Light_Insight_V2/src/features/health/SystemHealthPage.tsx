@@ -106,7 +106,7 @@ export function SystemHealthPage() {
   }, [allInfrastructure, selectedConnectorId]);
 
   const StatusText = ({ status }: { status: string }) => {
-    const isOnline = status === 'ONLINE' || status === 'STANDBY';
+    const isOnline = status === 'ONLINE' || status === 'CHỜ';
     const isOffline = status === 'OFFLINE';
     return (
       <span className={cn(
@@ -119,7 +119,7 @@ export function SystemHealthPage() {
   };
 
   const StatusBadge = ({ status }: { status: string }) => {
-    const isOnline = status === 'ONLINE' || status === 'STANDBY';
+    const isOnline = status === 'ONLINE' || status === 'CHỜ';
     const isOffline = status === 'OFFLINE';
     return (
       <span className={cn(
@@ -136,14 +136,14 @@ export function SystemHealthPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden font-sans">
       <header className="h-12 border-b border-white/5 bg-bg1 flex items-center px-3 shrink-0">
-        <h1 className="text-[15px] font-semibold text-t-0 tracking-tight">System Health & Connectors</h1>
+        <h1 className="text-[15px] font-semibold text-t-0 tracking-tight">Tình trạng hệ thống & kết nối</h1>
         <div className="ml-auto flex items-center gap-3">
           <div className="flex items-center gap-2 text-[10px] text-t-2 font-mono tracking-widest">
-            Last sync: {new Date().toLocaleTimeString()} · Live Push On
+            Lần đồng bộ gần nhất: {new Date().toLocaleTimeString()}
           </div>
           <button onClick={handleRefresh} disabled={isLoadingHealth || isRefetchingHealth} className="bg-bg-3 border border-white/10 hover:bg-bg4 text-t1 hover:text-t0 h-7 px-3 rounded-md flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50">
             <RefreshCcw size={12} className={cn((isLoadingHealth || isRefetchingHealth) && "animate-spin text-psim-accent")} />
-            <span className="text-[10px] font-bold uppercase tracking-wider">Refresh</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider">Làm mới</span>
           </button>
         </div>
       </header>
@@ -151,9 +151,9 @@ export function SystemHealthPage() {
       <main className="flex-1 flex overflow-hidden gap-px">
         <div className="w-1/2 flex flex-col overflow-hidden bg-bg-0">
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <div className="sticky top-0 bg-bg-0 z-10 px-3 py-3 shrink-0"><h2 className="text-[10px] font-mono font-bold text-t-2 uppercase tracking-[0.12em]">VMS & Device Connectors</h2></div>
+            <div className="sticky top-0 bg-bg-0 z-10 px-3 py-3 shrink-0"><h2 className="text-[10px] font-mono font-bold text-t-2 uppercase tracking-[0.12em]">Kết nối VMS & Thiết bị</h2></div>
             <div className="flex-1 overflow-y-auto px-3 pb-6 scrollbar-thin scrollbar-thumb-psim-accent/20">
-              {isLoadingHealth && !isRefetchingHealth ? <div className="h-full flex items-center justify-center opacity-30 uppercase font-bold text-[11px] animate-pulse">Syncing...</div> : (
+              {isLoadingHealth && !isRefetchingHealth ? <div className="h-full flex items-center justify-center opacity-30 uppercase font-bold text-[11px] animate-pulse">Đang đồng bộ...</div> : (
                 <div className="grid grid-cols-2 gap-2">
                   {connectors.map((c, i) => {
                     const connectorIp = c.ApiInfo.split(':')[0];
@@ -172,11 +172,11 @@ export function SystemHealthPage() {
                           <h3 className={cn("text-[13px] font-semibold tracking-tight uppercase", c.Name.includes('Milestone') ? "text-psim-green" : "text-t1")}>{c.Name}</h3>
                           {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-psim-green animate-pulse" />}
                         </div>
-                        <p className="text-[10px] text-t-2 font-mono mt-0.5">{c.ApiInfo}</p>
+                        <p className="text-[10px] text-t-2 font-mono mt-0.5">IP: {c.ApiInfo}</p>
                         <div className="space-y-1 mt-1">
-                          <div className="flex justify-between text-[11px]"><span className="text-t-2">Latency</span><span className={cn("font-mono font-bold", c.Status === 'SLOW' ? "text-psim-orange" : "text-psim-green")}>{c.Latency}</span></div>
+                          <div className="flex justify-between text-[11px]"><span className="text-t-2">Độ trễ</span><span className={cn("font-mono font-bold", c.Status === 'SLOW' ? "text-psim-orange" : "text-psim-green")}>{c.Latency}</span></div>
                           <div className="flex justify-between text-[11px]"><span className="text-t-2">{c.StatsLabel}</span><span className="font-semibold text-t1">{c.Stats}</span></div>
-                          <div className="flex justify-between text-[11px] items-center"><span className="text-t-2">Status</span><StatusText status={c.Status} /></div>
+                          <div className="flex justify-between text-[11px] items-center"><span className="text-t-2">Trạng thái</span><StatusText status={c.Status} /></div>
                         </div>
                         <div className="h-1 bg-bg4 rounded-full mt-1 overflow-hidden">
                           <div className={cn("h-full rounded-full transition-all duration-1000", c.HealthPercentage > 80 ? "bg-psim-green" : c.HealthPercentage > 50 ? "bg-psim-orange" : "bg-psim-red")} style={{ width: `${c.HealthPercentage}%` }} />
@@ -190,8 +190,8 @@ export function SystemHealthPage() {
           </div>
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden border-t border-white/5">
             <div className="sticky top-0 bg-bg-0 z-10 px-3 py-3 shrink-0 flex items-center justify-between">
-              <h2 className="text-[10px] font-mono font-bold text-t-2 uppercase tracking-[0.12em]">Infrastructure</h2>
-              <span className="text-[9px] font-bold text-psim-accent bg-psim-accent/10 px-2 py-0.5 rounded uppercase">{selectedConnectorId || 'Global'} View</span>
+              <h2 className="text-[10px] font-mono font-bold text-t-2 uppercase tracking-[0.12em]">Hạ tầng hệ thống</h2>
+              {/* <span className="text-[9px] font-bold text-psim-accent bg-psim-accent/10 px-2 py-0.5 rounded uppercase">{selectedConnectorId || 'Global'} View</span> */}
             </div>
             <div className="flex-1 overflow-y-auto px-3 pb-6 scrollbar-thin scrollbar-thumb-psim-accent/20">
               <div className="flex flex-col gap-1">
@@ -205,7 +205,7 @@ export function SystemHealthPage() {
                     <StatusBadge status={item.Status} />
                   </div>
                 )) : (
-                  <div className="py-10 text-center opacity-20 text-[11px] uppercase font-bold tracking-widest italic">No infrastructure data for this connector</div>
+                  <div className="py-10 text-center opacity-20 text-[11px] uppercase font-bold tracking-widest italic">Không có dữ liệu hạ tầng cho kết nối này</div>
                 )}
               </div>
             </div>
@@ -214,10 +214,9 @@ export function SystemHealthPage() {
 
         <div className="w-1/2 border-l border-white/5 bg-bg1/50 flex flex-col overflow-hidden shadow-2xl">
           <div className="p-4 border-b border-white/5 flex items-center justify-between shrink-0 bg-bg1">
-            <h2 className="text-[10px] font-mono font-bold text-t-2 uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={14} className="text-psim-accent" />Audit Log</h2>
+            <h2 className="text-[10px] font-mono font-bold text-t-2 uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={14} className="text-psim-accent" />Nhật ký hệ thống</h2>
             <div className="flex items-center gap-2">
                {isFetchingNextPage && <RefreshCcw size={12} className="animate-spin text-t2" />}
-               <span className="text-[9px] font-semibold text-t2 uppercase bg-bg2 px-1.5 py-0.5 rounded">Live</span>
             </div>
           </div>
           
@@ -239,7 +238,7 @@ export function SystemHealthPage() {
                   </div>
                 </div>
               ))}
-              {isFetchingNextPage && <div className="py-4 text-center text-[10px] text-t2 animate-pulse uppercase font-bold">Loading older logs...</div>}
+              {isFetchingNextPage && <div className="py-4 text-center text-[10px] text-t2 animate-pulse uppercase font-bold">Đang tải các nhật ký cũ...</div>}
             </div>
           </div>
         </div>

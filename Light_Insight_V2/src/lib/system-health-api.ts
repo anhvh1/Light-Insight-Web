@@ -22,6 +22,7 @@ export interface InfrastructureHealth {
   Description: string;
   Status: string;
   Type: string;
+  ConnectorId: string;
 }
 
 export interface AuditLog {

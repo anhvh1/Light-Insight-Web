@@ -40,8 +40,8 @@ namespace LightInsightBUS.Service.Login
             else
             {
                 // Ghi nhận Audit Log khi đăng nhập thành công
-                AuditLogger.Log(user.Username, "AUTH_LOGIN", $"Người dùng {user.Name} (@{user.Username}) đã đăng nhập vào hệ thống.", 
-                    new { Name = user.Name, RoleId = user.RoleId }, user.RoleName);
+                // AuditLogger.Log(user.Username, "AUTH_LOGIN", $"Người dùng {user.Name} (@{user.Username}) đã đăng nhập vào hệ thống.", 
+                //     new { Name = user.Name, RoleId = user.RoleId }, user.RoleName);
 
                 return new BaseResultModel
                 {
@@ -98,7 +98,7 @@ namespace LightInsightBUS.Service.Login
         }
         public async Task<BaseResultModel> Logout(string username)
         {
-            AuditLogger.Log(username, "AUTH_LOGOUT", $"Người dùng {username} đã đăng xuất khỏi hệ thống.");
+            // AuditLogger.Log(username, "AUTH_LOGOUT", $"Người dùng {username} đã đăng xuất khỏi hệ thống.");
             return new BaseResultModel { Status = 1, Message = "Logout logged successfully." };
         }
     }
