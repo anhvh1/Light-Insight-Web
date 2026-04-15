@@ -137,6 +137,15 @@ export function AlarmConsole() {
     () => alarms.find(a => a.id === selectedAlarmId) ?? null,
     [alarms, selectedAlarmId]
   );
+  const playbackEmbedUrl = useMemo(() => {
+    if (!selectedAlarm || !selectedConnectorId || !selectedAlarm.cameraId) return null;
+    const params = new URLSearchParams({
+      key: selectedConnectorId,
+      cameraId: selectedAlarm.cameraId,
+      alarmTime: selectedAlarm.alarmTimeRaw || selectedAlarm.time || '',
+    });
+    return `/embed/playback?${params.toString()}`;
+  }, [selectedAlarm, selectedConnectorId]);
   const selectedAlarmTypeLabel = selectedAlarm?.typeLabel || selectedAlarm?.type || 'Hệ thống';
 
   const filteredAlarms = useMemo(
@@ -289,7 +298,7 @@ export function AlarmConsole() {
         <table className="w-full border-collapse text-left">
           <thead>
             <tr>
-              {['Mức độ ưu tiên', 'Loại', 'Mô tả', 'Nguồn', 'Vị trí', 'Trạng thái', 'Thời gian', 'Tương quan'].map((col) => (
+              {['Mức độ ưu tiên', 'Loại', 'Mô tả', 'Nguồn/Vị trí', 'Trạng thái', 'Thời gian', 'Tương quan'].map((col) => (
                 <th
                   key={col}
                   className="py-2 px-3 text-[10px] font-mono uppercase tracking-wider border-b border-border-dim sticky top-0 z-10 whitespace-nowrap"
@@ -315,7 +324,7 @@ export function AlarmConsole() {
                 }}
               >
                 <td className="py-2.5 px-3 align-middle text-[12px]"><StatusPill priority={alarm.pri} /></td>
-                <td className="py-2.5 px-3 align-middle text-[12px]"><TypeBadge type={alarm.type} /></td>
+                <td className="py-2.5 px-3 align-middle text-[12px]"><TypeBadge type={alarm.type} label={alarm.typeLabel} /></td>
                 <td className="py-2.5 px-3 align-middle text-[12px]">
                   {alarm.title}
                   {alarm.isNew && (
@@ -327,7 +336,6 @@ export function AlarmConsole() {
                   {alarm.corr > 1 && <span className="ml-1.5 text-[9px] bg-[rgba(155,109,255,0.2)] text-purple px-[5px] py-[1px] rounded-[3px] font-mono">+{alarm.corr} corr</span>}
                 </td>
                 <td className="py-2.5 px-3 align-middle text-[11px] text-t-2">{alarm.src}</td>
-                <td className="py-2.5 px-3 align-middle text-[11px] text-t-2">{alarm.loc}</td>
                 <td className="py-2.5 px-3 align-middle text-[12px]">
                   {alarm.status === 'new' && <span className="px-2 py-0.5 rounded bg-psim-red/15 text-psim-red text-[10px] font-bold">{alarm.statusLabel ?? 'New'}</span>}
                   {alarm.status === 'in progress' && <span className="px-2 py-0.5 rounded bg-psim-orange/15 text-psim-orange text-[10px] font-bold">{alarm.statusLabel ?? 'In progress'}</span>}
@@ -399,6 +407,26 @@ export function AlarmConsole() {
         </div>
       ) : (
         <>
+          <div className="bg-bg2 rounded-md border border-border-dim p-2">
+            {!selectedAlarm.cameraId ? (
+              <div className="text-[11px] text-t-2">
+                Alarm này chưa có `cameraId`, không thể phát playback.
+              </div>
+            ) : !selectedConnectorId ? (
+              <div className="text-[11px] text-t-2">
+                Chưa chọn connector để lấy token playback.
+              </div>
+            ) : playbackEmbedUrl ? (
+              <iframe
+                title={`playback-${selectedAlarm.id}`}
+                src={playbackEmbedUrl}
+                className="block w-full aspect-video rounded border border-border-dim bg-black"
+              />
+            ) : (
+              <div className="text-[11px] text-t-2">Đang chuẩn bị playback...</div>
+            )}
+          </div>
+
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <div className="font-mono text-[10px] text-psim-accent">{selectedAlarm.id}</div>

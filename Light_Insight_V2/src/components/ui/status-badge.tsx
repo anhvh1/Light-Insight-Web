@@ -34,6 +34,7 @@ export function StatusPill({ priority, className, ...props }: StatusPillProps) {
 
 interface TypeBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   type: AlarmType;
+  label?: string;
 }
 
 const typeClasses: Record<AlarmType, string> = {
@@ -46,7 +47,8 @@ const typeClasses: Record<AlarmType, string> = {
   light: 'bg-[rgba(255,176,64,0.18)] text-[#ffb040]',
 };
 
-export function TypeBadge({ type, className, ...props }: TypeBadgeProps) {
+export function TypeBadge({ type, label, className, ...props }: TypeBadgeProps) {
+  const display = (label ?? '').trim() || type.toUpperCase();
   return (
     <span
       className={cn(
@@ -56,7 +58,7 @@ export function TypeBadge({ type, className, ...props }: TypeBadgeProps) {
       )}
       {...props}
     >
-      {type.toUpperCase()}
+      {display}
     </span>
   );
 }

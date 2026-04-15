@@ -12,6 +12,14 @@ export interface AlarmApiItem {
   stateName?: string;
   time?: string;
   type?: string;
+  cameraid?: string;
+  cameraId?: string;
+  cameraID?: string;
+  CameraId?: string;
+  CameraID?: string;
+  connectorName?: string;
+  timeUtc?: string;
+  Time?: string;
 }
 
 export interface AlarmFilters {

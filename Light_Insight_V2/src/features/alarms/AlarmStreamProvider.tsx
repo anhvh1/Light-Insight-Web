@@ -154,6 +154,15 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchFirstPage = useCallback(async (activeFilters: AlarmFilters) => {
+    if (!activeFilters?.key) {
+      setAlarms([]);
+      setCurrentPage(1);
+      currentPageRef.current = 1;
+      setCanNextPage(false);
+      setPendingRealtimeCount(0);
+      return true;
+    }
+
     setLoading(true);
     try {
       const rows = await alarmApi.getAll({
@@ -180,19 +189,17 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
 
   const refreshAlarms = useCallback(
     async (nextFilters?: AlarmFilters) => {
-      let merged: AlarmFilters = {};
-      setFilters((prev) => {
-        merged = { ...prev, ...(nextFilters ?? {}) };
-        filtersRef.current = merged;
-        return merged;
-      });
+      const merged: AlarmFilters = { ...filtersRef.current, ...(nextFilters ?? {}) };
+      filtersRef.current = merged;
+      setFilters(merged);
       await fetchFirstPage(merged);
     },
     [fetchFirstPage],
   );
 
   const loadMore = useCallback(async () => {
-    if (loading || !canNextPage) return;
+    const activeFilters = filtersRef.current;
+    if (loading || !canNextPage || !activeFilters?.key) return;
     setLoading(true);
     try {
       const existingIds = new Set(alarmsRef.current.map((a) => a.id));
@@ -207,7 +214,7 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
         const rows = await alarmApi.getAll({
           page: pageToFetch,
           pageSize: SERVER_PAGE_SIZE,
-          ...filters,
+          ...activeFilters,
         });
         lastRowsLength = rows.length;
         lastPageFetched = pageToFetch;
@@ -238,7 +245,7 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [loading, canNextPage, currentPage, filters]);
+  }, [loading, canNextPage, currentPage]);
 
   const addAlarm = useCallback((payload: AlarmPayload) => {
     const alarm = normalizeSignalRAlarm(payload, priorityLookupRef.current);

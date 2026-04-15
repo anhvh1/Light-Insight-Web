@@ -12,6 +12,14 @@ export interface AlarmPayload {
   stateName?: string;
   time?: string;
   type?: string;
+  cameraid?: string;
+  cameraId?: string;
+  cameraID?: string;
+  CameraId?: string;
+  CameraID?: string;
+  connectorName?: string;
+  timeUtc?: string;
+  Time?: string;
 }
 
 let counter = 0;
@@ -83,6 +91,14 @@ function toAlarm(
   isNew: boolean,
   lookup?: ReadonlyMap<string, string>,
 ): Alarm {
+  const rawTime = payload.time ?? payload.Time;
+  const resolvedCameraId =
+    payload.cameraid ??
+    payload.cameraId ??
+    payload.cameraID ??
+    payload.CameraId ??
+    payload.CameraID;
+
   const id = payload.alarmId?.trim() || generateId();
   const statusByLevel: Record<number, { status: string; label: string }> = {
     1: { status: 'new', label: 'New' },
@@ -105,9 +121,11 @@ function toAlarm(
     status,
     statusLabel,
     statusLevel: payload.stateLevel,
-    time: formatDisplayTime(payload.time),
+    time: formatDisplayTime(rawTime),
+    alarmTimeRaw: payload.timeUtc ?? rawTime,
+    cameraId: resolvedCameraId,
     type: 'light',
-    typeLabel: payload.type?.trim() || 'Hệ thống',
+    typeLabel: payload.connectorName?.trim() || payload.type?.trim() || 'Hệ thống',
     loc: payload.location ?? '',
     corr: 0,
     isNew,

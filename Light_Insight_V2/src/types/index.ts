@@ -17,6 +17,8 @@ export interface Alarm {
   statusLabel?: string;
   statusLevel?: number;
   time: string;
+  alarmTimeRaw?: string;
+  cameraId?: string;
   corr: number;
   isNew: boolean;
 }
