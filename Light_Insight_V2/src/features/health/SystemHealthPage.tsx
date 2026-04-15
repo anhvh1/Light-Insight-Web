@@ -258,12 +258,27 @@ export function SystemHealthPage() {
                         </div>
                         <p className="text-[10px] text-t-2 font-mono mt-0.5">IP: {c.ApiInfo}</p>
                         <div className="space-y-1 mt-1">
-                          <div className="flex justify-between text-[11px]"><span className="text-t-2">Độ trễ</span><span className={cn("font-mono font-bold", c.Status === 'SLOW' ? "text-psim-orange" : "text-psim-green")}>{c.Latency}</span></div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-t-2">Độ trễ</span>
+                            <span className={cn(
+                              "font-mono font-bold", 
+                              c.Status === 'BAD' || c.Status === 'OFFLINE' ? "text-psim-red" : 
+                              c.Status === 'SLOW' || c.Status === 'DISCONNECTED' ? "text-psim-orange" : 
+                              "text-psim-green"
+                            )}>{c.Latency}</span>
+                          </div>
                           <div className="flex justify-between text-[11px]"><span className="text-t-2">{c.StatsLabel}</span><span className="font-semibold text-t1">{c.Stats}</span></div>
                           <div className="flex justify-between text-[11px] items-center"><span className="text-t-2">Trạng thái</span><StatusText status={c.Status} /></div>
                         </div>
                         <div className="h-1 bg-bg4 rounded-full mt-1 overflow-hidden">
-                          <div className={cn("h-full rounded-full transition-all duration-1000", c.HealthPercentage > 80 ? "bg-psim-green" : c.HealthPercentage > 50 ? "bg-psim-orange" : "bg-psim-red")} style={{ width: `${c.HealthPercentage}%` }} />
+                          <div className={cn(
+                            "h-full rounded-full transition-all duration-1000", 
+                            c.Status === 'BAD' || c.Status === 'OFFLINE' ? "bg-psim-red" : 
+                            c.Status === 'SLOW' || c.Status === 'DISCONNECTED' ? "bg-psim-orange" : 
+                            "bg-psim-green"
+                          )} style={{ 
+                            width: `${c.Status === 'ONLINE' ? 100 : c.Status === 'SLOW' ? 70 : c.Status === 'BAD' ? 40 : 0}%` 
+                          }} />
                         </div>
                       </div>
                     );

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Text;
@@ -23,9 +24,9 @@ namespace LightInsightService.Sockets.Milestone.Health
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly HttpClient _httpClient;
         
-        private static readonly Dictionary<string, MilestoneLiveState> _globalStates = new Dictionary<string, MilestoneLiveState>();
-        private readonly Dictionary<string, Task> _activeConnections = new Dictionary<string, Task>();
-        private readonly Dictionary<string, (string Name, string Category)> _eventDefinitions = new Dictionary<string, (string, string)>();
+        private static readonly ConcurrentDictionary<string, MilestoneLiveState> _globalStates = new ConcurrentDictionary<string, MilestoneLiveState>();
+        private readonly ConcurrentDictionary<string, Task> _activeConnections = new ConcurrentDictionary<string, Task>();
+        private readonly ConcurrentDictionary<string, (string Name, string Category)> _eventDefinitions = new ConcurrentDictionary<string, (string, string)>();
 
         public MilestoneHealthSocketWorker(
             IMemoryCache cache, 
@@ -63,9 +64,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                         foreach (var vms in milestoneConnectors)
                         {
                             string cid = vms.IpServer;
-                            if (!_globalStates.ContainsKey(cid)) {
-                                _globalStates[cid] = new MilestoneLiveState { Name = vms.Name, Status = "OFFLINE" };
-                            }
+                            _globalStates.TryAdd(cid, new MilestoneLiveState { Name = vms.Name, Status = "OFFLINE" });
 
                             if (!_activeConnections.ContainsKey(cid) || _activeConnections[cid].IsCompleted)
                             {
@@ -133,7 +132,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                     await SendAsync(ws, new { command = "addSubscription", commandId = 2, filters = new[] { new { modifier = "include", resourceTypes = new[] { "*" }, sourceIds = new[] { "*" }, eventTypes = new[] { "*" } } } }, config.Name, ct);
                     await ReceiveAsync(ws, config.Name, ct);
 
-                    // 3. Heartbeat
+                    // 3. Heartbeat Task (Independent)
                     _ = Task.Run(async () =>
                     {
                         while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
@@ -142,24 +141,28 @@ namespace LightInsightService.Sockets.Milestone.Health
                                 var startTime = DateTime.UtcNow;
                                 var sw = Stopwatch.StartNew();
 
-                                await SendAsync(ws, new { command = "getState", commandId = 999 }, config.Name, ct);
-                                await ReceiveAsync(ws, config.Name, ct); 
+                                // 5s timeout on heartbeat
+                                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, cts.Token);
+                                
+                                await SendAsync(ws, new { command = "getState", commandId = 999 }, config.Name, linked.Token);
+                                await ReceiveAsync(ws, config.Name, linked.Token); 
                                 sw.Stop();
 
-                                var endTime = DateTime.UtcNow;
                                 var elapsed = sw.ElapsedMilliseconds;
+                                _logger.LogInformation($"[LATENCY_DEBUG] {config.Name} | Roundtrip: {elapsed}ms");
 
-                                _logger.LogInformation($"[LATENCY_DEBUG] {config.Name} | Roundtrip: {elapsed}ms | Start: {startTime:HH:mm:ss.fff} | End: {endTime:HH:mm:ss.fff}");
-
-                                // Update state
                                 var state = _globalStates[cid];
                                 state.LatencyMs = elapsed;
                                 state.Status = "ONLINE";
                                 if (state.LatencyMs > 2000) state.Status = "BAD";
                                 else if (state.LatencyMs > 500) state.Status = "SLOW";
-
                                 await PushUpdate(cid);
+
                                 await Task.Delay(5000, ct);
+                            } catch (OperationCanceledException) { 
+                                _logger.LogWarning($"[LATENCY_DEBUG] {config.Name} heartbeat timed out.");
+                                break; 
                             } catch (Exception ex) { 
                                 _logger.LogWarning($"[LATENCY_DEBUG] {config.Name} heartbeat failed: {ex.Message}");
                                 break; 
@@ -167,7 +170,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                         }
                     }, ct);
 
-                    // 4. Listen Loop
+                    // 4. Listen Loop (Event Listener)
                     while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
                     {
                         var msg = await ReceiveAsync(ws, config.Name, ct);
