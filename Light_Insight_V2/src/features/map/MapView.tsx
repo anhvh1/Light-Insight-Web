@@ -23,6 +23,7 @@ import type { MapTreeNode, Alarm } from '@/types';
 import { useAlarmStream } from '@/features/alarms/AlarmStreamProvider';
 
 import { normalizeApiAlarm } from '@/features/alarms/alarm-mapper';
+import { useCameraStatus } from './useCameraStatus';
 
 // --- HELPER FUNCTION ---
 
@@ -79,6 +80,10 @@ function MapViewInternal() {
   const { alarms: allAlarms } = useAlarmStream();
 
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
+  
+  // Connect Camera Status API & SignalR
+  const { summary: cameraSummary, statusMap: cameraStatusMap, connectionState: cameraConnectionState } = useCameraStatus(selectedMapId);
+
   const [selectedMapName, setSelectedMapName] = useState<string | null>(null);
   const [activeMapUrl, setActiveMapMapUrl] = useState<string | null>(null);
   const [showLegend, setShowLegend] = useState(true);
@@ -292,7 +297,12 @@ function MapViewInternal() {
 
   const stats = [
     { label: 'ACTIVE ALARMS', val: dailyAlarmCount.toString(), sub: `${dailyCriticalCount} critical`, color: 'text-psim-red' },
-    { label: 'CAMERA ACTIVE', val: '47', sub: '/ 52 total', color: 'text-psim-green' },
+    { 
+      label: 'CAMERA ACTIVE', 
+      val: cameraSummary ? cameraSummary.GlobalOnline.toString() : '-', 
+      sub: `/ ${cameraSummary ? cameraSummary.GlobalTotal : '-'} total`, 
+      color: cameraSummary && cameraSummary.GlobalOnline < cameraSummary.GlobalTotal ? 'text-psim-orange' : 'text-psim-green' 
+    },
     { label: 'GUARDS ON DUTY', val: '8', sub: 'Night Shift', color: 'text-psim-orange' },
     { label: 'ACCESS EVENTS/H', val: '142', sub: '↑ normal', color: 'text-psim-accent' },
     { label: 'LPR SCAN/H', val: '38', sub: '2 mismatch', color: 'text-teal' },
@@ -556,7 +566,15 @@ function MapViewInternal() {
           </div>
           <div className="text-[10px] text-t2 font-mono flex gap-4">
             <span><span className="text-psim-red">●</span> {dailyAlarmCount} alarms active</span>
-            <span>47/52 cameras online</span>
+            <span className="flex items-center gap-2">
+              {cameraSummary ? `${cameraSummary.GlobalOnline}/${cameraSummary.GlobalTotal}` : '--/--'} cameras online
+              {cameraConnectionState === 'disconnected' && (
+                 <span className="text-psim-red font-bold animate-pulse" title="Mất kết nối thời gian thực! (Offline)">⚠</span>
+              )}
+              {cameraConnectionState === 'reconnecting' && (
+                 <span className="text-psim-orange font-bold animate-pulse" title="Đang kết nối lại...">⟳</span>
+              )}
+            </span>
           </div>
         </div>
 
@@ -685,10 +703,14 @@ function MapViewInternal() {
                  {/* Map Markers (Cameras) */}
                  {markers.map((m: any) => {
                    const alarmForMarker = alarmsBySource.get(m.CameraName);
+                   const cameraId = m.CameraId || m.Id;
+                   const status = cameraStatusMap.get(cameraId);
+                   const isOffline = status && status.IsOnline === false;
+                   
                    return (
                      <div 
-                       key={m.Id}
-                       className="absolute cursor-pointer group/marker z-10"
+                       key={cameraId}
+                       className={cn("absolute cursor-pointer group/marker z-10", isOffline && "z-20")}
                        style={{ 
                          left: `${m.PosX}%`, 
                          top: `${m.PosY}%`,
@@ -708,9 +730,10 @@ function MapViewInternal() {
                           {/* Camera Label (Visible on hover or if alarming) */}
                           <div className={cn(
                             "bg-white border border-black/10 rounded px-2 py-0.5 mb-3 whitespace-nowrap shadow-xl z-30 transition-opacity pointer-events-none text-[9px] font-bold text-black uppercase",
-                            alarmForMarker ? "opacity-100" : "opacity-0 group-hover/marker:opacity-100"
+                            (alarmForMarker || isOffline) ? "opacity-100" : "opacity-0 group-hover/marker:opacity-100",
+                            isOffline && !alarmForMarker && "text-psim-red"
                           )}>
-                            {m.CameraName}
+                            {m.CameraName} {isOffline && "(OFFLINE)"}
                           </div>
 
                           {/* Rotation Container */}
@@ -718,8 +741,8 @@ function MapViewInternal() {
                             {/* Field of View (FoV) Cone */}
                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 pointer-events-none">
                               <div className="relative -top-[100px]">
-                                <svg width="140" height="100" viewBox="0 0 140 100" className="opacity-40">
-                                  <path d="M70 100 L0 0 L140 0 Z" fill="rgba(0, 194, 255, 0.3)" stroke="rgba(0, 194, 255, 0.5)" strokeWidth="1" />
+                                <svg width="140" height="100" viewBox="0 0 140 100" className={cn("opacity-40", isOffline ? "opacity-10 grayscale" : "")}>
+                                  <path d="M70 100 L0 0 L140 0 Z" fill={isOffline ? "rgba(100, 100, 100, 0.3)" : "rgba(0, 194, 255, 0.3)"} stroke={isOffline ? "rgba(100, 100, 100, 0.5)" : "rgba(0, 194, 255, 0.5)"} strokeWidth="1" />
                                 </svg>
                               </div>
                             </div>
@@ -727,7 +750,11 @@ function MapViewInternal() {
                             {/* Camera Icon */}
                             <div className={cn(
                               "w-10 h-10 rounded-xl border-2 flex items-center justify-center bg-[#1a1f2e] text-white shadow-2xl transition-all group-hover/marker:scale-110",
-                              alarmForMarker ? alarmStyles[alarmForMarker.pri] : "border-psim-accent/50"
+                              alarmForMarker 
+                                ? alarmStyles[alarmForMarker.pri] 
+                                : isOffline 
+                                  ? "border-psim-red shadow-[0_0_10px_2px_var(--tw-shadow-color)] shadow-psim-red/40 animate-pulse text-psim-red bg-psim-red/10" 
+                                  : "border-psim-green text-psim-green shadow-[0_0_10px_rgba(0,214,143,0.1)] hover:shadow-[0_0_15px_rgba(0,214,143,0.4)]"
                             )}>
                               <Cctv size={22} className="-rotate-90" />
                             </div>
