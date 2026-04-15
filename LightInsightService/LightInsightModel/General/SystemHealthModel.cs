@@ -29,6 +29,7 @@ namespace LightInsightModel.General
         public string Status { get; set; }
         public string Type { get; set; } // server, storage, camera
         public string ConnectorId { get; set; } // Dùng để lọc hạ tầng theo connector
+        public string? MachineName { get; set; } // To link storage to a specific server agent
 
         // Hardware Metrics
         public double? CpuUsage { get; set; }

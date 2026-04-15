@@ -8,3 +8,4 @@
 .vscode/
 appsettings.Development.json
 publish.*
+publish-single

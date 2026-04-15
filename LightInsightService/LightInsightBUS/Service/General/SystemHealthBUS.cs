@@ -93,8 +93,10 @@ namespace LightInsightBUS.Service.General
         {
             if (item.Type != "server" && item.Type != "storage") return;
 
-            // Key dựa trên tên máy (WIN-...)
-            if (_cache.TryGetValue($"AGENT_METRIC_{item.Name}", out MilestoneServerMetric metrics))
+            // Use MachineName if available, otherwise fallback to Name
+            string lookupKey = item.MachineName ?? item.Name;
+
+            if (_cache.TryGetValue($"AGENT_METRIC_{lookupKey}", out MilestoneServerMetric metrics))
             {
                 item.CpuUsage = metrics.CpuUsage;
                 item.RamUsage = metrics.RamUsage;
@@ -106,7 +108,7 @@ namespace LightInsightBUS.Service.General
                     item.Description = $"CPU {metrics.CpuUsage}% · RAM {metrics.RamUsage}% · Disks: {metrics.Disks.Count}";
                 }
                 
-                // Map disks cho storage nếu cần (matching logic can be complex, here we just attach the full list)
+                // Map disks
                 item.Disks = metrics.Disks.Select(d => new InfrastructureDisk {
                     DriveName = d.DriveName,
                     UsagePercentage = d.UsagePercentage,
@@ -118,27 +120,38 @@ namespace LightInsightBUS.Service.General
 
         private async Task<InfrastructureHealth> GetLocalServerHealth()
         {
-            string cpu = $"{_systemProber.GetCurrentCpuUsage()}%";
-            string ram = "N/A";
-            string disk = "N/A";
+            int cpuValue = _systemProber.GetCurrentCpuUsage();
+            double ramValue = 0;
+            double totalRam = 0;
+            double freeRam = 0;
+            double diskValue = 0;
 
             try {
                 var memStatus = GC.GetGCMemoryInfo();
                 if (memStatus.TotalAvailableMemoryBytes > 0)
-                    ram = $"{(memStatus.MemoryLoadBytes * 100) / memStatus.TotalAvailableMemoryBytes}%";
+                {
+                    ramValue = Math.Round((double)memStatus.MemoryLoadBytes * 100 / memStatus.TotalAvailableMemoryBytes, 2);
+                    totalRam = Math.Round((double)memStatus.TotalAvailableMemoryBytes / (1024 * 1024 * 1024), 2);
+                    freeRam = Math.Round((double)(memStatus.TotalAvailableMemoryBytes - memStatus.MemoryLoadBytes) / (1024 * 1024 * 1024), 2);
+                }
 
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
                     var driveC = new DriveInfo("C");
                     if (driveC.IsReady)
-                        disk = $"{(int)((driveC.TotalSize - driveC.AvailableFreeSpace) * 100 / driveC.TotalSize)}%";
+                        diskValue = Math.Round((double)(driveC.TotalSize - driveC.AvailableFreeSpace) * 100 / driveC.TotalSize, 2);
                 }
             } catch { }
 
             return new InfrastructureHealth { 
                 Name = "Web Server", 
-                Description = $"CPU {cpu} · RAM {ram} · Disk {disk}", 
+                Description = $"CPU {cpuValue}% · RAM {ramValue}% · Disk {diskValue}%", 
                 Status = "ONLINE", 
-                Type = "server" 
+                Type = "server",
+                CpuUsage = cpuValue,
+                RamUsage = ramValue,
+                TotalRamGb = totalRam,
+                FreeRamGb = freeRam,
+                DiskUsage = diskValue
             };
         }
     }

@@ -31,6 +31,7 @@ export interface InfrastructureHealth {
   Status: string;
   Type: string;
   ConnectorId: string;
+  MachineName?: string;
   CpuUsage?: number;
   RamUsage?: number;
   TotalRamGb?: number;

@@ -199,6 +199,7 @@ namespace LightInsightService.Sockets.Milestone.Health
         private async Task PushUpdate(string cid)
         {
             var state = _globalStates[cid];
+            _logger.LogInformation($"[SignalR] Pushing HealthUpdate for {cid}: {JsonSerializer.Serialize(state)}");
             await _hubContext.Clients.All.SendAsync("HealthUpdate", state);
             _cache.Set($"HEALTH_STATE_{cid}", state);
         }
@@ -226,7 +227,8 @@ namespace LightInsightService.Sockets.Milestone.Health
                             Type = "server", 
                             Status = enabled ? "ONLINE" : "OFFLINE", 
                             Description = $"Last update: {DateTime.Now:HH:mm:ss}",
-                            ConnectorId = cid
+                            ConnectorId = cid,
+                            MachineName = name // Use server name as link
                         });
 
                         // Storage Item
@@ -235,12 +237,23 @@ namespace LightInsightService.Sockets.Milestone.Health
                             using var dDoc = JsonDocument.Parse(diskJson);
                             if (dDoc.RootElement.TryGetProperty("array", out var disks)) {
                                 foreach (var d in disks.EnumerateArray()) {
+                                    string storageName = d.GetProperty("name").GetString();
+                                    
+                                    // Try multiple common property names for path in Milestone REST API
+                                    string path = "Unknown path";
+                                    if (d.TryGetProperty("path", out var p)) path = p.GetString();
+                                    else if (d.TryGetProperty("storagePath", out var sp)) path = sp.GetString();
+                                    else if (d.TryGetProperty("diskPath", out var dp)) path = dp.GetString();
+                                    
+                                    _logger.LogDebug($"[Milestone] Storage '{storageName}' raw: {d.GetRawText()}");
+
                                     newInfra.Add(new InfrastructureHealth { 
-                                        Name = $"Storage: {d.GetProperty("name").GetString()}", 
+                                        Name = $"Storage: {storageName}", 
                                         Type = "storage", 
                                         Status = "ONLINE", 
-                                        Description = "Monitoring active",
-                                        ConnectorId = cid
+                                        Description = $"Path: {path}",
+                                        ConnectorId = cid,
+                                        MachineName = name // Link storage to THIS recording server
                                     });
                                 }
                             }

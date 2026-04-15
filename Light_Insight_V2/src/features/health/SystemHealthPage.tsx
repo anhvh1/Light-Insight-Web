@@ -122,6 +122,25 @@ export function SystemHealthPage() {
       });
     });
 
+    connection.on('HealthUpdate', (state: any) => {
+      queryClient.setQueryData(['system-health-status'], (old: any) => {
+        if (!old || !old.Data) return old;
+        const newConnectors = old.Data.Connectors.map((c: any) => {
+          if (c.Name === state.Name) { // Simplified matching for now
+            return {
+              ...c,
+              Latency: `${state.LatencyMs}ms`,
+              Stats: `${state.OnlineCameras} / ${state.TotalCameras}`,
+              Status: state.Status,
+              Description: `Real-time: ${state.OnlineCameras}/${state.TotalCameras} cams online, ${state.LatencyMs}ms latency`
+            };
+          }
+          return c;
+        });
+        return { ...old, Data: { ...old.Data, Connectors: newConnectors } };
+      });
+    });
+
     connection.on('ReceiveAgentMetrics', (report: any) => {
       const sId = report.serverId || report.ServerId;
       const cpu = report.cpuUsage || report.CpuUsage;
@@ -140,7 +159,8 @@ export function SystemHealthPage() {
       queryClient.setQueryData(['system-health-status'], (old: any) => {
         if (!old || !old.Data) return old;
         const newInfra = old.Data.Infrastructure.map((item: any) => {
-          if (item.Name.toLowerCase() === sId.toLowerCase()) {
+          const matchKey = item.MachineName || item.Name;
+          if (matchKey.toLowerCase() === sId.toLowerCase()) {
             return {
               ...item,
               CpuUsage: cpu,
@@ -148,7 +168,9 @@ export function SystemHealthPage() {
               TotalRamGb: totalRam,
               FreeRamGb: freeRam,
               Disks: disks,
-              Description: `CPU ${cpu}% • RAM ${ram}% • Disks: ${disks.length}`
+              Description: item.Type === 'server' 
+                ? `CPU ${cpu}% • RAM ${ram}% • Disks: ${disks.length}`
+                : item.Description // Keep Path for storage
             };
           }
           return item;
