@@ -303,9 +303,9 @@ function MapViewInternal() {
       sub: `/ ${cameraSummary ? cameraSummary.GlobalTotal : '-'} total`, 
       color: cameraSummary && cameraSummary.GlobalOnline < cameraSummary.GlobalTotal ? 'text-psim-orange' : 'text-psim-green' 
     },
-    { label: 'GUARDS ON DUTY', val: '8', sub: 'Night Shift', color: 'text-psim-orange' },
-    { label: 'ACCESS EVENTS/H', val: '142', sub: '↑ normal', color: 'text-psim-accent' },
-    { label: 'LPR SCAN/H', val: '38', sub: '2 mismatch', color: 'text-teal' },
+    { label: 'GUARDS ON DUTY', val: '0', sub: 'Night Shift', color: 'text-psim-orange' },
+    { label: 'ACCESS EVENTS/H', val: '0', sub: '↑ normal', color: 'text-psim-accent' },
+    { label: 'LPR SCAN/H', val: '0', sub: '2 mismatch', color: 'text-teal' },
   ];
 
   // Draggable Toolbar States
