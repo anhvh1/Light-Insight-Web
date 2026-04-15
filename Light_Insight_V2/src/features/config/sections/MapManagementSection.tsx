@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useTransition, useCallback } from 'react';
+import { useState, useEffect, useRef, useTransition } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { 
@@ -227,7 +227,10 @@ function DeviceTab({
                 draggable={!isPlaced} 
                 onDragStart={(e) => onDragStart(e, { 
                   id: String(cam.Id || ''), 
-                  name: String(cam.Name || ''), 
+                  name: String(cam.Name || ''),
+                  type: cam.Type || 1,
+                  connectorId: cam.Connectorid,
+                  ip: cam.IP || cam.Ip || cam.ip || ''
                 })} 
                 className={cn(
                   "p-3 bg-white/5 border border-white/5 rounded-lg flex items-center justify-between transition-all", 
@@ -280,8 +283,18 @@ export function MapManagementSection() {
     mapId: string; 
     rotation: number;
     vmsId: number;
+    type: number;
+    connectorId: string;
+    ip: string;
   }[]>([]);
-  const [draggingDevice, setDraggingDevice] = useState<{ id: string; name: string; vmsId: number } | null>(null);
+  const [draggingDevice, setDraggingDevice] = useState<{ 
+    id: string; 
+    name: string; 
+    vmsId: number; 
+    type: number;
+    connectorId: string;
+    ip: string;
+  } | null>(null);
   const [movingDeviceId, setMovingDeviceId] = useState<string | null>(null);
   const [zoomScale, setZoomScale] = useState(1);
   const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
@@ -335,15 +348,20 @@ export function MapManagementSection() {
 
   useEffect(() => {
     if (markersResponse?.Data) {
-      const markers = markersResponse.Data.map((m: any) => ({
-        id: m.CameraId,
-        name: m.CameraName,
-        x: m.PosX,
-        y: m.PosY,
-        mapId: m.MapId,
-        rotation: m.Rotation || 0,
-        vmsId: m.VmsId || 0
-      }));
+      const markers = markersResponse.Data.map((m: any) => {
+        return {
+          id: m.CameraId,
+          name: m.CameraName,
+          x: m.PosX,
+          y: m.PosY,
+          mapId: m.MapId,
+          rotation: m.Rotation || 0,
+          vmsId: m.VmsId || 0,
+          type: m.Type || 1,
+          connectorId: m.Connectorid || '',
+          ip: m.IP || ''
+        };
+      });
       setPlacedDevices(prev => {
         const otherMapsMarkers = prev.filter(d => d.mapId !== selectedMapId);
         return [...otherMapsMarkers, ...markers];
@@ -459,22 +477,15 @@ export function MapManagementSection() {
   const handleDownloadSample = () => {
     startTransition(async () => {
       try {
-        // Gọi trực tiếp API trả về dữ liệu file (Blob)
         const response = await mapApi.downloadSampleImage();
-        
-        // Dữ liệu blob nằm trong response.data khi dùng axios với responseType: 'blob'
         const blob = response.data;
         const objectUrl = URL.createObjectURL(blob);
-
-        // Kích hoạt tải xuống ngầm
         const link = document.createElement('a');
         link.href = objectUrl;
         link.download = 'light-insight-sample-map.png';
         link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
-
-        // Dọn dẹp bộ nhớ
         setTimeout(() => {
           document.body.removeChild(link);
           URL.revokeObjectURL(objectUrl);
@@ -503,6 +514,9 @@ export function MapManagementSection() {
         setIsCreateMapModalOpen(false);
         setNewMapData({ Name: '', Code: '', ParentId: null });
       }
+    },
+    onError: (error) => {
+      setResponseModal({ isOpen: true, status: -1, message: `Đã xảy ra lỗi: ${error.message}` });
     }
   });
 
@@ -514,6 +528,9 @@ export function MapManagementSection() {
         queryClient.invalidateQueries({ queryKey: ['map-tree'] });
         setEditingMapData(null);
       }
+    },
+    onError: (error) => {
+      setResponseModal({ isOpen: true, status: -1, message: `Đã xảy ra lỗi: ${error.message}` });
     }
   });
 
@@ -527,6 +544,9 @@ export function MapManagementSection() {
         setSelectedMapId(null);
         setMapImage(null);
       }
+    },
+    onError: (error) => {
+      setResponseModal({ isOpen: true, status: -1, message: `Đã xảy ra lỗi: ${error.message}` });
     }
   });
 
@@ -539,6 +559,9 @@ export function MapManagementSection() {
         setImageToDeleteId(null);
         queryClient.invalidateQueries({ queryKey: ['map-tree'] });
       }
+    },
+    onError: (error) => {
+      setResponseModal({ isOpen: true, status: -1, message: `Đã xảy ra lỗi: ${error.message}` });
     }
   });
 
@@ -546,6 +569,9 @@ export function MapManagementSection() {
     mutationFn: mapApi.saveMarkers,
     onSuccess: (res) => {
       setResponseModal({ isOpen: true, status: res.Status, message: res.Message || 'Lưu thành công' });
+    },
+    onError: (error) => {
+      setResponseModal({ isOpen: true, status: -1, message: `Đã xảy ra lỗi: ${error.message}` });
     }
   });
 
@@ -557,6 +583,9 @@ export function MapManagementSection() {
         setMapImage(res.Data);
         queryClient.invalidateQueries({ queryKey: ['map-tree'] });
       }
+    },
+    onError: (error) => {
+      setResponseModal({ isOpen: true, status: -1, message: `Đã xảy ra lỗi: ${error.message}` });
     }
   });
 
@@ -591,15 +620,14 @@ export function MapManagementSection() {
           if (res.Status === 1) setIsUploadWizardOpen(false);
         }
       });
-      // Update local preview immediately for UX
       const reader = new FileReader();
       reader.onloadend = () => setMapImage(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, device: { id: string; name: string }) => {
-    const connector = actualConnectors.find(c => c.Id === selectedSystemKey);
+  const handleDragStart = (e: React.DragEvent, device: { id: string; name: string; type: number; connectorId: string; ip: string; }) => {
+    const connector = actualConnectors.find(c => c.Id === device.connectorId);
     const vmsId = connector?.VmsID || 0;
     setDraggingDevice({ ...device, vmsId });
     e.dataTransfer.setData('deviceId', device.id);
@@ -614,10 +642,9 @@ export function MapManagementSection() {
     if (draggingDevice && selectedMapId) {
       if (placedDevices.some(d => d.id === draggingDevice.id && d.mapId === selectedMapId)) return;
       
-      const newDeviceId = String(draggingDevice.id || ''); // Ensure ID is a string, with fallback
-      const newDeviceName = String(draggingDevice.name || ''); // Ensure name is a string, with fallback
+      const newDeviceId = String(draggingDevice.id || '');
+      const newDeviceName = String(draggingDevice.name || '');
 
-      // Only proceed if a valid ID is present
       if (!newDeviceId) {
           console.warn("Attempted to drop a device with an invalid or empty ID.");
           return;
@@ -630,236 +657,246 @@ export function MapManagementSection() {
         y, 
         mapId: selectedMapId, 
         rotation: 0, 
-        vmsId: draggingDevice.vmsId 
+        vmsId: draggingDevice.vmsId,
+        type: draggingDevice.type,
+        connectorId: draggingDevice.connectorId,
+        ip: draggingDevice.ip
       }]);
       setDraggingDevice(null);
     }
   };
 
   return (
-    <div className="flex flex-col gap-6 h-full animate-in fade-in duration-500 w-full overflow-hidden">
-      <div className="flex items-center justify-between shrink-0">
-        <div>
-          <h2 className="text-[14px] font-heading font-bold text-t0">Thiết lập map</h2>
-          <p className="text-[12px] text-t-2 mt-1">Tạo bản đồ và đặt camera để theo dõi.</p>
-        </div>
-        <button 
-          onClick={() => setIsCreateMapModalOpen(true)}
-          className="bg-psim-accent2 text-white font-bold text-[11px] uppercase tracking-wider gap-2 h-8 px-4 rounded flex items-center shadow-lg shadow-psim-accent2/20 hover:scale-[1.02] transition-all"
-        >
-          <Plus size={16} /> Tạo bản đồ
-        </button>
-      </div>
-
-      <div className="flex gap-4 flex-1 overflow-hidden">
-        {/* Tabbed Sidebar */}
-        <TabContainer activeTab={activeSidebarTab} onTabChange={setActiveSidebarTab}>
-          {activeSidebarTab === 'map' ? (
-            <MapTab 
-              isLoading={isLoadingMapTree}
-              mapSearch={mapSearch}
-              onMapSearchChange={setMapSearch}
-              flatMaps={flatMaps}
-              selectedMapId={selectedMapId}
-              onMapSelect={(id) => {
-                setSelectedMapId(id);
-                const node = findNodeById(mapTree, id);
-                setMapImage(node?.MapImagePath || null);
-              }}
-              onRefresh={() => queryClient.invalidateQueries({ queryKey: ['map-tree'] })}
-              onEdit={(id) => {
-                const node = findNodeById(mapTree, id);
-                if (node) {
-                  setEditingMapData({
-                    Id: node.Id,
-                    Name: node.Name,
-                    Code: node.Code,
-                    ParentId: node.ParentId
-                  });
-                }
-              }}
-              onDelete={(id, name) => setMapToDelete({ id, name })}
-            />
-          ) : (
-            <DeviceTab 
-              isLoading={isLoadingDevices}
-              isLoadingConnectors={isLoadingConnectors}
-              selectedSystemKey={selectedSystemKey}
-              onSystemChange={setSelectedSystemKey}
-              actualConnectors={actualConnectors}
-              deviceSearch={deviceSearch}
-              onDeviceSearchChange={setDeviceSearch}
-              cameras={cameras}
-              placedDevices={placedDevices}
-              selectedMapId={selectedMapId}
-              onDragStart={handleDragStart}
-            />
-          )}
-        </TabContainer>
-
-        {/* Canvas Area */}
-        <div className="flex-1 bg-bg1 border border-border-dim rounded-xl flex flex-col overflow-hidden relative shadow-inner h-full">
-          <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="text-[14px] font-bold text-white uppercase">{flatMaps.find(m => m.id === selectedMapId)?.name || 'Chưa chọn bản đồ'}</span>
-              <span className="bg-psim-orange/20 text-psim-orange text-[9px] font-bold px-1.5 py-0.5 rounded border border-psim-orange/30">ẢNH</span>
-            </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={handleDownloadSample}
-                className="h-8 px-3 rounded text-[10px] font-bold text-psim-orange uppercase flex items-center gap-2 bg-psim-orange/10 border border-psim-orange/20 hover:bg-psim-orange/20 transition-all"
-              >
-                <Download size={12} /> Ảnh mẫu
-              </button>
-              <button 
-                disabled={!selectedMapId || uploadImageMutation.isPending}
-                onClick={() => setIsUploadWizardOpen(true)} 
-                className={cn(
-                  "h-8 px-3 rounded text-[10px] font-bold text-t-2 uppercase flex items-center gap-2 transition-all",
-                  (!selectedMapId || uploadImageMutation.isPending) ? "bg-white/5 border border-white/5 opacity-30 cursor-not-allowed" : "bg-white/5 border border-white/10 hover:bg-white/10"
-                )}
-              >
-                {uploadImageMutation.isPending ? <RefreshCcw size={12} className="animate-spin" /> : <Upload size={12} />} Tải ảnh
-              </button>
-              <button 
-                disabled={!selectedMapId || deleteImageMutation.isPending || !mapImage}
-                onClick={() => setImageToDeleteId(selectedMapId)}
-                className={cn(
-                  "h-8 px-3 rounded text-[10px] font-bold text-psim-red uppercase flex items-center gap-2 transition-all bg-psim-red/5 border",
-                  (!selectedMapId || deleteImageMutation.isPending || !mapImage) ? "border-transparent opacity-30 cursor-not-allowed" : "border-psim-red/20 hover:bg-psim-red/10"
-                )}
-              >
-                <Trash2 size={12} /> Xóa ảnh
-              </button>
-              <button 
-                disabled={!mapImage || placedDevices.filter(d => d.mapId === selectedMapId).length === 0 || saveMarkersMutation.isPending} 
-                onClick={() => {
-                  const selectedConnector = actualConnectors.find(c => c.Id === selectedSystemKey);
-                  const currentVmsId = selectedConnector?.VmsID || 0;
-                  const markers = placedDevices.filter(d => d.mapId === selectedMapId).map(d => ({ 
-                    CameraId: d.id, 
-                    CameraName: d.name, 
-                    PosX: d.x, 
-                    PosY: d.y, 
-                    Icon: 'Cctv', 
-                    VmsId: d.vmsId || currentVmsId, 
-                    Rotation: d.rotation 
-                  }));
-                  saveMarkersMutation.mutate({ MapId: selectedMapId!, Markers: markers });
-                }}
-                className={cn("h-8 px-3 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-2", (!mapImage || placedDevices.filter(d => d.mapId === selectedMapId).length === 0 || saveMarkersMutation.isPending) ? "bg-white/5 border border-white/5 opacity-30 cursor-not-allowed" : "bg-psim-orange text-white shadow-lg shadow-psim-orange/20 hover:scale-[1.02]")}
-              >
-                {saveMarkersMutation.isPending && <RefreshCcw size={12} className="animate-spin" />} Lưu vị trí
-              </button>
-            </div>
+    <>
+      <div className="flex flex-col gap-6 h-full animate-in fade-in duration-500 w-full overflow-hidden">
+        <div className="flex items-center justify-between shrink-0">
+          <div>
+            <h2 className="text-[14px] font-heading font-bold text-t0">Thiết lập map</h2>
+            <p className="text-[12px] text-t-2 mt-1">Tạo bản đồ và đặt camera để theo dõi.</p>
           </div>
-
-          <div 
-            id="map-canvas"
-            className={cn(
-              "flex-1 bg-black/40 relative overflow-hidden select-none", 
-              isPanning ? "cursor-grabbing" : (mapImage ? "cursor-grab" : "cursor-default")
-            )}
-            onWheel={handleWheel} 
-            onDragOver={(e) => e.preventDefault()} 
-            onDrop={handleDrop} 
-            onMouseDown={(e) => { 
-              if (e.button === 0 && !movingDeviceId && !rotatingDeviceId && mapImage) { 
-                e.preventDefault();
-                panningStartRef.current = { 
-                  mouseX: e.clientX, 
-                  mouseY: e.clientY, 
-                  offsetX: mapOffset.x, 
-                  offsetY: mapOffset.y 
-                };
-                setIsPanning(true); 
-              } 
-            }} 
+          <button 
+            onClick={() => setIsCreateMapModalOpen(true)}
+            className="bg-psim-accent2 text-white font-bold text-[11px] uppercase tracking-wider gap-2 h-8 px-4 rounded flex items-center shadow-lg shadow-psim-accent2/20 hover:scale-[1.02] transition-all"
           >
-            {/* Zoom Controls Overlay */}
-            {mapImage && (
-              <div className="absolute bottom-6 right-6 flex flex-col gap-2 z-50">
-                <div className="flex flex-col bg-[#161b2e]/90 border border-white/10 rounded-lg overflow-hidden shadow-2xl backdrop-blur-md">
-                  <button 
-                    onClick={handleZoomIn}
-                    className="w-10 h-10 flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all"
-                    title="Phóng to"
-                  >
-                    <ZoomIn size={20} />
-                  </button>
-                  <div className="h-px bg-white/5 mx-2" />
-                  <button 
-                    onClick={handleZoomOut}
-                    className="w-10 h-10 flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all"
-                    title="Thu nhỏ"
-                  >
-                    <ZoomOut size={20} />
-                  </button>
-                </div>
+            <Plus size={16} /> Tạo bản đồ
+          </button>
+        </div>
+
+        <div className="flex gap-4 flex-1 overflow-hidden">
+          {/* Tabbed Sidebar */}
+          <TabContainer activeTab={activeSidebarTab} onTabChange={setActiveSidebarTab}>
+            {activeSidebarTab === 'map' ? (
+              <MapTab 
+                isLoading={isLoadingMapTree}
+                mapSearch={mapSearch}
+                onMapSearchChange={setMapSearch}
+                flatMaps={flatMaps}
+                selectedMapId={selectedMapId}
+                onMapSelect={(id) => {
+                  setSelectedMapId(id);
+                  const node = findNodeById(mapTree, id);
+                  setMapImage(node?.MapImagePath || null);
+                }}
+                onRefresh={() => queryClient.invalidateQueries({ queryKey: ['map-tree'] })}
+                onEdit={(id) => {
+                  const node = findNodeById(mapTree, id);
+                  if (node) {
+                    setEditingMapData({
+                      Id: node.Id,
+                      Name: node.Name,
+                      Code: node.Code,
+                      ParentId: node.ParentId
+                    });
+                  }
+                }}
+                onDelete={(id, name) => setMapToDelete({ id, name })}
+              />
+            ) : (
+              <DeviceTab 
+                isLoading={isLoadingDevices}
+                isLoadingConnectors={isLoadingConnectors}
+                selectedSystemKey={selectedSystemKey}
+                onSystemChange={setSelectedSystemKey}
+                actualConnectors={actualConnectors}
+                deviceSearch={deviceSearch}
+                onDeviceSearchChange={setDeviceSearch}
+                cameras={cameras}
+                placedDevices={placedDevices}
+                selectedMapId={selectedMapId}
+                onDragStart={handleDragStart}
+              />
+            )}
+          </TabContainer>
+
+          {/* Canvas Area */}
+          <div className="flex-1 bg-bg1 border border-border-dim rounded-xl flex flex-col overflow-hidden relative shadow-inner h-full">
+            <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[14px] font-bold text-white uppercase">{flatMaps.find(m => m.id === selectedMapId)?.name || 'Chưa chọn bản đồ'}</span>
+                <span className="bg-psim-orange/20 text-psim-orange text-[9px] font-bold px-1.5 py-0.5 rounded border border-psim-orange/30">ẢNH</span>
+              </div>
+              <div className="flex gap-2">
                 <button 
-                  onClick={handleResetZoom}
-                  className="w-10 h-10 bg-[#161b2e]/90 border border-white/10 rounded-lg flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all shadow-2xl backdrop-blur-md"
-                  title="Reset (100%)"
+                  onClick={handleDownloadSample}
+                  className="h-8 px-3 rounded text-[10px] font-bold text-psim-orange uppercase flex items-center gap-2 bg-psim-orange/10 border border-psim-orange/20 hover:bg-psim-orange/20 transition-all"
                 >
-                  <Maximize2 size={20} />
+                  <Download size={12} /> Ảnh mẫu
+                </button>
+                <button 
+                  disabled={!selectedMapId || uploadImageMutation.isPending}
+                  onClick={() => setIsUploadWizardOpen(true)} 
+                  className={cn(
+                    "h-8 px-3 rounded text-[10px] font-bold text-t-2 uppercase flex items-center gap-2 transition-all",
+                    (!selectedMapId || uploadImageMutation.isPending) ? "bg-white/5 border border-white/5 opacity-30 cursor-not-allowed" : "bg-white/5 border border-white/10 hover:bg-white/10"
+                  )}
+                >
+                  {uploadImageMutation.isPending ? <RefreshCcw size={12} className="animate-spin" /> : <Upload size={12} />} Tải ảnh
+                </button>
+                <button 
+                  disabled={!selectedMapId || deleteImageMutation.isPending || !mapImage}
+                  onClick={() => setImageToDeleteId(selectedMapId)}
+                  className={cn(
+                    "h-8 px-3 rounded text-[10px] font-bold text-psim-red uppercase flex items-center gap-2 transition-all bg-psim-red/5 border",
+                    (!selectedMapId || deleteImageMutation.isPending || !mapImage) ? "border-transparent opacity-30 cursor-not-allowed" : "border-psim-red/20 hover:bg-psim-red/10"
+                  )}
+                >
+                  <Trash2 size={12} /> Xóa ảnh
+                </button>
+                <button 
+                  disabled={!mapImage || placedDevices.filter(d => d.mapId === selectedMapId).length === 0 || saveMarkersMutation.isPending} 
+                  onClick={() => {
+                    try {
+                      const markers = placedDevices.filter(d => d.mapId === selectedMapId).map(d => ({ 
+                        CameraId: d.id, 
+                        CameraName: d.name, 
+                        PosX: d.x, 
+                        PosY: d.y, 
+                        Icon: 'Cctv', 
+                        VmsId: d.vmsId,
+                        Connectorid: d.connectorId,
+                        Type: d.type,
+                        Rotation: d.rotation,
+                        IP: d.ip
+                      }));
+                      saveMarkersMutation.mutate({ MapId: selectedMapId!, Markers: markers });
+                    } catch (error: any) {
+                      setResponseModal({ isOpen: true, status: -1, message: `Lỗi tạo dữ liệu lưu: ${error.message}` });
+                    }
+                  }}
+                  className={cn("h-8 px-3 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-2", (!mapImage || placedDevices.filter(d => d.mapId === selectedMapId).length === 0 || saveMarkersMutation.isPending) ? "bg-white/5 border border-white/5 opacity-30 cursor-not-allowed" : "bg-psim-orange text-white shadow-lg shadow-psim-orange/20 hover:scale-[1.02]")}
+                >
+                  {saveMarkersMutation.isPending && <RefreshCcw size={12} className="animate-spin" />} Lưu vị trí
                 </button>
               </div>
-            )}
-            {mapImage ? (
-              <div className="w-full h-full flex items-center justify-center relative origin-center" style={{ transform: `translate(${mapOffset.x}px, ${mapOffset.y}px) scale(${zoomScale})` }}>
-                <div className="relative max-w-full max-h-full">
-                  <img 
-                    src={mapImage} 
-                    className="max-w-full max-h-full object-contain" 
-                    draggable="false"
-                    onDragStart={(e) => e.preventDefault()}
-                  />
-                  {placedDevices.filter(d => d.mapId === selectedMapId).map((device) => (
-                    <div key={device.id} style={{ left: `${device.x}%`, top: `${device.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 group/device pointer-events-auto z-10">
-                      <div className="relative flex flex-col items-center">
-                        <div className="bg-white border border-black/10 rounded px-2 py-0.5 mb-3 whitespace-nowrap shadow-xl z-30 pointer-events-none text-[9px] font-bold text-black uppercase">{device.name}</div>
-                        <div className="relative w-10 h-10 flex items-center justify-center" style={{ transform: `rotate(${device.rotation}deg)` }}>
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 pointer-events-none">
-                            <div className="relative -top-[100px]">
-                              <svg width="140" height="100" viewBox="0 0 140 100" className="opacity-60"><path d="M70 100 L0 0 L140 0 Z" fill="rgba(0, 194, 255, 0.2)" stroke="rgba(0, 194, 255, 0.4)" strokeWidth="1" /></svg>
-                              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-4 h-4 bg-psim-red rounded-full border-2 border-white cursor-pointer pointer-events-auto hover:scale-125" 
-                            onMouseDown={(e) => { 
-                              e.stopPropagation();
-                              setRotatingDeviceId(device.id);
-                            }} 
-                          />
-                        </div>
-                      </div>
-                      <div 
-                        className={cn("w-10 h-10 bg-[#1a1f2e] text-white rounded-xl flex items-center justify-center border border-white/20 cursor-move", movingDeviceId === device.id && "border-psim-orange")} 
-                        onMouseDown={(e) => { 
-                          e.stopPropagation(); 
-                          deviceStartRef.current = {
-                            mouseX: e.clientX,
-                            mouseY: e.clientY,
-                            deviceX: device.x,
-                            deviceY: device.y
-                          };
-                          setMovingDeviceId(device.id); 
-                        }}
-                      >
-                        <Cctv size={22} className="-rotate-90" />
-                      </div>
-                        </div>
-                        <button onClick={(e) => { e.stopPropagation(); setPlacedDevices(prev => prev.filter(d => !(d.id === device.id && d.mapId === selectedMapId))); }} className="absolute -top-4 -right-4 w-6 h-6 bg-psim-red text-white rounded-full flex items-center justify-center opacity-0 group-hover/device:opacity-100 transition-opacity"><X size={12} /></button>
-                      </div>
-                    </div>
-                  ))}
+            </div>
+
+            <div 
+              id="map-canvas"
+              className={cn(
+                "flex-1 bg-black/40 relative overflow-hidden select-none", 
+                isPanning ? "cursor-grabbing" : (mapImage ? "cursor-grab" : "cursor-default")
+              )}
+              onWheel={handleWheel} 
+              onDragOver={(e) => e.preventDefault()} 
+              onDrop={handleDrop} 
+              onMouseDown={(e) => { 
+                if (e.button === 0 && !movingDeviceId && !rotatingDeviceId && mapImage) { 
+                  e.preventDefault();
+                  panningStartRef.current = { 
+                    mouseX: e.clientX, 
+                    mouseY: e.clientY, 
+                    offsetX: mapOffset.x, 
+                    offsetY: mapOffset.y 
+                  };
+                  setIsPanning(true); 
+                } 
+              }} 
+            >
+              {/* Zoom Controls Overlay */}
+              {mapImage && (
+                <div className="absolute bottom-6 right-6 flex flex-col gap-2 z-50">
+                  <div className="flex flex-col bg-[#161b2e]/90 border border-white/10 rounded-lg overflow-hidden shadow-2xl backdrop-blur-md">
+                    <button 
+                      onClick={handleZoomIn}
+                      className="w-10 h-10 flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all"
+                      title="Phóng to"
+                    >
+                      <ZoomIn size={20} />
+                    </button>
+                    <div className="h-px bg-white/5 mx-2" />
+                    <button 
+                      onClick={handleZoomOut}
+                      className="w-10 h-10 flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all"
+                      title="Thu nhỏ"
+                    >
+                      <ZoomOut size={20} />
+                    </button>
+                  </div>
+                  <button 
+                    onClick={handleResetZoom}
+                    className="w-10 h-10 bg-[#161b2e]/90 border border-white/10 rounded-lg flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all shadow-2xl backdrop-blur-md"
+                    title="Reset (100%)"
+                  >
+                    <Maximize2 size={20} />
+                  </button>
                 </div>
-              </div>
-            ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-20"><MapIcon size={48} /><p className="text-[11px] uppercase tracking-widest font-medium">Chưa có ảnh bản đồ</p></div>
-            )}
+              )}
+              {mapImage ? (
+                <div className="w-full h-full flex items-center justify-center relative origin-center" style={{ transform: `translate(${mapOffset.x}px, ${mapOffset.y}px) scale(${zoomScale})` }}>
+                  <div className="relative max-w-full max-h-full">
+                    <img 
+                      src={mapImage} 
+                      className="max-w-full max-h-full object-contain" 
+                      draggable="false"
+                      onDragStart={(e) => e.preventDefault()}
+                    />
+                    {placedDevices.filter(d => d.mapId === selectedMapId).map((device) => (
+                      <div key={device.id} style={{ left: `${device.x}%`, top: `${device.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 group/device pointer-events-auto z-10">
+                        <div className="relative flex flex-col items-center">
+                          <div className="bg-white border border-black/10 rounded px-2 py-0.5 mb-3 whitespace-nowrap shadow-xl z-30 pointer-events-none text-[9px] font-bold text-black uppercase">{device.name}</div>
+                          <div className="relative w-10 h-10 flex items-center justify-center" style={{ transform: `rotate(${device.rotation}deg)` }}>
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 pointer-events-none">
+                              <div className="relative -top-[100px]">
+                                <svg width="140" height="100" viewBox="0 0 140 100" className="opacity-60"><path d="M70 100 L0 0 L140 0 Z" fill="rgba(0, 194, 255, 0.2)" stroke="rgba(0, 194, 255, 0.4)" strokeWidth="1" /></svg>
+                                <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-4 h-4 bg-psim-red rounded-full border-2 border-white cursor-pointer pointer-events-auto hover:scale-125" 
+                              onMouseDown={(e) => { 
+                                e.stopPropagation();
+                                setRotatingDeviceId(device.id);
+                              }} 
+                            />
+                          </div>
+                        </div>
+                        <div 
+                          className={cn("w-10 h-10 bg-[#1a1f2e] text-white rounded-xl flex items-center justify-center border border-white/20 cursor-move", movingDeviceId === device.id && "border-psim-orange")} 
+                          onMouseDown={(e) => { 
+                            e.stopPropagation(); 
+                            deviceStartRef.current = {
+                              mouseX: e.clientX,
+                              mouseY: e.clientY,
+                              deviceX: device.x,
+                              deviceY: device.y
+                            };
+                            setMovingDeviceId(device.id); 
+                          }}
+                        >
+                          <Cctv size={22} className="-rotate-90" />
+                        </div>
+                          </div>
+                          <button onClick={(e) => { e.stopPropagation(); setPlacedDevices(prev => prev.filter(d => !(d.id === device.id && d.mapId === selectedMapId))); }} className="absolute -top-4 -right-4 w-6 h-6 bg-psim-red text-white rounded-full flex items-center justify-center opacity-0 group-hover/device:opacity-100 transition-opacity"><X size={12} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-20"><MapIcon size={48} /><p className="text-[11px] uppercase tracking-widest font-medium">Chưa có ảnh bản đồ</p></div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* --- CREATE MAP MODAL --- */}
+      {/* --- MODALS (now outside main div) --- */}
       {isCreateMapModalOpen && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/90 animate-in fade-in duration-200" onClick={() => setIsCreateMapModalOpen(false)} />
@@ -930,7 +967,6 @@ export function MapManagementSection() {
         </div>
       )}
 
-      {/* --- EDIT MAP MODAL --- */}
       {editingMapData && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/90 animate-in fade-in duration-200" onClick={() => setEditingMapData(null)} />
@@ -999,7 +1035,6 @@ export function MapManagementSection() {
         </div>
       )}
 
-      {/* --- DELETE MAP CONFIRMATION MODAL --- */}
       {mapToDelete && (
         <div className="fixed inset-0 z-[11000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setMapToDelete(null)} />
@@ -1038,7 +1073,6 @@ export function MapManagementSection() {
         </div>
       )}
 
-      {/* --- DELETE IMAGE CONFIRMATION MODAL --- */}
       {imageToDeleteId && (
         <div className="fixed inset-0 z-[11500] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setImageToDeleteId(null)} />
@@ -1077,7 +1111,6 @@ export function MapManagementSection() {
         </div>
       )}
 
-      {/* --- RESPONSE MODAL --- */}
       {responseModal.isOpen && (
         <div className="fixed inset-0 z-[12000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setResponseModal(prev => ({ ...prev, isOpen: false }))} />
@@ -1112,7 +1145,6 @@ export function MapManagementSection() {
         </div>
       )}
 
-      {/* --- IMAGE UPLOAD WIZARD --- */}
       {isUploadWizardOpen && (
         <ImageUploadWizard 
           onConfirm={handleWizardConfirm}
@@ -1121,7 +1153,6 @@ export function MapManagementSection() {
         />
       )}
 
-      {/* --- MANUAL DOWNLOAD MODAL (CORS FALLBACK) --- */}
       {showDownloadManual.isOpen && (
         <div className="fixed inset-0 z-[13000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/90 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setShowDownloadManual({ isOpen: false, url: '' })} />
@@ -1157,7 +1188,6 @@ export function MapManagementSection() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
-

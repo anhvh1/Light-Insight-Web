@@ -16,5 +16,6 @@ namespace LightInsightBUS.Interfaces.General
         Task<BaseResultModel> GetMarkersByMapIdAsync(Guid mapId);
         Task<BaseResultModel> DeleteMapImageAsync(Guid id);
         Task<BaseResultModel> GetAllDevicesAsync(Guid key);
+        Task<BaseResultModel> StatisticMarkerByTypeAsync(Guid mapId);
     }
 }

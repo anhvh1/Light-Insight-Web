@@ -155,9 +155,15 @@ namespace LightInsightDAL.Repositories.General
                 var result = await cmd.ExecuteScalarAsync();
                 return result is bool && (bool)result;
             }
+            catch (PostgresException ex) // B?t ri�ng l?i t? Postgres
+            {
+                Console.WriteLine($"Postgres Error: {ex.MessageText}");
+                Console.WriteLine($"Detail: {ex.Detail}");
+                return false;
+            }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in ReplaceMarkersAsync: {ex.Message}");
+                Console.WriteLine($"General Error: {ex.Message}");
                 return false;
             }
         }
@@ -189,7 +195,10 @@ namespace LightInsightDAL.Repositories.General
                         Icon = reader.IsDBNull(6) ? null : reader.GetString(6),
                         CreatedAt = reader.GetDateTime(7),
                         VmsID = reader.GetInt32(8),
-                        Rotation = reader.GetDouble(9)
+                        Rotation = reader.GetDouble(9),
+                        Type = reader.IsDBNull(10) ? 0 : reader.GetInt32(10),
+                        Connectorid = reader.IsDBNull(11) ? (Guid?)null : reader.GetGuid(11),
+                        IP = reader.IsDBNull(12) ? null : reader.GetString(12),
                     });
                 }
                 return list;
@@ -197,6 +206,78 @@ namespace LightInsightDAL.Repositories.General
             catch (Exception ex)
             {
                 Console.WriteLine($"Error in GetMarkersByMapIdAsync: {ex.Message}");
+                return list;
+            }
+        }
+
+        public async Task<List<DMMapMarkerStatisticModel>> StatisticMarkerByTypeAsync(Guid mapId)
+        {
+            var list = new List<DMMapMarkerStatisticModel>();
+            try
+            {
+                await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
+                await conn.OpenAsync();
+
+                var sql = "SELECT * FROM public.fn_statistic_marker_by_type(@p_map_id)";
+
+                await using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("p_map_id", mapId);
+
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    list.Add(new DMMapMarkerStatisticModel
+                    {
+                        MarkerType = reader.GetInt32(0),
+                        TotalCount = reader.GetInt64(1)
+                    });
+                }
+                return list;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in StatisticMarkerByTypeAsync: {ex.Message}");
+                return list;
+            }
+        }
+
+        public async Task<List<DMMapMarkerModel>> GetAllMarkersWithIpAsync()
+        {
+            var list = new List<DMMapMarkerModel>();
+            try
+            {
+                await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
+                await conn.OpenAsync();
+
+                // Get all markers with an IP
+                var sql = "SELECT id, map_id, camera_id, camera_name, pos_x, pos_y, icon, created_at, vmsid, rotation, type, connectorid, ip FROM public.dm_map_marker WHERE ip IS NOT NULL AND ip <> ''";
+
+                await using var cmd = new NpgsqlCommand(sql, conn);
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    list.Add(new DMMapMarkerModel
+                    {
+                        Id = reader.GetGuid(0),
+                        MapId = reader.GetGuid(1),
+                        CameraId = reader.GetString(2),
+                        CameraName = reader.GetString(3),
+                        PosX = reader.GetDouble(4),
+                        PosY = reader.GetDouble(5),
+                        Icon = reader.IsDBNull(6) ? null : reader.GetString(6),
+                        CreatedAt = reader.GetDateTime(7),
+                        VmsID = reader.GetInt32(8),
+                        Rotation = reader.GetDouble(9),
+                        Type = reader.IsDBNull(10) ? 0 : reader.GetInt32(10),
+                        Connectorid = reader.IsDBNull(11) ? (Guid?)null : reader.GetGuid(11),
+                        IP = reader.IsDBNull(12) ? null : reader.GetString(12),
+                    });
+                }
+                return list;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetAllMarkersWithIpAsync: {ex.Message}");
                 return list;
             }
         }

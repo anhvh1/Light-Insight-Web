@@ -21,6 +21,8 @@ export interface Alarm {
   cameraId?: string;
   corr: number;
   isNew: boolean;
+  connectorName?: string;
+  ipadress?: string;
 }
 
 export interface Incident {
