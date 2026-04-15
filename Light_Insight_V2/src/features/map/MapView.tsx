@@ -503,7 +503,10 @@ function MapViewInternal() {
                     <div>
                       <span className={cn(
                         "text-[10px] font-heading font-bold px-3 py-1 rounded-lg uppercase tracking-wider border inline-block text-center min-w-[80px]",
-                        alarm.pri === 'critical' ? "border-psim-red/40 bg-psim-red/10 text-psim-red" : "border-psim-orange/40 bg-psim-orange/10 text-psim-orange"
+                        alarm.pri === 'critical' ? "border-psim-red/40 bg-psim-red/10 text-psim-red" : 
+                        alarm.pri === 'high' ? "border-psim-orange/40 bg-psim-orange/10 text-psim-orange" :
+                        alarm.pri === 'medium' ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-500" :
+                        "border-psim-green/40 bg-psim-green/10 text-psim-green"
                       )}>
                         {alarm.pri}
                       </span>
@@ -885,24 +888,39 @@ function MapViewInternal() {
           </div>
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 custom-scrollbar">
             {latestAlarms.map((alarm) => (
-              <div key={alarm.id} className="p-3.5 bg-white/[0.03] border border-white/5 rounded-xl hover:bg-white/[0.06] transition-all cursor-pointer group relative overflow-hidden">
+              <div key={alarm.id} className="p-2.5 bg-white/[0.03] border border-white/5 rounded-xl hover:bg-white/[0.06] transition-all cursor-pointer group relative overflow-hidden flex flex-col gap-1.5">
+                {/* Side indicator */}
                 <div className={cn(
-                  "absolute left-0 top-0 bottom-0 w-1 transition-transform origin-top scale-y-0 group-hover:scale-y-100",
-                  alarm.pri === 'critical' ? "bg-psim-red" : "bg-psim-orange"
+                  "absolute left-0 top-0 bottom-0 w-1",
+                  alarm.pri === 'critical' ? "bg-psim-red" : 
+                  alarm.pri === 'high' ? "bg-psim-orange" :
+                  alarm.pri === 'medium' ? "bg-psim-yellow" : "bg-psim-green"
                 )} />
-                <div className="flex items-start justify-between gap-2 mb-2">
+
+                {/* Line 1: Title & Priority */}
+                <div className="flex items-start justify-between gap-2 pl-1">
+                  <div className="text-[11px] font-bold leading-tight text-white group-hover:text-psim-accent transition-colors flex-1 uppercase truncate" title={alarm.title}>
+                    {alarm.title}
+                  </div>
                   <span className={cn(
-                    "text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest",
-                    alarm.pri === 'critical' ? "bg-psim-red text-white" : "bg-psim-orange text-white"
+                    "text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter shrink-0",
+                    alarm.pri === 'critical' ? "bg-psim-red text-white" : 
+                    alarm.pri === 'high' ? "bg-psim-orange text-white" :
+                    alarm.pri === 'medium' ? "bg-psim-yellow text-black" : "bg-psim-green text-white"
                   )}>
                     {alarm.pri}
                   </span>
-                  <span className="text-[9px] font-mono text-t3 group-hover:text-t2">
-                    {alarm.time}
-                  </span>
                 </div>
-                <div className="text-[12px] font-bold leading-tight group-hover:text-psim-accent transition-colors text-t1">
-                  {alarm.title}
+
+                {/* Line 2: Source & Time */}
+                <div className="flex items-center justify-between gap-2 border-t border-white/[0.03] pt-1.5 pl-1">
+                  <div className="flex items-center gap-1 text-[9px] text-t3 font-medium truncate flex-1">
+                    <Cctv size={10} className="text-psim-accent opacity-70 shrink-0" />
+                    <span className="truncate">{alarm.src || 'Unknown Camera'}</span>
+                  </div>
+                  <div className="text-[8px] font-mono text-t3 group-hover:text-t2 shrink-0">
+                    {alarm.time}
+                  </div>
                 </div>
               </div>
             ))}
