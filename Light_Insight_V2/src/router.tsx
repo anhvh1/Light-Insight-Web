@@ -9,6 +9,7 @@ import { MainLayout } from './components/layout/MainLayout';
 import { AlarmConsole } from './features/alarms/AlarmConsole';
 import { MapView } from './features/map/MapView';
 import { VideoWall } from './features/video/VideoWall';
+import { HiddenPlaybackPage } from './features/video/HiddenPlaybackPage';
 import { IncidentManagement } from './features/incidents/IncidentManagement';
 import { ConfigurationLayout } from './features/config/ConfigurationLayout';
 import { UsersRolesSection } from './features/config/sections/UsersRolesSection';
@@ -40,6 +41,12 @@ const loginRoute = createRoute({
       throw redirect({ to: '/' });
     }
   }
+});
+
+const hiddenPlaybackRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/embed/playback',
+  component: HiddenPlaybackPage,
 });
 
 // 3. Authenticated Layout Route
@@ -136,6 +143,7 @@ const configIndexRoute = createRoute({
 // 5. Tạo cây Route
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  hiddenPlaybackRoute,
   authLayoutRoute.addChildren([
     indexRoute,
     alarmRoute,

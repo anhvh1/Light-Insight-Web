@@ -1,8 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { 
-  MapPin, 
   ChevronRight, 
   GripVertical, 
   ChevronUp, 
@@ -14,29 +13,105 @@ import {
   Maximize2,
   Activity,
   Cctv,
-  RefreshCcw
+  RefreshCcw,
+  ZoomIn,
+  ZoomOut,
+  X
 } from 'lucide-react';
 import { mapApi } from '@/lib/map-api';
+import type { MapTreeNode, Alarm } from '@/types';
 import { useAlarmStream } from '@/features/alarms/AlarmStreamProvider';
-import type { MapTreeNode } from '@/types';
 
-export function MapView() {
-  const { alarms, bellCount } = useAlarmStream();
+import { normalizeApiAlarm } from '@/features/alarms/alarm-mapper';
+import { useCameraStatus } from './useCameraStatus';
+
+// --- HELPER FUNCTION ---
+
+function findFirstMap(nodes: MapTreeNode[]): MapTreeNode | null {
+  for (const node of nodes) {
+    // A node is considered a map if it has a path. This is the most reliable check.
+    if (node.MapImagePath) {
+      return node;
+    }
+    // If not, recurse into its children.
+    if (node.Children && node.Children.length > 0) {
+      const foundInChild = findFirstMap(node.Children);
+      if (foundInChild) {
+        return foundInChild;
+      }
+    }
+  }
+  return null;
+}
+
+function findMapById(nodes: MapTreeNode[], id: string): MapTreeNode | null {
+  for (const node of nodes) {
+    if (node.Id === id) return node;
+    if (node.Children && node.Children.length > 0) {
+      const found = findMapById(node.Children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function filterMapTree(nodes: MapTreeNode[], query: string): MapTreeNode[] {
+  if (!query) return nodes;
+  const lowerQuery = query.toLowerCase();
   
-  const criticalCount = alarms.filter(a => a.pri === 'critical').length;
+  return nodes.map(node => {
+    const isMatch = node.Name.toLowerCase().includes(lowerQuery);
+    if (node.Children && node.Children.length > 0) {
+      const filteredChildren = filterMapTree(node.Children, query);
+      if (isMatch || filteredChildren.length > 0) {
+        return { ...node, Children: filteredChildren };
+      }
+    } else if (isMatch) {
+      return node;
+    }
+    return null;
+  }).filter(Boolean) as MapTreeNode[];
+}
 
-  const stats = [
-    { label: 'ACTIVE ALARMS', val: alarms.length.toString(), sub: `${criticalCount} critical`, color: 'text-psim-red' },
-    { label: 'CAMERA ACTIVE', val: '47', sub: '/ 52 total', color: 'text-psim-green' },
-    { label: 'GUARDS ON DUTY', val: '8', sub: 'Night Shift', color: 'text-psim-orange' },
-    { label: 'ACCESS EVENTS/H', val: '142', sub: '↑ normal', color: 'text-psim-accent' },
-    { label: 'LPR SCAN/H', val: '38', sub: '2 mismatch', color: 'text-teal' },
-  ];
+// --- THE ACTUAL MAP VIEW COMPONENT (Consumes the context) ---
+
+function MapViewInternal() {
+  // Use the central alarm stream
+  const { alarms: allAlarms } = useAlarmStream();
 
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
+  
+  // Connect Camera Status API & SignalR
+  const { summary: cameraSummary, statusMap: cameraStatusMap, connectionState: cameraConnectionState } = useCameraStatus(selectedMapId);
+
   const [selectedMapName, setSelectedMapName] = useState<string | null>(null);
   const [activeMapUrl, setActiveMapMapUrl] = useState<string | null>(null);
   const [showLegend, setShowLegend] = useState(true);
+
+  // Modal States
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalAlarms, setModalAlarms] = useState<Alarm[]>([]);
+  const [modalPage, setModalPage] = useState(0);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const modalScrollRef = useRef<HTMLDivElement>(null);
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsModalOpen(false);
+    };
+    if (isModalOpen) {
+        window.addEventListener('keydown', handleEsc);
+        document.body.style.overflow = 'hidden';
+    } else {
+        document.body.style.overflow = 'unset';
+    }
+    return () => {
+        window.removeEventListener('keydown', handleEsc);
+        document.body.style.overflow = 'unset';
+    };
+  }, [isModalOpen]);
 
   // Zoom & Pan States
   const [zoomScale, setZoomScale] = useState(1);
@@ -67,14 +142,218 @@ export function MapView() {
   });
   const markers = markersResponse?.Data || [];
 
+  const { data: historicalAlarmsResponse } = useQuery({
+    queryKey: ['map-historical-alarms', selectedMapId],
+    queryFn: () => mapApi.getMilestoneAlarms(selectedMapId!, 0, 20),
+    enabled: !!selectedMapId,
+    select: (res) => (res.Data || []).map(normalizeApiAlarm)
+  });
+  const historicalAlarms = historicalAlarmsResponse || [];
+
+  // --- MODAL DATA FETCHING ---
+  const fetchModalAlarms = useCallback(async (page: number, append = false) => {
+    if (!selectedMapId) return;
+    setIsFetchingMore(true);
+    try {
+      const res = await mapApi.getMilestoneAlarms(selectedMapId, page, 20);
+      const newAlarms = (res.Data || []).map(normalizeApiAlarm);
+      
+      if (newAlarms.length < 20) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
+
+      setModalAlarms(prev => append ? [...prev, ...newAlarms] : newAlarms);
+      setModalPage(page);
+    } catch (error) {
+      console.error('Failed to fetch modal alarms:', error);
+    } finally {
+      setIsFetchingMore(false);
+    }
+  }, [selectedMapId]);
+
+  const handleOpenModal = () => {
+    setIsModalOpen(true);
+    setModalAlarms([]);
+    setModalPage(0);
+    setHasMore(true);
+    void fetchModalAlarms(0);
+  };
+
+  const handleModalScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (!hasMore || isFetchingMore) return;
+    const target = e.currentTarget;
+    if (target.scrollHeight - target.scrollTop <= target.clientHeight + 50) {
+      void fetchModalAlarms(modalPage + 1, true);
+    }
+  };
+
+  // --- AUTO-SELECT MAP ---
+  useEffect(() => {
+    // If a map isn't already selected and the tree has finished loading and is not empty
+    if (!selectedMapId && !isLoadingTree && mapTree.length > 0) {
+      const savedMapId = localStorage.getItem('lastSelectedMapId');
+      let targetMap = savedMapId ? findMapById(mapTree, savedMapId) : null;
+      
+      if (!targetMap) {
+        targetMap = findFirstMap(mapTree);
+      }
+
+      if (targetMap) {
+        setSelectedMapId(targetMap.Id);
+        setSelectedMapName(targetMap.Name);
+        setActiveMapMapUrl(targetMap.MapImagePath);
+        if (!savedMapId) {
+          localStorage.setItem('lastSelectedMapId', targetMap.Id);
+        }
+      }
+    }
+  }, [mapTree, isLoadingTree, selectedMapId]);
+
+
+  // Extract CameraNames from the markers for efficient lookup
+  const cameraNamesOnActiveMap = useMemo(() => {
+    return new Set(markers.map(marker => marker.CameraName));
+  }, [markers]);
+
+
+  // --- DERIVED STATE FROM CENTRAL ALARM STREAM + HISTORICAL ---
+
+  // 1. Filter for alarms relevant to the map (must have a source AND that source must be a camera on the active map)
+  const mapAlarms = useMemo(() => {
+    const realtimeMapAlarms = allAlarms.filter(alarm => 
+      alarm.src && cameraNamesOnActiveMap.has(alarm.src)
+    );
+    
+    // Combine and remove duplicates by ID
+    const combined = [...realtimeMapAlarms, ...historicalAlarms];
+    const uniqueMap = new Map<string, Alarm>();
+    combined.forEach(a => {
+      if (!uniqueMap.has(a.id)) {
+        uniqueMap.set(a.id, a);
+      }
+    });
+    
+    return Array.from(uniqueMap.values());
+  }, [allAlarms, historicalAlarms, cameraNamesOnActiveMap]);
+
+  // 2. Get the 6 most recent alarms for the live feed
+  const latestAlarms = useMemo(() => {
+    // The `allAlarms` from the hook are already sorted by time, newest first.
+    return mapAlarms.slice(0, 6);
+  }, [mapAlarms]);
+
+  // 3. Daily Alarm Counters
+  const [dailyAlarmCount, setDailyAlarmCount] = useState(0);
+  const [dailyCriticalCount, setDailyCriticalCount] = useState(0);
+  const processedAlarmsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!selectedMapId) return;
+    
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format based on local time
+    const storageKey = `map_alarms_daily_${selectedMapId}`;
+    const dateKey = `map_alarms_date_${selectedMapId}`;
+    
+    const savedDate = localStorage.getItem(dateKey);
+    if (savedDate !== today) {
+      localStorage.setItem(dateKey, today);
+      localStorage.setItem(storageKey + '_total', '0');
+      localStorage.setItem(storageKey + '_critical', '0');
+      setDailyAlarmCount(0);
+      setDailyCriticalCount(0);
+      processedAlarmsRef.current.clear(); // Reset processed alarms on a new day
+    } else {
+      setDailyAlarmCount(parseInt(localStorage.getItem(storageKey + '_total') || '0', 10));
+      setDailyCriticalCount(parseInt(localStorage.getItem(storageKey + '_critical') || '0', 10));
+    }
+
+    let newTotal = parseInt(localStorage.getItem(storageKey + '_total') || '0', 10);
+    let newCritical = parseInt(localStorage.getItem(storageKey + '_critical') || '0', 10);
+    let updated = false;
+
+    allAlarms.forEach(alarm => {
+      // Only process NEW alarms from hub that belong to the current map's cameras
+      if (alarm.isNew && alarm.src && cameraNamesOnActiveMap.has(alarm.src)) {
+        if (!processedAlarmsRef.current.has(alarm.id)) {
+          processedAlarmsRef.current.add(alarm.id);
+          newTotal += 1;
+          if (alarm.pri === 'critical') {
+            newCritical += 1;
+          }
+          updated = true;
+        }
+      }
+    });
+
+    if (updated) {
+      localStorage.setItem(storageKey + '_total', newTotal.toString());
+      localStorage.setItem(storageKey + '_critical', newCritical.toString());
+      setDailyAlarmCount(newTotal);
+      setDailyCriticalCount(newCritical);
+    }
+  }, [allAlarms, selectedMapId, cameraNamesOnActiveMap]);
+
+  const stats = [
+    { label: 'ACTIVE ALARMS', val: dailyAlarmCount.toString(), sub: `${dailyCriticalCount} critical`, color: 'text-psim-red' },
+    { 
+      label: 'CAMERA ACTIVE', 
+      val: cameraSummary ? cameraSummary.GlobalOnline.toString() : '-', 
+      sub: `/ ${cameraSummary ? cameraSummary.GlobalTotal : '-'} total`, 
+      color: cameraSummary && cameraSummary.GlobalOnline < cameraSummary.GlobalTotal ? 'text-psim-orange' : 'text-psim-green' 
+    },
+    { label: 'GUARDS ON DUTY', val: '0', sub: 'Night Shift', color: 'text-psim-orange' },
+    { label: 'ACCESS EVENTS/H', val: '0', sub: '↑ normal', color: 'text-psim-accent' },
+    { label: 'LPR SCAN/H', val: '0', sub: '2 mismatch', color: 'text-teal' },
+  ];
+
   // Draggable Toolbar States
   const [isExpanded, setIsExpanded] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 120 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ mouseX: 0, mouseY: 0, startX: 0, startY: 0 });
   
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
+
+  const [dismissedAlarmIds, setDismissedAlarmIds] = useState<Set<string>>(new Set());
+  const scheduledAlarmsRef = useRef<Set<string>>(new Set());
+
+  // Handle auto-dismiss after 5s
+  useEffect(() => {
+    mapAlarms.forEach(alarm => {
+      if (!scheduledAlarmsRef.current.has(alarm.id)) {
+        scheduledAlarmsRef.current.add(alarm.id);
+        setTimeout(() => {
+          setDismissedAlarmIds(prev => {
+            const next = new Set(prev);
+            next.add(alarm.id);
+            return next;
+          });
+        }, 5000);
+      }
+    });
+  }, [mapAlarms]);
+
+  // Create a map of deviceId -> highest priority alarm (that hasn't been dismissed)
+  const alarmsBySource = useMemo(() => {
+    const priorityOrder: { [key: string]: number } = { 'critical': 1, 'high': 2, 'medium': 3, 'low': 4 };
+    
+    // Filter out dismissed alarms first
+    const activeMapAlarms = mapAlarms.filter(a => !dismissedAlarmIds.has(a.id));
+    
+    const map = new Map<string, Alarm>();
+    const sortedAlarms = [...activeMapAlarms].sort((a, b) => (priorityOrder[a.pri] || 5) - (priorityOrder[b.pri] || 5));
+    
+    for (const alarm of sortedAlarms) {
+      if (alarm.src && !map.has(alarm.src)) {
+        map.set(alarm.src, alarm);
+      }
+    }
+    return map;
+  }, [mapAlarms, dismissedAlarmIds]);
 
   const handleDragStart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -113,12 +392,11 @@ export function MapView() {
 
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
-      // 1. Toolbar Dragging
       if (isDragging && mapContainerRef.current && toolbarRef.current) {
         const containerRect = mapContainerRef.current.getBoundingClientRect();
         const toolbarRect = toolbarRef.current.getBoundingClientRect();
         const dx = e.clientX - dragStartRef.current.mouseX;
-        const dy = e.clientY - dragStartRef.current.mouseY;
+        const dy = e.clientY - dragStartRef.current. mouseY;
         let newRight = dragStartRef.current.startX - dx;
         let newTop = dragStartRef.current.startY + dy;
         newRight = Math.max(8, Math.min(containerRect.width - toolbarRect.width - 8, newRight));
@@ -127,7 +405,6 @@ export function MapView() {
         return;
       }
 
-      // 2. Map Panning
       if (isPanningRef.current && activeMapUrl) {
         const dx = e.clientX - panningStartRef.current.mouseX;
         const dy = e.clientY - panningStartRef.current.mouseY;
@@ -153,8 +430,129 @@ export function MapView() {
     };
   }, [isDragging, isPanning, activeMapUrl]);
 
+  const alarmStyles: { [key: string]: string } = {
+    critical: 'border-psim-red shadow-[0_0_15px_3px_var(--tw-shadow-color)] shadow-psim-red/50 animate-pulse',
+    high: 'border-psim-orange shadow-[0_0_15px_3px_var(--tw-shadow-color)] shadow-psim-orange/50 animate-pulse',
+    medium: 'border-psim-accent shadow-[0_0_15px_3px_var(--tw-shadow-color)] shadow-psim-accent/50',
+    low: 'border-psim-green',
+  };
+
+  const filteredMapTree = useMemo(() => filterMapTree(mapTree, searchQuery), [mapTree, searchQuery]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden font-sans select-none">
+      {/* Custom Tailwind Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/80 backdrop-blur-md" 
+            onClick={() => setIsModalOpen(false)} 
+          />
+          
+          {/* Modal Content */}
+          <div className="relative w-[1200px] h-[80vh] bg-[#0a0f1d] border border-white/10 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+            {/* Modal Header */}
+            <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-psim-orange/10 flex items-center justify-center text-psim-orange shadow-inner">
+                   <Activity size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-heading font-bold uppercase tracking-widest text-white leading-none mb-1">
+                    Nhật ký sự kiện
+                  </h2>
+                  <p className="text-[11px] font-bold text-psim-orange uppercase tracking-tighter opacity-70">
+                    Bản đồ: {selectedMapName}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-psim-red hover:text-white flex items-center justify-center transition-all group"
+              >
+                <X size={20} className="group-hover:rotate-90 transition-transform duration-300 text-t3 group-hover:text-white" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div 
+              ref={modalScrollRef}
+              onScroll={handleModalScroll}
+              className="flex-1 overflow-y-auto custom-scrollbar bg-[#05070a]/50"
+            >
+              {/* Table Header */}
+              <div className="sticky top-0 z-20 grid grid-cols-[120px_120px_1fr_200px_150px_150px] gap-6 px-8 py-4 bg-[#161b2e] border-b border-white/10 text-[10px] font-heading font-bold uppercase tracking-widest text-t3">
+                <div>Thời gian</div>
+                <div>Mức độ</div>
+                <div>Nội dung sự kiện</div>
+                <div>Nguồn</div>
+                <div>Hệ thống</div>
+                <div>Địa chỉ IP</div>
+              </div>
+
+              <div className="flex flex-col min-h-full">
+                {modalAlarms.map((alarm, idx) => (
+                  <div 
+                    key={alarm.id + idx} 
+                    className="grid grid-cols-[120px_120px_1fr_200px_150px_150px] gap-6 px-8 py-4 border-b border-white/[0.03] hover:bg-white/[0.03] transition-all items-center group/row"
+                  >
+                    <div className="text-[12px] font-mono text-t2 font-semibold group-hover/row:text-white transition-colors">
+                      {alarm.time}
+                    </div>
+                    <div>
+                      <span className={cn(
+                        "text-[10px] font-heading font-bold px-3 py-1 rounded-lg uppercase tracking-wider border inline-block text-center min-w-[80px]",
+                        alarm.pri === 'critical' ? "border-psim-red/40 bg-psim-red/10 text-psim-red" : "border-psim-orange/40 bg-psim-orange/10 text-psim-orange"
+                      )}>
+                        {alarm.pri}
+                      </span>
+                    </div>
+                    <div className="text-[14px] font-medium text-white/90 group-hover/row:text-psim-accent transition-colors truncate" title={alarm.title}>
+                      {alarm.title}
+                    </div>
+                    <div className="text-[13px] font-medium text-t2 group-hover/row:text-white transition-colors truncate flex items-center gap-2" title={alarm.src}>
+                      <Cctv size={14} className="opacity-50" />
+                      <span className="truncate">{alarm.src || '---'}</span>
+                    </div>
+                    <div className="text-[13px] font-medium text-t2 group-hover/row:text-white transition-colors truncate" title={alarm.connectorName}>
+                      {alarm.connectorName || '---'}
+                    </div>
+                    <div className="text-[12px] font-mono text-t3 group-hover/row:text-white transition-colors truncate" title={alarm.ipadress}>
+                      {alarm.ipadress || '---'}
+                    </div>
+                  </div>
+                ))}
+
+                {isFetchingMore && (
+                  <div className="p-10 flex flex-col items-center justify-center gap-3 text-psim-orange">
+                    <RefreshCcw size={24} className="animate-spin" />
+                    <span className="text-[11px] font-heading font-bold uppercase tracking-[0.2em]">Đang đồng bộ dữ liệu...</span>
+                  </div>
+                )}
+                
+                {!hasMore && modalAlarms.length > 0 && (
+                  <div className="py-12 flex flex-col items-center justify-center gap-4 opacity-30">
+                    <div className="h-px w-24 bg-white/20" />
+                    <span className="text-[10px] font-heading font-bold uppercase tracking-[0.3em]">Hết danh sách sự kiện</span>
+                    <div className="h-px w-24 bg-white/20" />
+                  </div>
+                )}
+
+                {modalAlarms.length === 0 && !isFetchingMore && (
+                  <div className="flex-1 flex flex-col items-center justify-center opacity-20 py-40 gap-6">
+                    <div className="w-20 h-20 rounded-full border-2 border-dashed border-white flex items-center justify-center">
+                       <Activity size={40} />
+                    </div>
+                    <span className="text-[14px] font-heading font-bold uppercase tracking-[0.4em]">Trống dữ liệu</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header & Stats Bar */}
       <div className="px-3 py-3 border-b border-border-dim bg-bg0/50">
         <div className="flex items-center justify-between mb-4">
@@ -167,8 +565,16 @@ export function MapView() {
             )}
           </div>
           <div className="text-[10px] text-t2 font-mono flex gap-4">
-            <span><span className="text-psim-red">●</span> {bellCount} alarms active</span>
-            <span>47/52 cameras online</span>
+            <span><span className="text-psim-red">●</span> {dailyAlarmCount} alarms active</span>
+            <span className="flex items-center gap-2">
+              {cameraSummary ? `${cameraSummary.GlobalOnline}/${cameraSummary.GlobalTotal}` : '--/--'} cameras online
+              {cameraConnectionState === 'disconnected' && (
+                 <span className="text-psim-red font-bold animate-pulse" title="Mất kết nối thời gian thực! (Offline)">⚠</span>
+              )}
+              {cameraConnectionState === 'reconnecting' && (
+                 <span className="text-psim-orange font-bold animate-pulse" title="Đang kết nối lại...">⟳</span>
+              )}
+            </span>
           </div>
         </div>
 
@@ -190,31 +596,6 @@ export function MapView() {
         {/* Left Toolbar */}
         <div className="w-14 border-r border-white/5 flex flex-col items-center py-6 gap-4 bg-[#0a0f1d]/40">
           <button 
-            onClick={handleZoomIn}
-            disabled={!activeMapUrl}
-            className="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white hover:bg-psim-orange hover:border-psim-orange hover:shadow-[0_0_15px_rgba(255,107,0,0.3)] transition-all font-bold disabled:opacity-20 disabled:grayscale"
-          >
-            +
-          </button>
-          <button 
-            onClick={handleZoomOut}
-            disabled={!activeMapUrl}
-            className="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white hover:bg-psim-orange hover:border-psim-orange hover:shadow-[0_0_15px_rgba(255,107,0,0.3)] transition-all font-bold disabled:opacity-20 disabled:grayscale"
-          >
-            -
-          </button>
-          <button 
-            onClick={handleResetZoom}
-            disabled={!activeMapUrl}
-            className="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-psim-accent hover:bg-psim-accent hover:text-bg0 transition-all font-bold disabled:opacity-20 disabled:grayscale"
-            title="Reset (100%)"
-          >
-            🎯
-          </button>
-          
-          <div className="flex-1" />
-
-          <button 
             onClick={() => setShowLegend(!showLegend)}
             className={cn(
               "w-9 h-9 flex items-center justify-center rounded-xl border transition-all",
@@ -224,7 +605,7 @@ export function MapView() {
           >
             <Activity size={18} />
           </button>
-          <button className="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-t3 hover:text-white transition-all"><Maximize2 size={18} /></button>
+          <div className="flex-1" />
         </div>
 
         {/* Map Canvas */}
@@ -249,6 +630,36 @@ export function MapView() {
             } 
           }} 
         >
+          {/* Zoom Controls Overlay */}
+          {activeMapUrl && (
+            <div className="absolute bottom-6 right-6 flex flex-col gap-2 z-50">
+              <div className="flex flex-col bg-[#161b2e]/90 border border-white/10 rounded-lg overflow-hidden shadow-2xl backdrop-blur-md">
+                <button 
+                  onClick={handleZoomIn}
+                  className="w-10 h-10 flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all"
+                  title="Phóng to"
+                >
+                  <ZoomIn size={20} />
+                </button>
+                <div className="h-px bg-white/10 mx-2" />
+                <button 
+                  onClick={handleZoomOut}
+                  className="w-10 h-10 flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all"
+                  title="Thu nhỏ"
+                >
+                  <ZoomOut size={20} />
+                </button>
+              </div>
+              <button 
+                onClick={handleResetZoom}
+                className="w-10 h-10 bg-[#161b2e]/90 border border-white/10 rounded-lg flex items-center justify-center text-t-2 hover:text-white hover:bg-psim-orange transition-all shadow-2xl backdrop-blur-md"
+                title="Reset (100%)"
+              >
+                <Maximize2 size={20} />
+              </button>
+            </div>
+          )}
+
           {/* Legend (Bottom Center - Slim Pill Style) */}
           {showLegend && (
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#0a0f1d]/80 backdrop-blur-2xl border border-white/10 rounded-full px-6 py-2.5 z-20 flex items-center gap-8 shadow-[0_10px_40px_rgba(0,0,0,0.5)] transition-all hover:bg-[#0a0f1d]/95 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -290,45 +701,68 @@ export function MapView() {
                  />
                  
                  {/* Map Markers (Cameras) */}
-                 {markers.map((m: any) => (
-                   <div 
-                     key={m.Id}
-                     className="absolute cursor-pointer group/marker z-10"
-                     style={{ 
-                       left: `${m.PosX}%`, 
-                       top: `${m.PosY}%`,
-                       transform: `translate(-50%, -50%)`
-                     }}
-                     title={m.CameraName}
-                   >
-                     <div className="relative flex flex-col items-center">
-                        {/* Camera Label (Visible on hover) */}
-                        <div className="bg-white border border-black/10 rounded px-2 py-0.5 mb-3 whitespace-nowrap shadow-xl z-30 opacity-0 group-hover/marker:opacity-100 transition-opacity pointer-events-none text-[9px] font-bold text-black uppercase">
-                          {m.CameraName}
-                        </div>
+                 {markers.map((m: any) => {
+                   const alarmForMarker = alarmsBySource.get(m.CameraName);
+                   const cameraId = m.CameraId || m.Id;
+                   const status = cameraStatusMap.get(cameraId);
+                   const isOffline = status && status.IsOnline === false;
+                   
+                   return (
+                     <div 
+                       key={cameraId}
+                       className={cn("absolute cursor-pointer group/marker z-10", isOffline && "z-20")}
+                       style={{ 
+                         left: `${m.PosX}%`, 
+                         top: `${m.PosY}%`,
+                         transform: `translate(-50%, -50%)`
+                       }}
+                       onClick={() => {
+                         if (alarmForMarker) {
+                           setDismissedAlarmIds(prev => {
+                             const next = new Set(prev);
+                             next.add(alarmForMarker.id);
+                             return next;
+                           });
+                         }
+                       }}
+                     >
+                       <div className="relative flex flex-col items-center">
+                          {/* Camera Label (Visible on hover or if alarming) */}
+                          <div className={cn(
+                            "bg-white border border-black/10 rounded px-2 py-0.5 mb-3 whitespace-nowrap shadow-xl z-30 transition-opacity pointer-events-none text-[9px] font-bold text-black uppercase",
+                            (alarmForMarker || isOffline) ? "opacity-100" : "opacity-0 group-hover/marker:opacity-100",
+                            isOffline && !alarmForMarker && "text-psim-red"
+                          )}>
+                            {m.CameraName} {isOffline && "(OFFLINE)"}
+                          </div>
 
-                        {/* Rotation Container */}
-                        <div className="relative w-10 h-10 flex items-center justify-center" style={{ transform: `rotate(${m.Rotation || 0}deg)` }}>
-                          {/* Field of View (FoV) Cone */}
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 pointer-events-none">
-                            <div className="relative -top-[100px]">
-                              <svg width="140" height="100" viewBox="0 0 140 100" className="opacity-40">
-                                <path d="M70 100 L0 0 L140 0 Z" fill="rgba(0, 194, 255, 0.3)" stroke="rgba(0, 194, 255, 0.5)" strokeWidth="1" />
-                              </svg>
+                          {/* Rotation Container */}
+                          <div className="relative w-10 h-10 flex items-center justify-center" style={{ transform: `rotate(${m.Rotation || 0}deg)` }}>
+                            {/* Field of View (FoV) Cone */}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 pointer-events-none">
+                              <div className="relative -top-[100px]">
+                                <svg width="140" height="100" viewBox="0 0 140 100" className={cn("opacity-40", isOffline ? "opacity-10 grayscale" : "")}>
+                                  <path d="M70 100 L0 0 L140 0 Z" fill={isOffline ? "rgba(100, 100, 100, 0.3)" : "rgba(0, 194, 255, 0.3)"} stroke={isOffline ? "rgba(100, 100, 100, 0.5)" : "rgba(0, 194, 255, 0.5)"} strokeWidth="1" />
+                                </svg>
+                              </div>
+                            </div>
+
+                            {/* Camera Icon */}
+                            <div className={cn(
+                              "w-10 h-10 rounded-xl border-2 flex items-center justify-center bg-[#1a1f2e] text-white shadow-2xl transition-all group-hover/marker:scale-110",
+                              alarmForMarker 
+                                ? alarmStyles[alarmForMarker.pri] 
+                                : isOffline 
+                                  ? "border-psim-red shadow-[0_0_10px_2px_var(--tw-shadow-color)] shadow-psim-red/40 animate-pulse text-psim-red bg-psim-red/10" 
+                                  : "border-psim-green text-psim-green shadow-[0_0_10px_rgba(0,214,143,0.1)] hover:shadow-[0_0_15px_rgba(0,214,143,0.4)]"
+                            )}>
+                              <Cctv size={22} className="-rotate-90" />
                             </div>
                           </div>
-
-                          {/* Camera Icon */}
-                          <div className={cn(
-                            "w-10 h-10 rounded-xl border flex items-center justify-center bg-[#1a1f2e] text-white shadow-2xl transition-all group-hover/marker:scale-110",
-                            m.VmsID === 0 ? "border-psim-orange/50" : "border-psim-accent/50"
-                          )}>
-                            <Cctv size={22} className="-rotate-90" />
-                          </div>
-                        </div>
+                       </div>
                      </div>
-                   </div>
-                 ))}
+                   );
+                 })}
                </div>
             </div>
           ) : (
@@ -396,7 +830,14 @@ export function MapView() {
                 <>
                   <div className="relative mb-3 px-1">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-t3" size={12} />
-                    <input className="w-full bg-black/40 border border-white/5 rounded-xl h-9 pl-10 text-[11px] text-white outline-none focus:border-psim-orange/30 transition-all" placeholder="Tìm kiếm vị trí..." />
+                    <input 
+                      className="w-full bg-black/40 border border-white/5 rounded-xl h-9 pl-10 text-[11px] text-white outline-none focus:border-psim-orange/30 transition-all select-text" 
+                      placeholder="Tìm kiếm vị trí..." 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    />
                   </div>
 
                   <div className="flex flex-col gap-1 overflow-y-auto max-h-[350px] pr-1 custom-scrollbar">
@@ -405,8 +846,12 @@ export function MapView() {
                         <RefreshCcw size={20} className="animate-spin text-psim-orange" />
                         <span className="text-[10px] font-bold uppercase">Syncing...</span>
                       </div>
+                    ) : filteredMapTree.length === 0 ? (
+                      <div className="py-10 text-center text-[10px] text-t3 font-bold uppercase tracking-widest opacity-50">
+                        Không tìm thấy kết quả
+                      </div>
                     ) : (
-                      mapTree.map((node: MapTreeNode) => (
+                      filteredMapTree.map((node: MapTreeNode) => (
                         <TreeItem 
                           key={node.Id} 
                           node={node} 
@@ -416,6 +861,7 @@ export function MapView() {
                             setSelectedMapId(n.Id);
                             setSelectedMapName(n.Name);
                             setActiveMapMapUrl(n.MapImagePath);
+                            localStorage.setItem('lastSelectedMapId', n.Id);
                           }} 
  
                         />
@@ -435,10 +881,10 @@ export function MapView() {
               <div className="w-2 h-2 rounded-full bg-psim-accent animate-pulse shadow-[0_0_8px_var(--accent)]" />
               <span className="text-[11px] font-black tracking-[0.1em] uppercase text-white">Live Event</span>
             </div>
-            <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-psim-accent/10 text-psim-accent rounded border border-psim-accent/20">{alarms.length} ALERTS</span>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-psim-accent/10 text-psim-accent rounded border border-psim-accent/20">{dailyAlarmCount} ALERTS</span>
           </div>
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 custom-scrollbar">
-            {alarms.slice(0, 20).map((alarm) => (
+            {latestAlarms.map((alarm) => (
               <div key={alarm.id} className="p-3.5 bg-white/[0.03] border border-white/5 rounded-xl hover:bg-white/[0.06] transition-all cursor-pointer group relative overflow-hidden">
                 <div className={cn(
                   "absolute left-0 top-0 bottom-0 w-1 transition-transform origin-top scale-y-0 group-hover:scale-y-100",
@@ -455,28 +901,34 @@ export function MapView() {
                     {alarm.time}
                   </span>
                 </div>
-                <div className="text-[12px] font-bold leading-tight group-hover:text-psim-accent transition-colors mb-2 text-t1">
+                <div className="text-[12px] font-bold leading-tight group-hover:text-psim-accent transition-colors text-t1">
                   {alarm.title}
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-t3 font-medium">
-                  <MapPin size={10} className="text-psim-accent" /> {alarm.loc}
                 </div>
               </div>
             ))}
-            {alarms.length === 0 && (
+            {latestAlarms.length === 0 && (
               <div className="flex flex-col items-center justify-center py-20 opacity-20 gap-3">
                 <Activity size={32} />
                 <span className="text-[10px] font-bold uppercase tracking-widest">No active events</span>
               </div>
             )}
           </div>
-          <button className="m-4 h-11 text-[10px] font-black border border-white/10 hover:border-psim-orange/50 hover:bg-psim-orange/5 rounded-xl transition-all text-t2 flex items-center justify-center gap-2 uppercase tracking-widest group">
-            Global Activity Logs <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          <button 
+            onClick={handleOpenModal}
+            className="m-4 h-11 text-[10px] font-black border border-white/10 hover:border-psim-orange/50 hover:bg-psim-orange/5 rounded-xl transition-all text-t2 flex items-center justify-center gap-2 uppercase tracking-widest group"
+          >
+            Xem thêm <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
       </div>
     </div>
   );
+}
+
+// --- 3. PAGE WRAPPER (This is the component to be exported and used in routes) ---
+
+export function MapView() {
+  return <MapViewInternal />;
 }
 
 // --- TREE COMPONENT ---

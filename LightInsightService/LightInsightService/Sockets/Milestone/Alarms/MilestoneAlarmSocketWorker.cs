@@ -1,4 +1,4 @@
-﻿using System.Net.WebSockets;
+using System.Net.WebSockets;
 using System.Text;
 using Microsoft.AspNetCore.SignalR;
 using Newtonsoft.Json.Linq;
@@ -64,7 +64,11 @@ namespace LightInsightService.Sockets.Milestone.Alarms
                     stateName = raw["StateName"]?.ToString(),
                     stateLevel = (int?)raw["StateLevel"],
                     priorityName = raw["PriorityName"]?.ToString(),
-                    priorityLevel = (int?)raw["PriorityLevel"]
+                    priorityLevel = (int?)raw["PriorityLevel"],
+                    // Giữ tương thích payload với API /Alarm/GetAll để FE dùng chung mapper/playback
+                    cameraid = raw["CameraId"]?.ToString() ?? raw["cameraid"]?.ToString() ?? raw["cameraId"]?.ToString(),
+                    connectorName = raw["ConnectorName"]?.ToString() ?? "MileStone",
+                    ipadress = raw["IpAddress"]?.ToString() ?? raw["IPAddress"]?.ToString() ?? raw["ipadress"]?.ToString()
                 };
                 return feData;
             }

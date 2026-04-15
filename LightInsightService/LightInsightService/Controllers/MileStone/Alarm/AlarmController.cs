@@ -1,4 +1,4 @@
-﻿using LightInsightBUS.Interfaces.MileStone.Alarm;
+using LightInsightBUS.Interfaces.MileStone.Alarm;
 using LightInsightBUS.Interfaces.MileStone.Camera;
 using LightInsightModel.MileStone.Alarm;
 using Microsoft.AspNetCore.Mvc;
@@ -23,6 +23,11 @@ namespace LightInsightService.Controllers.MileStone.Alarm
         [HttpGet("GetAll")]
         public async Task<IActionResult> GetAlarmData([FromQuery] Guid key, [FromQuery] int page = 1, [FromQuery] int pageSize = 100, [FromQuery] AlarmFilter filter = null)
         {
+            if (key == Guid.Empty)
+            {
+                return BadRequest("Missing or invalid connector key.");
+            }
+
             // Đảm bảo dữ liệu hợp lệ
             if (page < 1) page = 1;
             if (pageSize < 1) pageSize = 100;
@@ -37,6 +42,11 @@ namespace LightInsightService.Controllers.MileStone.Alarm
         [HttpGet("MessageDropdown")]
         public async Task<IActionResult> GetMessageDropdown([FromQuery] Guid key)
         {
+            if (key == Guid.Empty)
+            {
+                return BadRequest("Missing or invalid connector key.");
+            }
+
             // Tận dụng biến _service có sẵn để gọi hàm lấy danh sách Message
             var result = await _service.GetAlarmMessageDropdownAsync(key);
 
@@ -47,6 +57,11 @@ namespace LightInsightService.Controllers.MileStone.Alarm
         [HttpGet("CameraDropdown")]
         public async Task<IActionResult> GetCameraDropdown(Guid key)
         {
+            if (key == Guid.Empty)
+            {
+                return BadRequest("Missing or invalid connector key.");
+            }
+
             var result = await _cameraDropDown.GetCameraDropdownAsync(key);
             return Ok(result);
         }

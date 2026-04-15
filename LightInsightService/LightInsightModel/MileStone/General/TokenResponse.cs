@@ -44,4 +44,9 @@ namespace LightInsightModel.MileStone.General
         public string ID { get; set; }
         public string Name { get; set; }
     }
+    public class WebRTCToken
+    {
+        public string baseUrl { get; set; }
+        public string bearerToken { get; set; }
+    }
 }

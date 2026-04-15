@@ -62,10 +62,13 @@ builder.Services.AddScoped<IConnectors, ConnectorsBUS>();
 builder.Services.AddScoped<IDMMap, DMMapBUS>();
 builder.Services.AddScoped<ISystemHealth, SystemHealthBUS>();
 builder.Services.AddScoped<IAuditLog, AuditLogBUS>();
+builder.Services.AddScoped<IToken, TokenBUS>();
 builder.Services.AddScoped<GetAnalyticsEvents>();
 builder.Services.AddScoped<MilestoneSystemProber>();
 builder.Services.AddScoped<LightInsightDAL.Repositories.General.SystemConfigDAL>();
 builder.Services.AddScoped<ISystemConfig, SystemConfigBUS>();
+builder.Services.AddSingleton<ICameraStatusService, CameraStatusService>();
+builder.Services.AddHostedService<CameraMonitoringWorker>();
 builder.Services.AddScoped<LightInsightBUS.Service.HealthProviders.Milestone.MilestoneHealthBUS>();
 
 
@@ -155,6 +158,14 @@ AuditLogger.OnLogCreated = async (log) =>
     await hubContext.Clients.All.SendAsync("ReceiveAuditLog", log);
 };
 
+// Kết nối CameraStatusService với SignalR Hub
+var cameraStatusHubContext = app.Services.GetRequiredService<Microsoft.AspNetCore.SignalR.IHubContext<LightInsightService.Sockets.General.CameraStatusHub>>();
+var cameraStatusService = app.Services.GetRequiredService<ICameraStatusService>();
+cameraStatusService.OnStatusChanged += async (status) =>
+{
+    await cameraStatusHubContext.Clients.All.SendAsync("CameraStatusChanged", status);
+};
+
 // Nạp dữ liệu vào Cache khi khởi động
 
 //if (app.Environment.IsDevelopment())
@@ -190,5 +201,6 @@ app.MapFallbackToFile("/index.html");
 
 app.MapHub<MilestoneAlarmHub>("/alarm-hub");
 app.MapHub<LightInsightService.Sockets.General.AuditLogHub>("/audit-log-hub");
+app.MapHub<LightInsightService.Sockets.General.CameraStatusHub>("/camera-status-hub");
 
 app.Run();

@@ -64,5 +64,8 @@ namespace LightInsightModel.MileStone.Alarm
         public string stateName { get; set; }
         public string time { get; set; }
         public string type { get; set; }
+        public string cameraid { get; set; }
+        public string? connectorName { get; set; }
+        public string? ipadress { get; set; }
     }
 }

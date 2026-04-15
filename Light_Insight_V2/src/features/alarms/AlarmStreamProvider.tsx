@@ -1,16 +1,24 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import * as signalR from '@microsoft/signalr';
 import type { Alarm } from '@/types';
 import { alarmApi, type AlarmFilters } from '@/lib/alarm-api';
-import { normalizeApiAlarm, normalizeSignalRAlarm, type AlarmPayload } from './alarm-mapper';
+import { priorityApi } from '@/lib/priority-api';
+import {
+  buildEventPriorityLookup,
+  normalizeApiAlarm,
+  normalizeSignalRAlarm,
+  resolveAlarmPriority,
+  type AlarmPayload,
+} from './alarm-mapper';
 
 const HUB_BASE_URL = import.meta.env.VITE_ALARM_HUB_URL;
 const HUB_URL = HUB_BASE_URL ? `${HUB_BASE_URL.replace(/\/$/, '')}/alarm-hub` : '';
 
 // TODO: doi ten event cho dung voi hub backend dang emit
 const HUB_EVENT_NAME = 'ReceiveAlarm';
-const MAX_ALARMS = 100;
 const SERVER_PAGE_SIZE = 100;
+const MAX_DUPLICATE_PAGE_SKIPS = 20;
 
 type AlarmStreamContextValue = {
   alarms: Alarm[];
@@ -24,8 +32,9 @@ type AlarmStreamContextValue = {
   pendingRealtimeCount: number;
   filters: AlarmFilters;
   refreshAlarms: (nextFilters?: AlarmFilters) => Promise<void>;
-  nextPage: () => Promise<void>;
-  prevPage: () => Promise<void>;
+  loadMore: () => Promise<void>;
+  setIsAtTop: (isAtTop: boolean) => void;
+  clearBellCount: () => void;
   clearPendingRealtimeCount: () => void;
   clearNewFlags: () => void;
   markAlarmAsRead: (alarmId: string) => void;
@@ -44,9 +53,32 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   const [pendingRealtimeCount, setPendingRealtimeCount] = useState(0);
   const currentPageRef = useRef(1);
   const filtersRef = useRef<AlarmFilters>({});
+  const alarmsRef = useRef<Alarm[]>([]);
+  const isAtTopRef = useRef(true);
+
+  const { data: mappingResponse } = useQuery({
+    queryKey: ['priority-mappings'],
+    queryFn: priorityApi.getAllMappings,
+  });
+
+  const priorityLookup = useMemo(
+    () => buildEventPriorityLookup(mappingResponse?.Data ?? []),
+    [mappingResponse?.Data],
+  );
+
+  const priorityLookupRef = useRef(priorityLookup);
+  useEffect(() => {
+    priorityLookupRef.current = priorityLookup;
+  }, [priorityLookup]);
 
   const clearBellCount = useCallback(() => {
     setBellCount(0);
+  }, []);
+  const setIsAtTop = useCallback((isAtTop: boolean) => {
+    isAtTopRef.current = isAtTop;
+    if (isAtTop) {
+      setPendingRealtimeCount(0);
+    }
   }, []);
 
   const normalizeText = (value?: string) => (value ?? '').trim().toLowerCase();
@@ -56,22 +88,6 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
     return normalized;
   };
   const normalizePriority = (value?: string) => normalizeText(value);
-  const hasActiveFilters = (activeFilters: AlarmFilters) => {
-    const values: Array<unknown> = [
-      activeFilters.priorityName,
-      activeFilters.stateName,
-      activeFilters.message,
-      activeFilters.source,
-      activeFilters.fromTime,
-      activeFilters.toTime,
-    ];
-    return values.some((value) => {
-      if (typeof value === 'string') {
-        return value.trim().length > 0;
-      }
-      return Boolean(value);
-    });
-  };
   const parseDateLike = (value?: string) => {
     if (!value) return null;
     const parsed = new Date(value);
@@ -137,25 +153,31 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const fetchPage = useCallback(async (page: number, activeFilters: AlarmFilters) => {
+  const fetchFirstPage = useCallback(async (activeFilters: AlarmFilters) => {
+    if (!activeFilters?.key) {
+      setAlarms([]);
+      setCurrentPage(1);
+      currentPageRef.current = 1;
+      setCanNextPage(false);
+      setPendingRealtimeCount(0);
+      return true;
+    }
+
     setLoading(true);
     try {
       const rows = await alarmApi.getAll({
-        page,
+        page: 1,
         pageSize: SERVER_PAGE_SIZE,
         ...activeFilters,
       });
-      const nextAlarms = rows.map(normalizeApiAlarm).slice(0, MAX_ALARMS);
+      const nextAlarms = rows.map((row) =>
+        normalizeApiAlarm(row as AlarmPayload, priorityLookupRef.current),
+      );
       setAlarms(nextAlarms);
-      setCurrentPage(page);
-      currentPageRef.current = page;
+      setCurrentPage(1);
+      currentPageRef.current = 1;
       setCanNextPage(rows.length >= SERVER_PAGE_SIZE);
-      if (page === 1) {
-        setPendingRealtimeCount(0);
-        if (!hasActiveFilters(activeFilters)) {
-          clearBellCount();
-        }
-      }
+      setPendingRealtimeCount(0);
       return true;
     } catch (error) {
       console.error('Failed to load alarm list:', error);
@@ -167,44 +189,78 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
 
   const refreshAlarms = useCallback(
     async (nextFilters?: AlarmFilters) => {
-      clearBellCount();
-      let merged: AlarmFilters = {};
-      setFilters((prev) => {
-        merged = { ...prev, ...(nextFilters ?? {}) };
-        filtersRef.current = merged;
-        return merged;
-      });
-      await fetchPage(1, merged);
+      const merged: AlarmFilters = { ...filtersRef.current, ...(nextFilters ?? {}) };
+      filtersRef.current = merged;
+      setFilters(merged);
+      await fetchFirstPage(merged);
     },
-    [clearBellCount, fetchPage],
+    [fetchFirstPage],
   );
 
-  const nextPage = useCallback(async () => {
-    if (loading || !canNextPage) return;
-    const targetPage = currentPage + 1;
-    const ok = await fetchPage(targetPage, filters);
-    if (!ok) return;
-  }, [canNextPage, currentPage, fetchPage, filters, loading]);
+  const loadMore = useCallback(async () => {
+    const activeFilters = filtersRef.current;
+    if (loading || !canNextPage || !activeFilters?.key) return;
+    setLoading(true);
+    try {
+      const existingIds = new Set(alarmsRef.current.map((a) => a.id));
+      const batchNew: Alarm[] = [];
+      let pageToFetch = currentPage + 1;
+      let lastPageFetched = currentPage;
+      let lastRowsLength = 0;
 
-  const prevPage = useCallback(async () => {
-    if (loading || currentPage <= 1) return;
-    await fetchPage(currentPage - 1, filters);
-  }, [currentPage, fetchPage, filters, loading]);
+      let skips = 0;
+      while (skips < MAX_DUPLICATE_PAGE_SKIPS) {
+        skips += 1;
+        const rows = await alarmApi.getAll({
+          page: pageToFetch,
+          pageSize: SERVER_PAGE_SIZE,
+          ...activeFilters,
+        });
+        lastRowsLength = rows.length;
+        lastPageFetched = pageToFetch;
+        const incoming = rows.map((row) =>
+          normalizeApiAlarm(row as AlarmPayload, priorityLookupRef.current),
+        );
+        const appended = incoming.filter((a) => !existingIds.has(a.id));
+        for (const a of appended) {
+          existingIds.add(a.id);
+          batchNew.push(a);
+        }
+
+        if (rows.length < SERVER_PAGE_SIZE) break;
+        if (appended.length > 0) break;
+        pageToFetch += 1;
+      }
+
+      setAlarms((prev) => {
+        const ids = new Set(prev.map((a) => a.id));
+        const extra = batchNew.filter((a) => !ids.has(a.id));
+        return [...prev, ...extra];
+      });
+      setCurrentPage(lastPageFetched);
+      currentPageRef.current = lastPageFetched;
+      setCanNextPage(lastRowsLength >= SERVER_PAGE_SIZE);
+    } catch (error) {
+      console.error('Failed to load more alarms:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, canNextPage, currentPage]);
 
   const addAlarm = useCallback((payload: AlarmPayload) => {
-    const alarm = normalizeSignalRAlarm(payload);
-    setBellCount((prev) => prev + 1);
+    const alarm = normalizeSignalRAlarm(payload, priorityLookupRef.current);
     const activeFilters = filtersRef.current;
     if (!matchesFilters(alarm, payload, activeFilters)) {
       return;
     }
-    if (currentPageRef.current !== 1) {
+    setBellCount((prev) => prev + 1);
+    if (!isAtTopRef.current) {
       setPendingRealtimeCount((prev) => prev + 1);
       return;
     }
     setAlarms((prev) => {
       const withoutDuplicate = prev.filter((item) => item.id !== alarm.id);
-      return [alarm, ...withoutDuplicate].slice(0, MAX_ALARMS);
+      return [alarm, ...withoutDuplicate];
     });
   }, [matchesFilters]);
 
@@ -215,6 +271,23 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     filtersRef.current = filters;
   }, [filters]);
+
+  useEffect(() => {
+    alarmsRef.current = alarms;
+  }, [alarms]);
+
+  useEffect(() => {
+    if (priorityLookup.size === 0) return;
+    setAlarms((prev) =>
+      prev.map((a) => ({
+        ...a,
+        pri: resolveAlarmPriority(
+          { message: a.title, priorityName: a.apiPriorityName },
+          priorityLookup,
+        ),
+      })),
+    );
+  }, [priorityLookup]);
 
   useEffect(() => {
     if (!HUB_URL) {
@@ -260,8 +333,9 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
       pendingRealtimeCount,
       filters,
       refreshAlarms,
-      nextPage,
-      prevPage,
+      loadMore,
+      setIsAtTop,
+      clearBellCount,
       clearPendingRealtimeCount,
       clearNewFlags,
       markAlarmAsRead,
@@ -277,8 +351,9 @@ export function AlarmStreamProvider({ children }: { children: ReactNode }) {
       pendingRealtimeCount,
       filters,
       refreshAlarms,
-      nextPage,
-      prevPage,
+      loadMore,
+      setIsAtTop,
+      clearBellCount,
       clearPendingRealtimeCount,
       clearNewFlags,
       markAlarmAsRead,

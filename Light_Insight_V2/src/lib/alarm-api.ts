@@ -12,10 +12,21 @@ export interface AlarmApiItem {
   stateName?: string;
   time?: string;
   type?: string;
+  cameraid?: string;
+  cameraId?: string;
+  cameraID?: string;
+  CameraId?: string;
+  CameraID?: string;
+  connectorName?: string;
+  timeUtc?: string;
+  Time?: string;
 }
 
 export interface AlarmFilters {
-  priorityName?: 'Low' | 'Medium' | 'High';
+  /** Connector Id — query param `key` for Milestone-backed alarm APIs */
+  key?: string;
+  /** Giá trị từ API Priorities/Priority (PriorityName), ví dụ LOW, MEDIUM, HIGH, CRITICAL */
+  priorityName?: string;
   stateName?: 'New' | 'In progress' | 'On hold' | 'Closed';
   message?: string;
   source?: string;
@@ -57,6 +68,28 @@ function extractAlarmRows(payload: unknown): AlarmApiItem[] {
   return [];
 }
 
+function extractCameraNameList(payload: unknown): string[] {
+  const rows: unknown[] = [];
+  if (Array.isArray(payload)) {
+    rows.push(...payload);
+  } else if (payload && typeof payload === 'object') {
+    const obj = payload as Record<string, unknown>;
+    for (const candidate of [obj.Data, obj.data, obj.array]) {
+      if (Array.isArray(candidate)) {
+        rows.push(...candidate);
+        break;
+      }
+    }
+  }
+  return rows
+    .map((item) => {
+      const o = item as Record<string, unknown>;
+      const n = o?.name ?? o?.Name ?? o?.sourceName;
+      return typeof n === 'string' ? n.trim() : '';
+    })
+    .filter((n) => n.length > 0);
+}
+
 export const alarmApi = {
   getAll: async (query?: AlarmPageQuery) => {
     const page = Math.max(1, query?.page ?? 1);
@@ -64,32 +97,39 @@ export const alarmApi = {
     const start = (page - 1) * pageSize + 1; // 1-based range
     const end = page * pageSize;
 
+    const params: Record<string, unknown> = {
+      page,
+      pageNumber: page,
+      pageSize,
+      limit: pageSize,
+      start,
+      end,
+      from: start,
+      to: end,
+      skip: start - 1,
+      take: pageSize,
+      priorityName: query?.priorityName,
+      stateName: query?.stateName,
+      message: query?.message,
+      source: query?.source,
+      fromTime: query?.fromTime,
+      toTime: query?.toTime,
+    };
+    if (query?.key) {
+      params.key = query.key;
+    }
+
     const response = await apiClient.get('/Alarm/GetAll', {
-      params: {
-        page,
-        pageNumber: page,
-        pageSize,
-        limit: pageSize,
-        start,
-        end,
-        from: start,
-        to: end,
-        skip: start - 1,
-        take: pageSize,
-        priorityName: query?.priorityName,
-        stateName: query?.stateName,
-        message: query?.message,
-        source: query?.source,
-        fromTime: query?.fromTime,
-        toTime: query?.toTime,
-      },
+      params,
     });
 
     return extractAlarmRows(response.data);
   },
 
-  getMessages: async (): Promise<string[]> => {
-    const response = await apiClient.get('/Alarm/MessageDropdown');
+  getMessages: async (key: string): Promise<string[]> => {
+    const response = await apiClient.get('/Alarm/MessageDropdown', {
+      params: { key },
+    });
     const data = response.data;
     if (!data) return [];
     if (Array.isArray(data)) return data as string[];
@@ -97,13 +137,10 @@ export const alarmApi = {
     return [];
   },
 
-  getSources: async (): Promise<Array<{ id: string; name: string }>> => {
-    const response = await apiClient.get('/Alarm/CameraDropdown');
-    const data = response.data;
-    if (!Array.isArray(data)) return [];
-    return data.map((item: any) => ({
-      id: item.id ?? item.Id ?? item.sourceId ?? '',
-      name: item.name ?? item.Name ?? item.sourceName ?? '',
-    })).filter((x: { id: string; name: string }) => x.id && x.name);
+  getSources: async (key: string): Promise<string[]> => {
+    const response = await apiClient.get('/Alarm/CameraDropdown', {
+      params: { key },
+    });
+    return extractCameraNameList(response.data);
   },
 };

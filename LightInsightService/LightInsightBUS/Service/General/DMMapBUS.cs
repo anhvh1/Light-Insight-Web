@@ -54,7 +54,10 @@ namespace LightInsightBUS.Service.General
                     pos_y = m.PosY,
                     icon = m.Icon,
                     vms_id = m.VmsId,
-                    rotation = m.Rotation
+                    rotation = m.Rotation,
+                    type = m.Type, // Add this new property
+                    connectorid = m.Connectorid,
+                    ip = m.IP
                 }).ToList();
 
                 var jsonString = JsonSerializer.Serialize(dbMarkers);
@@ -349,6 +352,24 @@ namespace LightInsightBUS.Service.General
                     result.Status = 0;
                     result.Message = "Xóa ảnh thành công nhưng cập nhật CSDL thất bại.";
                 }
+            }
+            catch (Exception ex)
+            {
+                result.Status = -1;
+                result.Message = ex.Message;
+            }
+            return result;
+        }
+
+        public async Task<BaseResultModel> StatisticMarkerByTypeAsync(Guid mapId)
+        {
+            var result = new BaseResultModel();
+            try
+            {
+                var stats = await _dmMapDAL.StatisticMarkerByTypeAsync(mapId);
+                result.Status = 1;
+                result.Message = "Lấy dữ liệu thống kê marker thành công.";
+                result.Data = stats;
             }
             catch (Exception ex)
             {

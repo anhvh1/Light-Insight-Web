@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AlarmType } from '@/types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { StatusPill, TypeBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
+import { priorityApi } from '@/lib/priority-api';
 import { useAlarmSignalR } from './useAlarmSignalR';
 import { AlarmSearchPanel } from './AlarmSearchPanel';
 import { alarmApi, type AlarmFilters } from '@/lib/alarm-api';
@@ -38,42 +39,121 @@ export function AlarmConsole() {
     alarms,
     connected,
     loading,
-    currentPage,
-    pageSize,
-    canNextPage,
+    pendingRealtimeCount,
     filters,
     refreshAlarms,
-    nextPage,
-    prevPage,
+    loadMore,
+    setIsAtTop,
+    clearBellCount,
+    clearPendingRealtimeCount,
     markAlarmAsRead,
   } = useAlarmSignalR();
 
+  const [isAutoScroll, setIsAutoScroll] = useState(true);
+  const listRef = useRef<HTMLDivElement>(null);
+  const isAutoScrollRef = useRef(true);
+  const [showScrollToTop, setShowScrollToTop] = useState(false);
+  // (kept for possible future edge handling)
+  const firstRowHeightRef = useRef<number | null>(null);
+  const firstRowRef = useCallback((node: HTMLTableRowElement | null) => {
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    if (rect.height > 0) {
+      firstRowHeightRef.current = rect.height;
+    }
+  }, []);
+
   const [activeTab, setActiveTab] = useState<string>('all');
-  const [filterType, setFilterType] = useState<AlarmType | 'all'>('all');
+  const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
+  const connectorInitDoneRef = useRef(false);
   const [selectedAlarmId, setSelectedAlarmId] = useState<string | null>(null);
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
   const [localFilters, setLocalFilters] = useState<AlarmFilters>(getDefaultFilterValues());
   const [useFromTime, setUseFromTime] = useState(false);
   const [useToTime, setUseToTime] = useState(false);
   const [messages, setMessages] = useState<string[]>([]);
-  const [sources, setSources] = useState<Array<{ id: string; name: string }>>([]);
+  const [sources, setSources] = useState<string[]>([]);
   const [loadingDicts, setLoadingDicts] = useState(false);
-  const [dictLoaded, setDictLoaded] = useState(false);
+  const [selectedPriorityName, setSelectedPriorityName] = useState<string | undefined>(undefined);
+
+  const { data: connectorsResponse, isLoading: isLoadingConnectors } = useQuery({
+    queryKey: ['connectors-list'],
+    queryFn: priorityApi.getAllConnectors,
+  });
+  const connectors = connectorsResponse?.Data ?? [];
+
+  const { data: mappingResponse } = useQuery({
+    queryKey: ['priority-mappings'],
+    queryFn: priorityApi.getAllMappings,
+  });
+  const { priorityOptions, priorityToEvents } = useMemo(() => {
+    const rows = mappingResponse?.Data ?? [];
+    const map = new Map<string, string[]>();
+    const order = new Map<string, number>();
+    for (const r of rows) {
+      const name = (r.PriorityName ?? '').trim();
+      if (!name) continue;
+      const events = (r.AnalyticsEvents ?? [])
+        .map((x) => (typeof x === 'string' ? x.trim() : ''))
+        .filter((x): x is string => x.length > 0);
+      if (events.length === 0) continue;
+      const existing = map.get(name) ?? [];
+      map.set(name, [...existing, ...events]);
+      if (!order.has(name)) order.set(name, r.PriorityID ?? 0);
+    }
+    const options = [...map.keys()].sort((a, b) => {
+      const pa = order.get(a) ?? 0;
+      const pb = order.get(b) ?? 0;
+      if (pa !== pb) return pa - pb;
+      return a.localeCompare(b);
+    });
+    return { priorityOptions: options, priorityToEvents: map };
+  }, [mappingResponse?.Data]);
+
+  const selectedPriorityMessageCsv = useMemo(() => {
+    if (!selectedPriorityName) return undefined;
+    const events = priorityToEvents.get(selectedPriorityName) ?? [];
+    if (events.length === 0) return undefined;
+    return events
+      .map((ev) => ev.trim())
+      .filter((ev) => ev.length > 0)
+      .filter((ev, idx, arr) => arr.indexOf(ev) === idx)
+      .join(', ');
+  }, [priorityToEvents, selectedPriorityName]);
+
+  useEffect(() => {
+    isAutoScrollRef.current = isAutoScroll;
+  }, [isAutoScroll]);
+
+  useEffect(() => {
+    setIsAtTop(isAutoScroll);
+    if (isAutoScroll) {
+      clearPendingRealtimeCount();
+    }
+  }, [clearPendingRealtimeCount, isAutoScroll, setIsAtTop]);
 
   const selectedAlarm = useMemo(
     () => alarms.find(a => a.id === selectedAlarmId) ?? null,
     [alarms, selectedAlarmId]
   );
+  const playbackEmbedUrl = useMemo(() => {
+    if (!selectedAlarm || !selectedConnectorId || !selectedAlarm.cameraId) return null;
+    const params = new URLSearchParams({
+      key: selectedConnectorId,
+      cameraId: selectedAlarm.cameraId,
+      alarmTime: selectedAlarm.alarmTimeRaw || selectedAlarm.time || '',
+    });
+    return `/embed/playback?${params.toString()}`;
+  }, [selectedAlarm, selectedConnectorId]);
   const selectedAlarmTypeLabel = selectedAlarm?.typeLabel || selectedAlarm?.type || 'Hệ thống';
 
   const filteredAlarms = useMemo(
     () =>
       alarms.filter((alarm) => {
         const matchesTab = activeTab === 'all' || alarm.status === activeTab;
-        const matchesType = filterType === 'all' || alarm.type === filterType;
-        return matchesTab && matchesType;
+        return matchesTab;
       }),
-    [activeTab, alarms, filterType]
+    [activeTab, alarms]
   );
 
   const tabs: Array<{ value: string; label: string }> = [
@@ -83,11 +163,6 @@ export function AlarmConsole() {
     { value: 'on hold', label: 'On hold' },
     { value: 'close', label: 'Close' },
   ];
-  const filterTypes: (AlarmType | 'all')[] = ['all', 'ai', 'lpr', 'acs', 'fire', 'bms', 'tech', 'light'];
-  const hasRecords = filteredAlarms.length > 0;
-  const startRecord = hasRecords ? (currentPage - 1) * pageSize + 1 : 0;
-  const endRecord = hasRecords ? (currentPage - 1) * pageSize + filteredAlarms.length : 0;
-
   const handleAcknowledge = () => {
     if (!selectedAlarmId) return;
     setSelectedAlarmId(null);
@@ -108,75 +183,121 @@ export function AlarmConsole() {
       ...prev,
       stateName,
     }));
-    await refreshAlarms({
-      stateName,
-    });
+    await refreshAlarms({ ...filters, stateName, key: selectedConnectorId ?? undefined });
   };
 
   useEffect(() => {
-    void refreshAlarms();
-  }, [refreshAlarms]);
+    if (!connectors.length || connectorInitDoneRef.current) return;
+    const firstId = connectors[0]?.Id ?? (connectors[0] as { id?: string })?.id;
+    if (!firstId) return;
+    connectorInitDoneRef.current = true;
+    setSelectedConnectorId(firstId);
+    void refreshAlarms({ ...EMPTY_FILTERS, key: firstId });
+  }, [connectors, refreshAlarms]);
 
   useEffect(() => {
     const defaultValues = getDefaultFilterValues();
     setLocalFilters({
       ...defaultValues,
       ...filters,
+      source: typeof filters.source === 'string' ? filters.source : undefined,
       fromTime: filters.fromTime ?? defaultValues.fromTime,
       toTime: filters.toTime ?? defaultValues.toTime,
     });
   }, [filters]);
 
   const loadDictionaries = useCallback(async () => {
-    if (dictLoaded || loadingDicts) return;
+    if (!selectedConnectorId) return;
     setLoadingDicts(true);
     try {
       const [msg, src] = await Promise.all([
-        alarmApi.getMessages(),
-        alarmApi.getSources(),
+        alarmApi.getMessages(selectedConnectorId),
+        alarmApi.getSources(selectedConnectorId),
       ]);
       setMessages(msg);
       setSources(src);
-      setDictLoaded(true);
     } finally {
       setLoadingDicts(false);
     }
-  }, [dictLoaded, loadingDicts]);
+  }, [selectedConnectorId]);
+
+  useEffect(() => {
+    if (!selectedConnectorId || !showAdvancedFilter) return;
+    void loadDictionaries();
+  }, [selectedConnectorId, showAdvancedFilter, loadDictionaries]);
 
   const handleToggleAdvancedFilter = () => {
-    setShowAdvancedFilter((prev) => {
-      const next = !prev;
-      if (next) {
-        void loadDictionaries();
-      }
-      return next;
-    });
+    setShowAdvancedFilter((prev) => !prev);
   };
 
   const handleApplyFilters = async () => {
+    if (!selectedConnectorId) return;
     const payload: AlarmFilters = {
       ...localFilters,
       fromTime: useFromTime ? localFilters.fromTime : undefined,
       toTime: useToTime ? localFilters.toTime : undefined,
+      key: selectedConnectorId,
     };
+    if (selectedPriorityMessageCsv) {
+      payload.message = selectedPriorityMessageCsv;
+    }
     await refreshAlarms(payload);
   };
 
   const handleClearFilters = async () => {
+    if (!selectedConnectorId) return;
     setLocalFilters(getDefaultFilterValues());
     setUseFromTime(false);
     setUseToTime(false);
-    await refreshAlarms(EMPTY_FILTERS);
+    await refreshAlarms({ ...EMPTY_FILTERS, key: selectedConnectorId });
     setShowAdvancedFilter(false);
+  };
+
+  const handleConnectorClick = (id: string) => {
+    setSelectedConnectorId(id);
+    void refreshAlarms({ ...filters, key: id });
+  };
+
+  const handleChangeSelectedPriorityName = (value: string | undefined) => {
+    setSelectedPriorityName(value);
+    // Priority mapping sẽ dùng filter.message dạng CSV events, nên clear message dropdown để tránh xung đột UI.
+    setLocalFilters((prev) => ({ ...prev, message: undefined }));
+  };
+
+  const handleChangeFilters = (patch: Partial<AlarmFilters>) => {
+    if (Object.prototype.hasOwnProperty.call(patch, 'message') && patch.message) {
+      setSelectedPriorityName(undefined);
+    }
+    setLocalFilters((prev) => ({ ...prev, ...patch }));
   };
 
   const renderAlarmTable = () => (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto pr-1">
+      <div className="relative flex-1 min-h-0 flex flex-col">
+      <div
+        ref={listRef}
+        className="flex-1 overflow-y-auto pr-1"
+        onScroll={() => {
+          const el = listRef.current;
+          if (!el) return;
+          const firstRowHeight = firstRowHeightRef.current ?? 44;
+          setShowScrollToTop(el.scrollTop > firstRowHeight);
+          if (el.scrollTop > 0 && isAutoScrollRef.current) {
+            setIsAutoScroll(false);
+          }
+          if (el.scrollTop <= 24 && !isAutoScrollRef.current) {
+            setIsAutoScroll(true);
+          }
+          const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+          if (distanceFromBottom < 200) {
+            void loadMore();
+          }
+        }}
+      >
         <table className="w-full border-collapse text-left">
           <thead>
             <tr>
-              {['Mức độ ưu tiên', 'Loại', 'Mô tả', 'Nguồn', 'Vị trí', 'Trạng thái', 'Thời gian', 'Tương quan'].map((col) => (
+              {['Mức độ ưu tiên', 'Loại', 'Mô tả', 'Nguồn/Vị trí', 'Trạng thái', 'Thời gian', 'Tương quan'].map((col) => (
                 <th
                   key={col}
                   className="py-2 px-3 text-[10px] font-mono uppercase tracking-wider border-b border-border-dim sticky top-0 z-10 whitespace-nowrap"
@@ -191,6 +312,7 @@ export function AlarmConsole() {
             {filteredAlarms.map((alarm) => (
               <tr
                 key={alarm.id}
+                ref={alarm.id === filteredAlarms[0]?.id ? firstRowRef : undefined}
                 className={cn(
                   "cursor-pointer transition-colors hover:bg-bg2 border-b border-border-dim",
                   selectedAlarmId === alarm.id && "bg-[rgba(0,194,255,0.05)]",
@@ -201,14 +323,18 @@ export function AlarmConsole() {
                 }}
               >
                 <td className="py-2.5 px-3 align-middle text-[12px]"><StatusPill priority={alarm.pri} /></td>
-                <td className="py-2.5 px-3 align-middle text-[12px]"><TypeBadge type={alarm.type} /></td>
+                <td className="py-2.5 px-3 align-middle text-[12px]"><TypeBadge type={alarm.type} label={alarm.typeLabel} /></td>
                 <td className="py-2.5 px-3 align-middle text-[12px]">
                   {alarm.title}
-                  {alarm.isNew && <span className="ml-1.5 text-[9px] bg-psim-red text-white px-[6px] py-[1px] rounded-[3px] font-mono">NEW</span>}
+                  {alarm.isNew && (
+                    <span
+                      className="ml-1.5 inline-block h-2 w-2 rounded-full bg-psim-red align-middle"
+                      title="Sự kiện mới"
+                    />
+                  )}
                   {alarm.corr > 1 && <span className="ml-1.5 text-[9px] bg-[rgba(155,109,255,0.2)] text-purple px-[5px] py-[1px] rounded-[3px] font-mono">+{alarm.corr} corr</span>}
                 </td>
                 <td className="py-2.5 px-3 align-middle text-[11px] text-t-2">{alarm.src}</td>
-                <td className="py-2.5 px-3 align-middle text-[11px] text-t-2">{alarm.loc}</td>
                 <td className="py-2.5 px-3 align-middle text-[12px]">
                   {alarm.status === 'new' && <span className="px-2 py-0.5 rounded bg-psim-red/15 text-psim-red text-[10px] font-bold">{alarm.statusLabel ?? 'New'}</span>}
                   {alarm.status === 'in progress' && <span className="px-2 py-0.5 rounded bg-psim-orange/15 text-psim-orange text-[10px] font-bold">{alarm.statusLabel ?? 'In progress'}</span>}
@@ -229,28 +355,40 @@ export function AlarmConsole() {
           </tbody>
         </table>
       </div>
-      <div className="flex items-center justify-between gap-3 border-t border-border-dim bg-bg1 px-3 py-2 text-[11px]">
+      {showScrollToTop && (
         <button
-          className="rounded-md border border-border-dim px-3 py-1 text-t1 transition-colors hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={loading || currentPage === 1}
+          type="button"
+          className={cn(
+            "absolute right-3 z-20 flex h-9 w-9 items-center justify-center rounded-md border border-border-dim bg-bg3 text-[14px] text-t1 shadow-lg transition-colors hover:bg-bg4 hover:border-psim-accent hover:text-psim-accent",
+            !isAutoScroll && pendingRealtimeCount > 0 ? "bottom-14" : "bottom-3"
+          )}
+          aria-label="Về đầu danh sách"
+          title="Về đầu danh sách"
           onClick={() => {
-            void prevPage();
+            listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+            clearBellCount();
+            requestAnimationFrame(() => {
+              setIsAutoScroll(true);
+            });
           }}
         >
-          Trang trước
+          ↑
         </button>
-        <div className="font-mono text-t-2">
-          Bản ghi {startRecord} - {endRecord}
-        </div>
+      )}
+      {!isAutoScroll && pendingRealtimeCount > 0 && (
         <button
-          className="rounded-md border border-border-dim px-3 py-1 text-t1 transition-colors hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={loading || !canNextPage}
+          className="absolute bottom-3 right-3 z-20 rounded-md border border-psim-accent/50 bg-bg3 px-3 py-1.5 text-[11px] text-psim-accent shadow-lg hover:bg-bg4"
           onClick={() => {
-            void nextPage();
+            listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+            clearBellCount();
+            requestAnimationFrame(() => {
+              setIsAutoScroll(true);
+            });
           }}
         >
-          Trang sau
+          Có {pendingRealtimeCount} sự kiện mới
         </button>
+      )}
       </div>
     </div>
   );
@@ -263,6 +401,26 @@ export function AlarmConsole() {
         </div>
       ) : (
         <>
+          <div className="bg-bg2 rounded-md border border-border-dim p-2">
+            {!selectedAlarm.cameraId ? (
+              <div className="text-[11px] text-t-2">
+                Alarm này chưa có `cameraId`, không thể phát playback.
+              </div>
+            ) : !selectedConnectorId ? (
+              <div className="text-[11px] text-t-2">
+                Chưa chọn connector để lấy token playback.
+              </div>
+            ) : playbackEmbedUrl ? (
+              <iframe
+                title={`playback-${selectedAlarm.id}`}
+                src={playbackEmbedUrl}
+                className="block w-full aspect-video rounded border border-border-dim bg-black"
+              />
+            ) : (
+              <div className="text-[11px] text-t-2">Đang chuẩn bị playback...</div>
+            )}
+          </div>
+
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <div className="font-mono text-[10px] text-psim-accent">{selectedAlarm.id}</div>
@@ -433,12 +591,13 @@ export function AlarmConsole() {
               isOpen={showAdvancedFilter}
               onToggle={handleToggleAdvancedFilter}
               filters={localFilters}
-              onChangeFilters={(patch) =>
-                setLocalFilters((prev) => ({ ...prev, ...patch }))
-              }
+              onChangeFilters={handleChangeFilters}
               onApply={handleApplyFilters}
               onClear={handleClearFilters}
               loading={loading || loadingDicts}
+              priorityOptions={priorityOptions}
+              selectedPriorityName={selectedPriorityName}
+              onChangeSelectedPriorityName={handleChangeSelectedPriorityName}
               messages={messages}
               sources={sources}
               useFromTime={useFromTime}
@@ -448,19 +607,34 @@ export function AlarmConsole() {
               showTrigger
               renderPanel={false}
             />
-            <div className="flex gap-1">
-              {filterTypes.map(type => (
-                <button
-                  key={type}
-                  className={cn(
-                    "px-2.5 py-1 rounded-md text-[11px] cursor-pointer border border-border-dim bg-bg2 font-mono transition-colors",
-                    filterType === type ? 'bg-psim-accent/15 text-psim-accent border-psim-accent/30' : 'text-t2 hover:bg-bg3 hover:text-t1'
-                  )}
-                  onClick={() => setFilterType(type)}
-                >
-                  {type.toUpperCase()}
-                </button>
-              ))}
+            <div className="flex gap-1 flex-wrap items-center min-h-[28px]">
+              {isLoadingConnectors ? (
+                <span className="text-[10px] text-t2 font-mono px-1">Đang tải connector...</span>
+              ) : connectors.length === 0 ? (
+                <span className="text-[10px] text-t2 font-mono px-1">Chưa có connector</span>
+              ) : (
+                connectors.map((c: { Id?: string; id?: string; Name?: string; name?: string }) => {
+                  const id = c.Id ?? c.id ?? '';
+                  const name = c.Name ?? c.name ?? id;
+                  if (!id) return null;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      title={name}
+                      className={cn(
+                        'max-w-[140px] px-2.5 py-1 rounded-md text-[11px] cursor-pointer border border-border-dim bg-bg2 transition-colors truncate',
+                        selectedConnectorId === id
+                          ? 'bg-psim-accent/15 text-psim-accent border-psim-accent/30'
+                          : 'text-t2 hover:bg-bg3 hover:text-t1'
+                      )}
+                      onClick={() => handleConnectorClick(id)}
+                    >
+                      {name}
+                    </button>
+                  );
+                })
+              )}
             </div>
             <button className="ml-auto px-3 py-1.5 text-[11px] font-medium rounded-md bg-psim-red/15 text-psim-red border border-psim-red/30 hover:bg-psim-red/25 transition-colors">🔕 Mute All</button>
             <button className="px-3 py-1.5 text-[11px] font-medium rounded-md bg-bg3 text-t1 border border-border-dim hover:bg-bg4 transition-colors">⬇ Export</button>
@@ -472,12 +646,13 @@ export function AlarmConsole() {
                   isOpen={showAdvancedFilter}
                   onToggle={handleToggleAdvancedFilter}
                   filters={localFilters}
-                  onChangeFilters={(patch) =>
-                    setLocalFilters((prev) => ({ ...prev, ...patch }))
-                  }
+                  onChangeFilters={handleChangeFilters}
                   onApply={handleApplyFilters}
                   onClear={handleClearFilters}
                   loading={loading || loadingDicts}
+                  priorityOptions={priorityOptions}
+                  selectedPriorityName={selectedPriorityName}
+                  onChangeSelectedPriorityName={handleChangeSelectedPriorityName}
                   messages={messages}
                   sources={sources}
                   useFromTime={useFromTime}
