@@ -146,7 +146,7 @@ function MapViewInternal() {
     queryKey: ['map-historical-alarms', selectedMapId],
     queryFn: () => mapApi.getMilestoneAlarms(selectedMapId!, 0, 20),
     enabled: !!selectedMapId,
-    select: (res) => (res.Data || []).map(normalizeApiAlarm)
+    select: (res) => (res.Data || []).map((p: any) => normalizeApiAlarm(p))
   });
   const historicalAlarms = historicalAlarmsResponse || [];
 
@@ -156,7 +156,7 @@ function MapViewInternal() {
     setIsFetchingMore(true);
     try {
       const res = await mapApi.getMilestoneAlarms(selectedMapId, page, 20);
-      const newAlarms = (res.Data || []).map(normalizeApiAlarm);
+      const newAlarms = (res.Data || []).map((p: any) => normalizeApiAlarm(p));
       
       if (newAlarms.length < 20) {
         setHasMore(false);
