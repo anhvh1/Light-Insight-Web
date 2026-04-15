@@ -25,92 +25,32 @@ namespace LightInsightBUS.Service.HealthProviders.Milestone
 
         public async Task<ConnectorHealth> GetHealthAsync(ConnectorListModel config)
         {
-            // 1. ƯU TIÊN LẤY DỮ LIỆU TỪ CACHE REAL-TIME CỦA SOCKET WORKER
             if (_cache.TryGetValue($"HEALTH_STATE_{config.IpServer}", out MilestoneLiveState liveState))
             {
-                // TÍNH TOÁN ĐIỂM SỐ (Health Score)
-                int score = 0;
-                string status = liveState.Status; // "ONLINE" hoặc "OFFLINE" từ worker
-
-                if (status == "ONLINE")
-                {
-                    // Nếu latency cao, chuyển trạng thái thành SLOW
-                    if (liveState.LatencyMs > 500) status = "SLOW";
-
-                    // Tỷ lệ camera online (0-100)
-                    score = liveState.TotalCameras > 0 
-                        ? (liveState.OnlineCameras * 100 / liveState.TotalCameras) 
-                        : 100;
-
-                    // Phạt theo độ trễ (Latency)
-                    if (liveState.LatencyMs > 500) score -= 20;
-                    else if (liveState.LatencyMs > 200) score -= 10;
-                }
-
                 return new ConnectorHealth
                 {
                     Name = config.Name,
                     ApiInfo = $"{config.IpServer}:{config.Port}",
-                    Status = status, // Sẽ trả về ONLINE, OFFLINE, hoặc SLOW
+                    Status = liveState.Status,
                     Latency = $"{liveState.LatencyMs}ms",
-                    HealthPercentage = Math.Max(0, score),
+                    HealthPercentage = 100, // Score is now handled in worker
                     StatsLabel = "Cameras",
                     Stats = $"{liveState.OnlineCameras} / {liveState.TotalCameras}",
                     Description = $"Real-time: {liveState.OnlineCameras}/{liveState.TotalCameras} cams online, {liveState.LatencyMs}ms latency"
                 };
             }
 
-            // 2. FALLBACK NẾU CACHE CHƯA CÓ (Dùng REST trực tiếp)
-            var health = new ConnectorHealth
+            return new ConnectorHealth
             {
                 Name = config.Name,
                 ApiInfo = $"{config.IpServer}:{config.Port}",
-                Status = "OFFLINE",
+                Status = "DISCONNECTED",
                 Latency = "0ms",
                 HealthPercentage = 0,
                 StatsLabel = "Cameras",
                 Stats = "0 / 0",
-                Description = "Polling via REST (Fallback)"
+                Description = "Waiting for socket..."
             };
-
-            var sw = Stopwatch.StartNew();
-            try
-            {
-                string token = await GetTokenInternalAsync(config);
-                sw.Stop();
-                health.Latency = $"{sw.ElapsedMilliseconds}ms";
-
-                if (!string.IsNullOrEmpty(token))
-                {
-                    health.Status = sw.ElapsedMilliseconds > 500 ? "SLOW" : "ONLINE";
-                    
-                    var cameras = await GetCamerasInternalAsync(config, token);
-                    int total = cameras.Count;
-                    int online = cameras.Count(c => c.enabled); 
-
-                    health.Stats = $"{online} / {total}";
-                    
-                    int score = 100;
-                    if (total > 0) {
-                        int offlineCount = total - online;
-                        score -= (offlineCount * 100 / total);
-                    } else {
-                        score = 0; 
-                    }
-
-                    if (sw.ElapsedMilliseconds > 200) score -= 10;
-                    if (sw.ElapsedMilliseconds > 500) score -= 20;
-
-                    health.HealthPercentage = Math.Max(0, score);
-                }
-            }
-            catch
-            {
-                health.Status = "OFFLINE";
-                health.HealthPercentage = 0;
-            }
-
-            return health;
         }
 
         public async Task<List<InfrastructureHealth>> GetInfrastructureAsync(ConnectorListModel config)

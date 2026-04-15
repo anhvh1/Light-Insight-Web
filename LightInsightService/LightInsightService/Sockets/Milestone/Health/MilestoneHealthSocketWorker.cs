@@ -69,6 +69,7 @@ namespace LightInsightService.Sockets.Milestone.Health
 
                             if (!_activeConnections.ContainsKey(cid) || _activeConnections[cid].IsCompleted)
                             {
+                                _logger.LogInformation($"[DEBUG] Starting connection task for {vms.Name} ({cid})");
                                 _activeConnections[cid] = Task.Run(() => MaintainWebSocketConnection(vms, stoppingToken), stoppingToken);
                             }
 
@@ -138,14 +139,31 @@ namespace LightInsightService.Sockets.Milestone.Health
                         while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
                         {
                             try {
+                                var startTime = DateTime.UtcNow;
                                 var sw = Stopwatch.StartNew();
+
                                 await SendAsync(ws, new { command = "getState", commandId = 999 }, config.Name, ct);
                                 await ReceiveAsync(ws, config.Name, ct); 
                                 sw.Stop();
-                                _globalStates[cid].LatencyMs = sw.ElapsedMilliseconds;
+
+                                var endTime = DateTime.UtcNow;
+                                var elapsed = sw.ElapsedMilliseconds;
+
+                                _logger.LogInformation($"[LATENCY_DEBUG] {config.Name} | Roundtrip: {elapsed}ms | Start: {startTime:HH:mm:ss.fff} | End: {endTime:HH:mm:ss.fff}");
+
+                                // Update state
+                                var state = _globalStates[cid];
+                                state.LatencyMs = elapsed;
+                                state.Status = "ONLINE";
+                                if (state.LatencyMs > 2000) state.Status = "BAD";
+                                else if (state.LatencyMs > 500) state.Status = "SLOW";
+
                                 await PushUpdate(cid);
-                                await Task.Delay(15000, ct); 
-                            } catch { break; }
+                                await Task.Delay(5000, ct);
+                            } catch (Exception ex) { 
+                                _logger.LogWarning($"[LATENCY_DEBUG] {config.Name} heartbeat failed: {ex.Message}");
+                                break; 
+                            }
                         }
                     }, ct);
 
@@ -159,9 +177,9 @@ namespace LightInsightService.Sockets.Milestone.Health
                 }
                 catch (Exception ex)
                 {
-                    _globalStates[cid].Status = "OFFLINE";
+                    _globalStates[cid].Status = "DISCONNECTED";
                     await PushUpdate(cid);
-                    _logger.LogWarning($"[{config.Name}] WS disconnected: {ex.Message}");
+                    _logger.LogError($"[CONNECTION_DEBUG] {config.Name} ({config.IpServer}) failed with: {ex.GetType().Name} - {ex.Message}");
                 }
                 await Task.Delay(10000, ct);
             }
@@ -199,7 +217,6 @@ namespace LightInsightService.Sockets.Milestone.Health
         private async Task PushUpdate(string cid)
         {
             var state = _globalStates[cid];
-            _logger.LogInformation($"[SignalR] Pushing HealthUpdate for {cid}: {JsonSerializer.Serialize(state)}");
             await _hubContext.Clients.All.SendAsync("HealthUpdate", state);
             _cache.Set($"HEALTH_STATE_{cid}", state);
         }

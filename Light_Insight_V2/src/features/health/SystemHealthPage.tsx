@@ -13,10 +13,15 @@ const AUDIT_HUB_URL = import.meta.env.VITE_ALARM_HUB_URL ? `${import.meta.env.VI
 const StatusText = ({ status }: { status: string }) => {
   const isOnline = status === 'ONLINE' || status === 'CHỜ';
   const isOffline = status === 'OFFLINE';
+  const isDisconnected = status === 'DISCONNECTED';
+  const isBad = status === 'BAD';
   return (
     <span className={cn(
       "text-[10px] font-bold font-mono whitespace-nowrap uppercase tracking-wider",
-      isOnline ? "text-psim-green" : isOffline ? "text-psim-red" : "text-psim-orange"
+      isOnline ? "text-psim-green" : 
+      isOffline ? "text-psim-red" : 
+      isDisconnected ? "text-psim-orange" : 
+      isBad ? "text-psim-red" : "text-psim-orange"
     )}>
       {status}
     </span>
@@ -26,11 +31,15 @@ const StatusText = ({ status }: { status: string }) => {
 const StatusBadge = ({ status }: { status: string }) => {
   const isOnline = status === 'ONLINE' || status === 'CHỜ';
   const isOffline = status === 'OFFLINE';
+  const isDisconnected = status === 'DISCONNECTED';
+  const isBad = status === 'BAD';
   return (
     <span className={cn(
       "px-2 py-0.5 rounded-[4px] text-[10px] font-bold font-mono border whitespace-nowrap uppercase tracking-wider",
       isOnline ? "bg-psim-green/15 text-psim-green border-psim-green/30" :
       isOffline ? "bg-psim-red/15 text-psim-red border-psim-red/30" :
+      isDisconnected ? "bg-psim-orange/15 text-psim-orange border-psim-orange/30" :
+      isBad ? "bg-psim-red/15 text-psim-red border-psim-red/30" :
       "bg-psim-orange/15 text-psim-orange border-psim-orange/30"
     )}>
       {status}
