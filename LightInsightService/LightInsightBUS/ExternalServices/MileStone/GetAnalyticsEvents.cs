@@ -157,7 +157,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
             string token = await GetTokenAsync(key);
             if (string.IsNullOrEmpty(token)) return new List<SimpleEvent>();
 
-            string apiUrl = $"http://{config.IpServer}:{config.Port}/API/rest/v1/analyticsEvents";
+            string apiUrl = $"http://{config.IpServer}:{config.Port}/API/rest/v1/alarmDefinitions";
 
             var request = new HttpRequestMessage(HttpMethod.Get, apiUrl);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
