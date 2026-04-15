@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -29,9 +29,18 @@ namespace LightInsightBUS.Service.MileStone.Alarm
 
         public async Task<List<string>> GetAlarmMessageDropdownAsync(Guid key)
         {
+            if (key == Guid.Empty)
+            {
+                return new List<string>();
+            }
+
             // Lấy Token và cấu hình
             var accessToken = await tocken.GetTokenAsync(key);
             var config = tocken.GetVmsConfig(key);
+            if (config == null || string.IsNullOrWhiteSpace(accessToken))
+            {
+                return new List<string>();
+            }
             var baseUrl = $"http://{config.IpServer}:{config.Port}";
 
             // Gọi API của Milestone
@@ -57,11 +66,23 @@ namespace LightInsightBUS.Service.MileStone.Alarm
         public async Task<List<AlarmData>> GetAlarmData(Guid key, int page, int pageSize, AlarmFilter filter = null)
         {
             var resultList = new List<AlarmData>();
+            if (key == Guid.Empty)
+            {
+                return resultList;
+            }
 
             // 1. Lấy Token
             var accessToken = await tocken.GetTokenAsync(key);
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                return resultList;
+            }
 
             var config = tocken.GetVmsConfig(key);
+            if (config == null)
+            {
+                return resultList;
+            }
             var baseUrl = $"http://{config.IpServer}:{config.Port}";
 
             // Xử lý logic trang: Frontend gửi lên 1, 2, 3... nhưng API Milestone đếm từ 0, 1, 2...
@@ -134,7 +155,9 @@ namespace LightInsightBUS.Service.MileStone.Alarm
                         source = camName, // Lấy tên camera từ logic Cache bên trên
                         stateLevel = item.state?.level ?? 0,
                         stateName = item.state?.name ?? "Unknown",
-
+                        cameraid = camId,
+                        connectorName = config.Name,
+                        ipadress = config.IpServer,
                         // Chuyển UTC Time về Local Time và Format theo DD-MM-YYYY HH:mm:ss
                         time = item.time.ToLocalTime().ToString("dd-MM-yyyy HH:mm:ss"),
 
