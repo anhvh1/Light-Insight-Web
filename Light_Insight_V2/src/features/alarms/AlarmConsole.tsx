@@ -39,7 +39,6 @@ export function AlarmConsole() {
     alarms,
     connected,
     loading,
-    canNextPage,
     pendingRealtimeCount,
     filters,
     refreshAlarms,
@@ -359,7 +358,10 @@ export function AlarmConsole() {
       {showScrollToTop && (
         <button
           type="button"
-          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-md border border-border-dim bg-bg3 text-[14px] text-t1 shadow-lg transition-colors hover:bg-bg4 hover:border-psim-accent hover:text-psim-accent"
+          className={cn(
+            "absolute right-3 z-20 flex h-9 w-9 items-center justify-center rounded-md border border-border-dim bg-bg3 text-[14px] text-t1 shadow-lg transition-colors hover:bg-bg4 hover:border-psim-accent hover:text-psim-accent",
+            !isAutoScroll && pendingRealtimeCount > 0 ? "bottom-14" : "bottom-3"
+          )}
           aria-label="Về đầu danh sách"
           title="Về đầu danh sách"
           onClick={() => {
@@ -373,28 +375,20 @@ export function AlarmConsole() {
           ↑
         </button>
       )}
-      </div>
-      <div className="relative border-t border-border-dim bg-bg1 px-3 py-2 text-[11px]">
-        <div className="font-mono text-t-2 text-center">
-          Hiển thị {filteredAlarms.length} bản ghi
-          {loading && <span className="text-psim-accent"> · Đang tải…</span>}
-          {!loading && !canNextPage && alarms.length > 0 && <span className="text-t-2"> · Đã tải hết dữ liệu</span>}
-        </div>
-
-        {!isAutoScroll && pendingRealtimeCount > 0 && (
-          <button
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-psim-accent/50 bg-bg3 px-3 py-1.5 text-[11px] text-psim-accent shadow-lg hover:bg-bg4"
-            onClick={() => {
-              listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              clearBellCount();
-              requestAnimationFrame(() => {
-                setIsAutoScroll(true);
-              });
-            }}
-          >
-            Tạm dừng - Có {pendingRealtimeCount} tin mới - Click để Resume
-          </button>
-        )}
+      {!isAutoScroll && pendingRealtimeCount > 0 && (
+        <button
+          className="absolute bottom-3 right-3 z-20 rounded-md border border-psim-accent/50 bg-bg3 px-3 py-1.5 text-[11px] text-psim-accent shadow-lg hover:bg-bg4"
+          onClick={() => {
+            listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+            clearBellCount();
+            requestAnimationFrame(() => {
+              setIsAutoScroll(true);
+            });
+          }}
+        >
+          Có {pendingRealtimeCount} sự kiện mới
+        </button>
+      )}
       </div>
     </div>
   );
