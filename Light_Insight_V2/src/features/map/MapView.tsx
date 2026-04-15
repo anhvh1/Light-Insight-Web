@@ -1,8 +1,7 @@
-import { useState, useRef, useEffect, useMemo, createContext, useContext, useCallback, type ReactNode } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { 
-  MapPin, 
   ChevronRight, 
   GripVertical, 
   ChevronUp, 

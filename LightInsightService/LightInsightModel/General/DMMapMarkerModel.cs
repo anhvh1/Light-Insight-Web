@@ -54,5 +54,8 @@ namespace LightInsightModel.General
         [Column("connectorid")]
         public Guid? Connectorid { get; set; }
 
+        [Column("ip")]
+        public string? IP { get; set; }
+
     }
 }

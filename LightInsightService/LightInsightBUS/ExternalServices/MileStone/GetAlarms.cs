@@ -11,7 +11,7 @@ namespace LightInsightBUS.ExternalServices.MileStone
 {
     class GetAlarms
     {
-        public async Task<List<AlarmModel>> GetAlarmsAsync(string baseUrl, string token, List<string> cameraIds, DateTime startTime, DateTime endTime, int page, int size)
+        public async Task<List<AlarmModel>> GetAlarmsAsync(string baseUrl, string token, List<string> cameraIds, DateTime startTime, DateTime endTime, int page = 0, int size = 10)
         {
             try
             {

@@ -229,7 +229,8 @@ function DeviceTab({
                   id: String(cam.Id || ''), 
                   name: String(cam.Name || ''),
                   type: cam.Type || 1,
-                  connectorId: cam.Connectorid
+                  connectorId: cam.Connectorid,
+                  ip: cam.IP || cam.Ip || cam.ip || ''
                 })} 
                 className={cn(
                   "p-3 bg-white/5 border border-white/5 rounded-lg flex items-center justify-between transition-all", 
@@ -284,6 +285,7 @@ export function MapManagementSection() {
     vmsId: number;
     type: number;
     connectorId: string;
+    ip: string;
   }[]>([]);
   const [draggingDevice, setDraggingDevice] = useState<{ 
     id: string; 
@@ -291,6 +293,7 @@ export function MapManagementSection() {
     vmsId: number; 
     type: number;
     connectorId: string;
+    ip: string;
   } | null>(null);
   const [movingDeviceId, setMovingDeviceId] = useState<string | null>(null);
   const [zoomScale, setZoomScale] = useState(1);
@@ -355,7 +358,8 @@ export function MapManagementSection() {
           rotation: m.Rotation || 0,
           vmsId: m.VmsId || 0,
           type: m.Type || 1,
-          connectorId: m.Connectorid || ''
+          connectorId: m.Connectorid || '',
+          ip: m.IP || ''
         };
       });
       setPlacedDevices(prev => {
@@ -622,7 +626,7 @@ export function MapManagementSection() {
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, device: { id: string; name: string; type: number; connectorId: string; }) => {
+  const handleDragStart = (e: React.DragEvent, device: { id: string; name: string; type: number; connectorId: string; ip: string; }) => {
     const connector = actualConnectors.find(c => c.Id === device.connectorId);
     const vmsId = connector?.VmsID || 0;
     setDraggingDevice({ ...device, vmsId });
@@ -655,7 +659,8 @@ export function MapManagementSection() {
         rotation: 0, 
         vmsId: draggingDevice.vmsId,
         type: draggingDevice.type,
-        connectorId: draggingDevice.connectorId
+        connectorId: draggingDevice.connectorId,
+        ip: draggingDevice.ip
       }]);
       setDraggingDevice(null);
     }
@@ -770,7 +775,8 @@ export function MapManagementSection() {
                         VmsId: d.vmsId,
                         Connectorid: d.connectorId,
                         Type: d.type,
-                        Rotation: d.rotation 
+                        Rotation: d.rotation,
+                        IP: d.ip
                       }));
                       saveMarkersMutation.mutate({ MapId: selectedMapId!, Markers: markers });
                     } catch (error: any) {

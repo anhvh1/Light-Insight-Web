@@ -34,5 +34,6 @@ namespace LightInsightModel.General
         public double Rotation { get; set; }
         public int Type { get; set; }
         public Guid Connectorid { get; set; }
+        public string IP { get; set; }
     }
 }

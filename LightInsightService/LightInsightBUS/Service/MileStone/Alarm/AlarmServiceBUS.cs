@@ -143,6 +143,8 @@ namespace LightInsightBUS.Service.MileStone.Alarm
                         stateLevel = item.state?.level ?? 0,
                         stateName = item.state?.name ?? "Unknown",
                         cameraid = camId,
+                        connectorName = config.Name,
+                        ipadress = config.IpServer,
                         // Chuyển UTC Time về Local Time và Format theo DD-MM-YYYY HH:mm:ss
                         time = item.time.ToLocalTime().ToString("dd-MM-yyyy HH:mm:ss"),
 

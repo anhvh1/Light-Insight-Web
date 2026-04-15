@@ -43,7 +43,8 @@ export const mapApi = {
       VmsId: number; 
       Connectorid?: string;
       Type?: number;
-      Rotation: number 
+      Rotation: number;
+      IP?: string;
     }[] 
   }) => {
     const response = await apiClient.post<ApiResponse<null>>('/DMMap/SaveMarkers', data);

@@ -282,22 +282,75 @@ namespace LightInsightBUS.ExternalServices.MileStone
         {
             var json = await response.Content.ReadAsStringAsync();
 
-            using var doc = JsonDocument.Parse(json);
-            var list = new List<CameraItem>();
-
-            if (doc.RootElement.TryGetProperty("array", out var array))
+            // Cấu hình để không phân biệt hoa thường (vì JSON là "array", "id"... còn Class là "Array", "Id"...)
+            var options = new JsonSerializerOptions
             {
-                foreach (var item in array.EnumerateArray())
-                {
-                    list.Add(new CameraItem
-                    {
-                        Id = item.GetProperty("id").GetString(),
-                        Name = item.GetProperty("name").GetString()
-                    });
-                }
+                PropertyNameCaseInsensitive = true
+            };
+
+            var result = JsonSerializer.Deserialize<CameraResponse>(json, options);
+
+            return result?.Array ?? new List<CameraItem>();
+        }
+        public async Task<string> GetHardwareIpAsync(Guid key, string hardwareId)
+        {
+            if (string.IsNullOrEmpty(hardwareId)) return string.Empty;
+
+            string cacheKey = $"HW_IP_{hardwareId}";
+            if (_cache.TryGetValue(cacheKey, out string cachedIp))
+            {
+                return cachedIp;
             }
 
-            return list;
+            var config = GetVmsConfig(key);
+            if (config == null) return string.Empty;
+
+            string token = await GetTokenAsync(key);
+            if (string.IsNullOrEmpty(token)) return string.Empty;
+
+            string apiUrl = $"http://{config.IpServer}:{config.Port}/api/rest/v1/hardware/{hardwareId}";
+            var response = await SendRequestAsync(apiUrl, token);
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                _cache.Remove($"TOKEN_{key}");
+                token = await GetTokenAsync(key);
+                response = await SendRequestAsync(apiUrl, token);
+            }
+
+            if (!response.IsSuccessStatusCode) return string.Empty;
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("data", out var data) && data.TryGetProperty("address", out var addressProp))
+            {
+                string address = addressProp.GetString();
+                string ip = ExtractIpFromAddress(address);
+                _cache.Set(cacheKey, ip, TimeSpan.FromHours(24)); // IP hardware ít thay đổi
+                return ip;
+            }
+
+            return string.Empty;
+        }
+
+        private string ExtractIpFromAddress(string address)
+        {
+            if (string.IsNullOrEmpty(address)) return string.Empty;
+            try
+            {
+                // Xử lý chuỗi như http://192.168.100.66:554/ hoặc rtsp://192.168.100.66...
+                if (address.Contains("://"))
+                {
+                    Uri uri = new Uri(address);
+                    return uri.Host;
+                }
+                // Nếu là chuỗi thuần IP hoặc kèm port mà không có scheme
+                return address.Split(':')[0].Replace("/", "").Trim();
+            }
+            catch
+            {
+                return address;
+            }
         }
         public async Task<List<GenericDeviceModel>> GetAllDevicesAsync(Guid key)
         {
@@ -313,7 +366,19 @@ namespace LightInsightBUS.ExternalServices.MileStone
 
             var allDevices = new List<GenericDeviceModel>();
 
-            allDevices.AddRange(cameras.Select(c => new GenericDeviceModel { Id = c.Id, Name = c.Name, Type = DeviceType.Camera, Connectorid = key }));
+            // Lấy IP cho từng camera song song để tăng hiệu năng
+            var cameraDeviceTasks = cameras.Select(async c => new GenericDeviceModel
+            {
+                Id = c.Id,
+                Name = c.Name,
+                Type = DeviceType.Camera,
+                Connectorid = key,
+                IP = await GetHardwareIpAsync(key, c.HardwareId)
+            }).ToList();
+
+            var cameraDevices = await Task.WhenAll(cameraDeviceTasks);
+            allDevices.AddRange(cameraDevices);
+
             allDevices.AddRange(microphones.Select(m => new GenericDeviceModel { Id = m.Id, Name = m.Name, Type = DeviceType.Microphone, Connectorid = key }));
             allDevices.AddRange(speakers.Select(s => new GenericDeviceModel { Id = s.Id, Name = s.Name, Type = DeviceType.Speaker, Connectorid = key }));
 

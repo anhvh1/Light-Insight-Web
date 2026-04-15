@@ -8,5 +8,6 @@ namespace LightInsightModel.General
         public string Name { get; set; }
         public DeviceType Type { get; set; }
         public  Guid Connectorid { get; set; }
+        public string IP { get; set; }
     }
 }
