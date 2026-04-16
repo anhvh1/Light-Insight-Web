@@ -162,6 +162,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                                 await Task.Delay(5000, ct);
                             } catch (OperationCanceledException) { 
                                 _logger.LogWarning($"[LATENCY_DEBUG] {config.Name} heartbeat timed out.");
+                                AuditLogger.Log("SYSTEM", "SERVER_TIMEOUT", $"Mất phản hồi từ server: {config.Name} (Timeout 5s)", new { config.Name, config.IpServer }, "System", config.IpServer);
                                 break; 
                             } catch (Exception ex) { 
                                 _logger.LogWarning($"[LATENCY_DEBUG] {config.Name} heartbeat failed: {ex.Message}");
@@ -183,6 +184,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                     _globalStates[cid].Status = "DISCONNECTED";
                     await PushUpdate(cid);
                     _logger.LogError($"[CONNECTION_DEBUG] {config.Name} ({config.IpServer}) failed with: {ex.GetType().Name} - {ex.Message}");
+                    AuditLogger.Log("SYSTEM", "SERVER_DISCONNECTED", $"Mất kết nối WebSocket tới server: {config.Name}", new { config.Name, config.IpServer, error = ex.Message }, "System", config.IpServer);
                 }
                 await Task.Delay(10000, ct);
             }
@@ -201,6 +203,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                             
                             // Map ID to Name
                             string eventName = _eventDefinitions.ContainsKey(eventTypeId) ? _eventDefinitions[eventTypeId].Name : eventTypeId;
+                            string category = _eventDefinitions.ContainsKey(eventTypeId) ? _eventDefinitions[eventTypeId].Category : "Unknown";
                             
                             if (source.Contains("cameras")) {
                                 if (IsErrorState(eventTypeId)) _globalStates[cid].OnlineCameras--;
@@ -209,7 +212,13 @@ namespace LightInsightService.Sockets.Milestone.Health
                             }
 
                             string cleanSource = source.Split('/').LastOrDefault() ?? source;
-                            AuditLogger.Log("SYSTEM", "STATUS_CHANGE", $"[{_globalStates[cid].Name}] {cleanSource} status: {eventName}", new { source, eventTypeId, eventName }, "System", "127.0.0.1");
+                            string actionType = "STATUS_CHANGE";
+                            
+                            // Improve action type based on category
+                            if (category.Contains("Configuration")) actionType = "CONFIG_CHANGE";
+                            else if (IsErrorState(eventTypeId)) actionType = "ERROR_EVENT";
+
+                            AuditLogger.Log("SYSTEM", actionType, $"[{_globalStates[cid].Name}] {cleanSource} event: {eventName} ({category})", new { source, eventTypeId, eventName, category }, "System", cid);
                         }
                         await PushUpdate(cid);
                     }

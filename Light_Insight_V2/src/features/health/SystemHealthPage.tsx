@@ -254,7 +254,7 @@ export function SystemHealthPage() {
                       >
                         <div className="flex justify-between items-start">
                           <h3 className={cn("text-[13px] font-semibold tracking-tight uppercase", c.Name.includes('Milestone') ? "text-psim-green" : "text-t1")}>{c.Name}</h3>
-                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-psim-green animate-pulse" />}
+                          {/* {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-psim-green animate-pulse" />} */}
                         </div>
                         <p className="text-[10px] text-t-2 font-mono mt-0.5">IP: {c.ApiInfo}</p>
                         <div className="space-y-1 mt-1">
