@@ -57,3 +57,4 @@ Desktop.ini
 .env.*
 !.env.example
 /LightJSC.Web
+/LightJSC.Api
