@@ -41,7 +41,7 @@ export function ConfigurationLayout() {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
-        <div className={cn(
+        {/* <div className={cn(
           "border-r border-border-dim bg-bg0 flex flex-col transition-all duration-300 shrink-0 bg-bg-1 relative z-[50]",
           isCollapsed ? "w-[64px]" : "w-[240px]"
         )}>
@@ -74,7 +74,6 @@ export function ConfigurationLayout() {
                       <span className="whitespace-nowrap">{item.label}</span>
                     </div>
                     
-                    {/* Tooltip for collapsed mode - Simplified and Robust */}
                     {isCollapsed && (
                       <div className="absolute left-full ml-4 px-3 py-2 bg-[#1a2236] text-white text-[11px] font-bold rounded-lg whitespace-nowrap border border-white/10 pointer-events-none opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all z-[9999] shadow-2xl uppercase tracking-wider block">
                         {item.label}
@@ -111,7 +110,6 @@ export function ConfigurationLayout() {
                       <span className="whitespace-nowrap">{item.label}</span>
                     </div>
 
-                    {/* Tooltip for collapsed mode */}
                     {isCollapsed && (
                       <div className="absolute left-full ml-4 px-3 py-2 bg-[#1a2236] text-white text-[11px] font-bold rounded-lg whitespace-nowrap border border-white/10 pointer-events-none opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all z-[9999] shadow-2xl uppercase tracking-wider block">
                         {item.label}
@@ -124,7 +122,6 @@ export function ConfigurationLayout() {
             </div>
           </div>
 
-          {/* Collapse Toggle Button */}
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="h-12 border-t border-border-dim flex items-center justify-center text-t-2 hover:text-white hover:bg-bg2 transition-all group shrink-0"
@@ -136,7 +133,7 @@ export function ConfigurationLayout() {
               </div>
             )}
           </button>
-        </div>
+        </div> */}
 
         {/* Content Area - Where sub-pages render */}
         <div className="flex-1 overflow-hidden p-8 bg-bg0/10">
