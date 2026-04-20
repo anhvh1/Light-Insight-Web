@@ -155,12 +155,12 @@ export function MapLayoutManagerPanel({ cameras }: { cameras: CameraResponse[] }
         createHandlers.close();
     }
   }, [createMapMutation.isSuccess, createMapMutation.data, createHandlers]);
-
-  const geoStyleUrl = useMemo(() => {
-    const rawUrl = mapOptionsQuery.data?.geoStyleUrl?.trim();
-    if (!rawUrl) return undefined;
-    return rawUrl.startsWith('http') ? rawUrl : `${getApiBaseUrl()}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`;
-  }, [mapOptionsQuery.data?.geoStyleUrl]);
+const geoStyleUrl = useMemo(() => {
+  const rawUrl = mapOptionsQuery.data?.geoStyleUrl?.trim();
+  if (!rawUrl) return undefined;
+  // Để đường dẫn là tương đối để proxy của Vite tự điều hướng
+  return rawUrl.startsWith('http') ? rawUrl : rawUrl;
+}, [mapOptionsQuery.data?.geoStyleUrl]);
 
   const filteredMaps = useMemo(() => {
     const term = mapSearch.trim().toLowerCase();

@@ -6,5 +6,6 @@ namespace LightInsightBUS.MapTiles
         public int MinZoom { get; set; } = 5;
         public int MaxZoom { get; set; } = 14;
         public bool UseTmsCoordinates { get; set; } = true;
+        public bool ServeLocalAssets { get; set; } = true;
     }
 }

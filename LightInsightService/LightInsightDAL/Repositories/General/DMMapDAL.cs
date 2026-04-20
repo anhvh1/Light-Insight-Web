@@ -197,6 +197,31 @@ namespace LightInsightDAL.Repositories.General
             }
         }
 
+        public async Task<bool> UpdateMapViewAsync(Guid id, double lat, double lng, double zoom)
+        {
+            try
+            {
+                await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
+                await conn.OpenAsync();
+
+                var sql = "UPDATE public.dm_map SET geocenterlatitude = @lat, geocenterlongitude = @lng, geozoom = @zoom WHERE id = @id";
+
+                await using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("id", id);
+                cmd.Parameters.AddWithValue("lat", lat);
+                cmd.Parameters.AddWithValue("lng", lng);
+                cmd.Parameters.AddWithValue("zoom", zoom);
+
+                var result = await cmd.ExecuteNonQueryAsync();
+                return result > 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in UpdateMapViewAsync: {ex.Message}");
+                return false;
+            }
+        }
+
         public async Task<bool> ReplaceMarkersAsync(Guid mapId, string markersJson)
         {
             try

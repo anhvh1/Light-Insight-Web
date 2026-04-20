@@ -245,6 +245,38 @@ namespace LightInsightBUS.Service.General
             return result;
         }
 
+        public async Task<BaseResultModel> UpdateMapViewAsync(Guid id, double lat, double lng, double zoom)
+        {
+            var result = new BaseResultModel();
+            try
+            {
+                if (zoom < 0 || zoom > 24)
+                {
+                    result.Status = 0;
+                    result.Message = "GeoZoom must be between 0 and 24.";
+                    return result;
+                }
+
+                var success = await _dmMapDAL.UpdateMapViewAsync(id, lat, lng, zoom);
+                if (success)
+                {
+                    result.Status = 1;
+                    result.Message = "Cập nhật view thành công.";
+                }
+                else
+                {
+                    result.Status = 0;
+                    result.Message = "Cập nhật view thất bại.";
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Status = -1;
+                result.Message = ex.Message;
+            }
+            return result;
+        }
+
         public async Task<BaseResultModel> UploadMapImageAsync(Guid id, System.IO.Stream fileStream, string fileName, string baseUrl = null)
         {
             var result = new BaseResultModel();

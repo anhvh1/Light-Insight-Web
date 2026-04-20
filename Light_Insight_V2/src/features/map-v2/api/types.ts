@@ -25,28 +25,33 @@ export interface MapLayoutResponse {
   id: string;
   parentId?: string | null;
   name: string;
+  code?: string | null;
   type: MapLayoutType;
-  imageUrl?: string | null;
-  imageWidth?: number | null;
-  imageHeight?: number | null;
+  mapImagePath?: string | null;
   geoCenterLatitude?: number | null;
   geoCenterLongitude?: number | null;
   geoZoom?: number | null;
   createdAt: string;
-  updatedAt: string;
+  Children?: MapLayoutResponse[];
 }
 
 export interface MapCameraPositionRequest {
   cameraId: string;
+  CameraId?: string; // New API uses PascalCase
   label?: string | null;
+  CameraName?: string | null;
   x?: number | null;
+  PosX?: number | null;
   y?: number | null;
+  PosY?: number | null;
   angleDegrees?: number | null;
+  Rotation?: number | null;
   fovDegrees?: number | null;
   range?: number | null;
   iconScale?: number | null;
   latitude?: number | null;
   longitude?: number | null;
+  IP?: string | null;
 }
 
 export interface MapCameraPositionResponse extends MapCameraPositionRequest {

@@ -13,11 +13,17 @@ import type {
 
 export const listCameras = () => apiRequest<CameraResponse[]>('/api/v1/cameras');
 
-export const listMaps = () => apiRequest<MapLayoutResponse[]>('/api/v1/maps');
+export const listMaps = async () => {
+  const data = await apiRequest<MapLayoutResponse[]>('/api/DMMap/GetAllTree');
+  return (data || []).map(m => ({ ...m, children: m.Children || [] }));
+};
 
 export const getMapOptions = () => apiRequest<MapOptionsResponse>('/api/v1/maps/options');
 
-export const getMap = (id: string) => apiRequest<MapDetailResponse>(`/api/v1/maps/${id}`);
+export const getMap = async (id: string) => {
+  const response = await apiRequest<{ map: MapLayoutResponse; cameras: any[] }>(`/api/DMMap/GetById/${id}`);
+  return response;
+};
 
 export const createMap = (payload: MapLayoutRequest) =>
   apiRequest<MapLayoutResponse>('/api/v1/maps', {
@@ -35,9 +41,13 @@ export const deleteMap = (id: string) =>
   apiRequest<void>(`/api/v1/maps/${id}`, { method: 'DELETE' });
 
 export const updateMapView = (id: string, payload: MapViewRequest) =>
-  apiRequest<MapLayoutResponse>(`/api/v1/maps/${id}/view`, {
+  apiRequest<MapLayoutResponse>(`/api/DMMap/${id}/view`, {
     method: 'PUT',
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      GeoCenterLatitude: payload.geoCenterLatitude,
+      GeoCenterLongitude: payload.geoCenterLongitude,
+      GeoZoom: payload.geoZoom
+    })
   });
 
 export const uploadMapImage = (id: string, file: File) => {

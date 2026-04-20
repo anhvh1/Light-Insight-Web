@@ -1,6 +1,8 @@
 using LightInsightBUS.MapTiles;
+using LightInsightModel.Map;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,15 +14,22 @@ namespace LightInsightService.Controllers.General
     public sealed class MapTilesController : ControllerBase
     {
         private readonly MapTileRepository _repository;
+        private readonly MapOptions _options;
 
-        public MapTilesController(MapTileRepository repository)
+        public MapTilesController(MapTileRepository repository, IOptions<MapOptions> options)
         {
             _repository = repository;
+            _options = options.Value;
         }
 
         [HttpGet("{z:int}/{x:int}/{y:int}.pbf")]
         public async Task<IActionResult> GetTile(int z, int x, int y, CancellationToken cancellationToken)
         {
+            if (_options != null && !_options.ServeLocalAssets)
+            {
+                return NotFound();
+            }
+
             var tile = await _repository.GetTileAsync(z, x, y, cancellationToken);
             if (tile is null)
             {

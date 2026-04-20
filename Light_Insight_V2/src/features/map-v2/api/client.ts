@@ -22,6 +22,8 @@ export class ApiError extends Error {
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = buildApiUrl(path);
+  console.log(`[API Request]: ${options.method ?? 'GET'} ${url}`, options);
+  
   const headers = new Headers(options.headers);
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
 
@@ -29,28 +31,36 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(url, { ...options, headers });
-  if (!response.ok) {
-    const text = await response.text();
-    const message = text || response.statusText || 'Request failed';
-    throw new ApiError(response.status, message, text);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  const contentType = response.headers.get('content-type') ?? '';
-  if (contentType.includes('application/json')) {
-    const json = await response.json();
-    // Tự động bóc tách Data giống cấu trúc backend của bạn
-    if (json && typeof json === 'object' && 'Data' in json) {
-      return json.Data as T;
+  try {
+    const response = await fetch(url, { ...options, headers });
+    
+    if (!response.ok) {
+      const text = await response.text();
+      console.error(`[API Error]: ${response.status} ${url}`, text);
+      throw new ApiError(response.status, response.statusText || 'Request failed', text);
     }
-    return json as T;
-  }
 
-  return (await response.text()) as T;
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      const json = await response.json();
+      console.log(`[API Response]: ${url}`, json);
+      if (json && typeof json === 'object' && 'Data' in json) {
+        return json.Data as T;
+      }
+      return json as T;
+    }
+
+    const text = await response.text();
+    console.log(`[API Response Text]: ${url}`, text);
+    return text as T;
+  } catch (error) {
+    console.error(`[API Exception]: ${url}`, error);
+    throw error;
+  }
 }
 
 export async function apiHealth(path: string): Promise<boolean> {

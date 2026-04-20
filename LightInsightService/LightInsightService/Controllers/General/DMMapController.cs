@@ -33,6 +33,13 @@ namespace LightInsightService.Controllers.General
             return Ok(result);
         }
 
+        [HttpPut("{id}/view")]
+        public async Task<IActionResult> UpdateView(Guid id, [FromBody] MapViewRequest request)
+        {
+            var result = await _dmMapBUS.UpdateMapViewAsync(id, request.GeoCenterLatitude, request.GeoCenterLongitude, request.GeoZoom);
+            return Ok(result);
+        }
+
         [HttpPost("Add")]
         public async Task<IActionResult> Add(DMMapModel model)
         {
@@ -90,6 +97,7 @@ namespace LightInsightService.Controllers.General
             var result = await _dmMapBUS.GetMarkersByMapIdAsync(mapId);
             return Ok(result);
         }
+
         [HttpGet("GetAllDevicesAsync")]
         public async Task<IActionResult> GetAllDevicesAsync([FromQuery] Guid key)
         {
@@ -103,19 +111,28 @@ namespace LightInsightService.Controllers.General
             var result = await _dmMapBUS.StatisticMarkerByTypeAsync(mapId);
             return Ok(result);
         }
+
         [HttpGet("GetMapOptions")]
         public IActionResult GetOptions()
         {
-            var result = new BaseResultModel();
-            result.Data = new
+            var result = new BaseResultModel
             {
-                geoStyleUrl = "/mapstyles/vietnam-omt-style.json",
-                routingEnabled = true
+                Data = new
+                {
+                    geoStyleUrl = "/mapstyles/vietnam-omt-style.json",
+                    routingEnabled = true
+                },
+                Message = "thành công",
+                Status = 1
             };
-            result.Message = "thành công";
-            result.Status = 1;
             return Ok(result);
-
         }
+    }
+
+    public class MapViewRequest
+    {
+        public double GeoCenterLatitude { get; set; }
+        public double GeoCenterLongitude { get; set; }
+        public double GeoZoom { get; set; }
     }
 }

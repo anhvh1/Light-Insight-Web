@@ -1,9 +1,6 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
-using Microsoft.AspNetCore.Hosting;
-using System.IO;
-using System.Threading.Tasks;
-using System.Threading;
 
 namespace LightInsightBUS.MapTiles
 {
@@ -20,6 +17,7 @@ namespace LightInsightBUS.MapTiles
 
         public async Task<byte[]?> GetTileAsync(int z, int x, int y, CancellationToken cancellationToken)
         {
+
             if (z < _options.MinZoom || z > _options.MaxZoom)
             {
                 return null;

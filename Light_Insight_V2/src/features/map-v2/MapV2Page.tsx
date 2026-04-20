@@ -21,15 +21,11 @@ export default function MapV2Page() {
     );
   }
 
-  if (error) {
-    return (
-      <Center h="100vh">
-        <Text color="red">Error loading cameras: {(error as Error).message}</Text>
-      </Center>
-    );
-  }
-
   const safeCameras = Array.isArray(cameras) ? cameras : [];
+
+  if (error) {
+    console.error('Error loading cameras:', error);
+  }
 
   return (
     <I18nProvider>
