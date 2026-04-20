@@ -13,6 +13,7 @@ using LightInsightUtiltites;
 using LightInsightModel.General;
 using LightInsightBUS.Interfaces.Connectors;
 using System.Diagnostics;
+using System.Threading;
 
 namespace LightInsightService.Sockets.Milestone.Health
 {
@@ -27,6 +28,9 @@ namespace LightInsightService.Sockets.Milestone.Health
         private static readonly ConcurrentDictionary<string, MilestoneLiveState> _globalStates = new ConcurrentDictionary<string, MilestoneLiveState>();
         private readonly ConcurrentDictionary<string, Task> _activeConnections = new ConcurrentDictionary<string, Task>();
         private readonly ConcurrentDictionary<string, (string Name, string Category)> _eventDefinitions = new ConcurrentDictionary<string, (string, string)>();
+        
+        // Latency tracking
+        private readonly ConcurrentDictionary<string, Stopwatch> _latencyStopwatches = new ConcurrentDictionary<string, Stopwatch>();
 
         public MilestoneHealthSocketWorker(
             IMemoryCache cache, 
@@ -38,6 +42,7 @@ namespace LightInsightService.Sockets.Milestone.Health
             _logger = logger;
             _hubContext = hubContext;
             _scopeFactory = scopeFactory;
+            
             var handler = new HttpClientHandler();
             handler.ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
             _httpClient = new HttpClient(handler);
@@ -51,13 +56,13 @@ namespace LightInsightService.Sockets.Milestone.Health
             {
                 try
                 {
-                    using var scope = _scopeFactory.CreateScope();
-                    var connectorsService = scope.ServiceProvider.GetRequiredService<IConnectors>();
-                    var result = await connectorsService.GetAllConnectorsAsync();
-
-                    if (result.Status == 1 && result.Data is List<ConnectorListModel> connectorList)
+                    using (var scope = _scopeFactory.CreateScope())
                     {
-                        var milestoneConnectors = connectorList
+                        var connectorService = scope.ServiceProvider.GetRequiredService<IConnectors>();
+                        var res = await connectorService.GetAllConnectorsAsync();
+                        var allConnectors = res.Data as List<ConnectorListModel> ?? new List<ConnectorListModel>();
+                        
+                        var milestoneConnectors = allConnectors
                             .Where(c => c.VmsName != null && c.VmsName.Contains("Milestone", StringComparison.OrdinalIgnoreCase))
                             .ToList();
 
@@ -71,36 +76,23 @@ namespace LightInsightService.Sockets.Milestone.Health
                                 _logger.LogInformation($"[DEBUG] Starting connection task for {vms.Name} ({cid})");
                                 _activeConnections[cid] = Task.Run(() => MaintainWebSocketConnection(vms, stoppingToken), stoppingToken);
                             }
-
-                            // Quét dữ liệu tĩnh qua REST
-                            string token = await GetTokenAsync(vms);
-                            if (!string.IsNullOrEmpty(token)) {
-                                await FetchEventDefinitions(vms, token);
-                                await UpdateStaticData(vms, token);
-                            }
+                            
+                            // Background REST update for static data
+                            _ = Task.Run(async () => {
+                                try {
+                                    string token = await GetTokenAsync(vms);
+                                    if (!string.IsNullOrEmpty(token)) {
+                                        await FetchEventDefinitions(vms, token);
+                                        await UpdateStaticData(vms, token);
+                                    }
+                                } catch { }
+                            }, stoppingToken);
                         }
                     }
                 }
                 catch (Exception ex) { _logger.LogError($"Main Loop Error: {ex.Message}"); }
                 await Task.Delay(60000, stoppingToken); 
             }
-        }
-
-        private async Task FetchEventDefinitions(ConnectorListModel config, string token)
-        {
-            try {
-                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                var json = await _httpClient.GetStringAsync($"http://{config.IpServer}:{config.Port}/api/rest/v1/eventTypes");
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("array", out var array)) {
-                    foreach (var item in array.EnumerateArray()) {
-                        string id = item.GetProperty("id").GetString();
-                        string name = item.GetProperty("name").GetString();
-                        string cat = item.TryGetProperty("category", out var c) ? c.GetString() : "Unknown";
-                        _eventDefinitions[id] = (name, cat);
-                    }
-                }
-            } catch { }
         }
 
         private async Task MaintainWebSocketConnection(ConnectorListModel config, CancellationToken ct)
@@ -114,68 +106,47 @@ namespace LightInsightService.Sockets.Milestone.Health
                     string token = await GetTokenAsync(config);
                     if (string.IsNullOrEmpty(token)) throw new Exception("Token failed");
 
+                    using var handshakeCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    using var linkedHandshake = CancellationTokenSource.CreateLinkedTokenSource(ct, handshakeCts.Token);
+
+                    _logger.LogInformation($"[HANDSHAKE] Connecting to {config.Name} ({cid})...");
                     ws.Options.SetRequestHeader("Authorization", $"Bearer {token}");
-                    await ws.ConnectAsync(new Uri($"ws://{config.IpServer}:{config.Port}/api/ws/events/v1"), ct);
+                    ws.Options.SetRequestHeader("User-Agent", "LightInsight-Backend/2.0");
+                    ws.Options.AddSubProtocol("EventsAndStateWebSocketApi");
                     
+                    await ws.ConnectAsync(new Uri($"ws://{config.IpServer}:{config.Port}/api/ws/events/v1"), linkedHandshake.Token);
+                    
+                    // 1. Handshake Sequence
+                    await SendAsync(ws, new { command = "startSession", commandId = 101, sessionId = "", eventId = "" }, config.Name, linkedHandshake.Token);
+                    await ReceiveAsync(ws, config.Name, linkedHandshake.Token);
+                    
+                    await SendAsync(ws, new { command = "addSubscription", commandId = 102, filters = new[] { new { modifier = "include", resourceTypes = new[] { "*" }, sourceIds = new[] { "*" }, eventTypes = new[] { "*" } } } }, config.Name, linkedHandshake.Token);
+                    await ReceiveAsync(ws, config.Name, linkedHandshake.Token);
+
                     _globalStates[cid].Status = "ONLINE";
+                    _logger.LogInformation($"[HANDSHAKE] SUCCESS for {config.Name}! Starting unified runtime.");
 
-                    // 1. Start Session
-                    await SendAsync(ws, new { command = "startSession", commandId = 1, sessionId = "", eventId = "" }, config.Name, ct);
-                    await ReceiveAsync(ws, config.Name, ct);
-                    
-                    // Sync Camera count
-                    var cameras = await GetCamerasViaRest(config, token);
-                    _globalStates[cid].TotalCameras = cameras.Count;
-                    _globalStates[cid].OnlineCameras = cameras.Count(c => c.Enabled);
-
-                    // 2. Subscribe
-                    await SendAsync(ws, new { command = "addSubscription", commandId = 2, filters = new[] { new { modifier = "include", resourceTypes = new[] { "*" }, sourceIds = new[] { "*" }, eventTypes = new[] { "*" } } } }, config.Name, ct);
-                    await ReceiveAsync(ws, config.Name, ct);
-
-                    // 3. Heartbeat Task (Independent)
+                    // 2. Heartbeat Task (Sends getState every 5s)
                     _ = Task.Run(async () =>
                     {
                         while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
                         {
                             try {
-                                var startTime = DateTime.UtcNow;
-                                var sw = Stopwatch.StartNew();
-
-                                // 5s timeout on heartbeat
-                                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, cts.Token);
+                                var sw = new Stopwatch();
+                                _latencyStopwatches[cid] = sw;
+                                sw.Start();
                                 
-                                await SendAsync(ws, new { command = "getState", commandId = 999 }, config.Name, linked.Token);
-                                await ReceiveAsync(ws, config.Name, linked.Token); 
-                                sw.Stop();
-
-                                var elapsed = sw.ElapsedMilliseconds;
-                                _logger.LogInformation($"[LATENCY_DEBUG] {config.Name} | Roundtrip: {elapsed}ms");
-
-                                var state = _globalStates[cid];
-                                state.LatencyMs = elapsed;
-                                state.Status = "ONLINE";
-                                if (state.LatencyMs > 2000) state.Status = "BAD";
-                                else if (state.LatencyMs > 500) state.Status = "SLOW";
-                                await PushUpdate(cid);
-
+                                await SendAsync(ws, new { command = "getState", commandId = 1 }, config.Name, ct);
                                 await Task.Delay(5000, ct);
-                            } catch (OperationCanceledException) { 
-                                _logger.LogWarning($"[LATENCY_DEBUG] {config.Name} heartbeat timed out.");
-                                AuditLogger.Log("SYSTEM", "SERVER_TIMEOUT", $"Mất phản hồi từ server: {config.Name} (Timeout 5s)", new { config.Name, config.IpServer }, "System", config.IpServer);
-                                break; 
-                            } catch (Exception ex) { 
-                                _logger.LogWarning($"[LATENCY_DEBUG] {config.Name} heartbeat failed: {ex.Message}");
-                                break; 
-                            }
+                            } catch { break; }
                         }
                     }, ct);
 
-                    // 4. Listen Loop (Event Listener)
+                    // 3. Unified Receiver Loop
                     while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
                     {
                         var msg = await ReceiveAsync(ws, config.Name, ct);
-                        if (string.IsNullOrEmpty(msg)) continue;
+                        if (string.IsNullOrEmpty(msg)) break;
                         await ProcessWsMessage(msg, cid);
                     }
                 }
@@ -183,8 +154,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                 {
                     _globalStates[cid].Status = "DISCONNECTED";
                     await PushUpdate(cid);
-                    _logger.LogError($"[CONNECTION_DEBUG] {config.Name} ({config.IpServer}) failed with: {ex.GetType().Name} - {ex.Message}");
-                    AuditLogger.Log("SYSTEM", "SERVER_DISCONNECTED", $"Mất kết nối WebSocket tới server: {config.Name}", new { config.Name, config.IpServer, error = ex.Message }, "System", config.IpServer);
+                    _logger.LogError($"[CONNECTION_DEBUG] {config.Name} ({config.IpServer}) failed: {ex.Message}");
                 }
                 await Task.Delay(10000, ct);
             }
@@ -195,13 +165,34 @@ namespace LightInsightService.Sockets.Milestone.Health
             try {
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
+
+                // A. Handle Responses (Calculates Latency)
+                if (root.TryGetProperty("commandId", out var cmdIdProp)) {
+                    int cmdId = cmdIdProp.GetInt32();
+                    if (cmdId == 1) { // Heartbeat response
+                        if (_latencyStopwatches.TryRemove(cid, out var sw)) {
+                            sw.Stop();
+                            var elapsed = sw.ElapsedMilliseconds;
+                            _globalStates[cid].LatencyMs = elapsed;
+                            
+                            if (elapsed > 2000) _globalStates[cid].Status = "BAD";
+                            else if (elapsed > 500) _globalStates[cid].Status = "SLOW";
+                            else _globalStates[cid].Status = "ONLINE";
+                            
+                            await PushUpdate(cid);
+                            _logger.LogInformation($"[LATENCY] {_globalStates[cid].Name}: {elapsed}ms");
+                        }
+                    }
+                    return;
+                }
+
+                // B. Handle Events (Audit Log)
                 if (root.TryGetProperty("type", out var typeProp) && typeProp.GetString() == "event") {
                     if (root.TryGetProperty("events", out var eventsArray)) {
                         foreach (var evt in eventsArray.EnumerateArray()) {
                             string eventTypeId = evt.GetProperty("type").GetString();
                             string source = evt.GetProperty("source").GetString();
                             
-                            // Map ID to Name
                             string eventName = _eventDefinitions.ContainsKey(eventTypeId) ? _eventDefinitions[eventTypeId].Name : eventTypeId;
                             string category = _eventDefinitions.ContainsKey(eventTypeId) ? _eventDefinitions[eventTypeId].Category : "Unknown";
                             
@@ -211,14 +202,10 @@ namespace LightInsightService.Sockets.Milestone.Health
                                 _globalStates[cid].OnlineCameras = Math.Clamp(_globalStates[cid].OnlineCameras, 0, _globalStates[cid].TotalCameras);
                             }
 
-                            string cleanSource = source.Split('/').LastOrDefault() ?? source;
-                            string actionType = "STATUS_CHANGE";
-                            
-                            // Improve action type based on category
-                            if (category.Contains("Configuration")) actionType = "CONFIG_CHANGE";
-                            else if (IsErrorState(eventTypeId)) actionType = "ERROR_EVENT";
+                            string actionType = category.Contains("Configuration") ? "CONFIG_CHANGE" : "STATUS_CHANGE";
+                            if (IsErrorState(eventTypeId)) actionType = "ERROR_EVENT";
 
-                            AuditLogger.Log("SYSTEM", actionType, $"[{_globalStates[cid].Name}] {cleanSource} event: {eventName} ({category})", new { source, eventTypeId, eventName, category }, "System", cid);
+                            AuditLogger.Log("SYSTEM", actionType, $"[{_globalStates[cid].Name}] {source} event: {eventName}", new { source, eventTypeId, eventName }, "System", cid);
                         }
                         await PushUpdate(cid);
                     }
@@ -237,56 +224,28 @@ namespace LightInsightService.Sockets.Milestone.Health
         {
             string cid = config.IpServer;
             string baseUrl = $"http://{config.IpServer}:{config.Port}/api/rest/v1";
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             try {
-                var serversJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers");
-                using var doc = JsonDocument.Parse(serversJson);
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/recordingServers");
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                var response = await _httpClient.SendAsync(request);
+                if (!response.IsSuccessStatusCode) return;
+
+                var json = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
                 var newInfra = new List<InfrastructureHealth>();
 
                 if (doc.RootElement.TryGetProperty("array", out var servers)) {
                     foreach (var s in servers.EnumerateArray()) {
-                        string id = s.GetProperty("id").GetString();
                         string name = s.GetProperty("name").GetString();
-                        bool enabled = s.TryGetProperty("enabled", out var en) ? en.GetBoolean() : true;
-
-                        // Server Item
                         newInfra.Add(new InfrastructureHealth { 
                             Name = name, 
                             Type = "server", 
-                            Status = enabled ? "ONLINE" : "OFFLINE", 
+                            Status = "ONLINE", 
                             Description = $"Last update: {DateTime.Now:HH:mm:ss}",
                             ConnectorId = cid,
-                            MachineName = name // Use server name as link
+                            MachineName = name 
                         });
-
-                        // Storage Item
-                        try {
-                            var diskJson = await _httpClient.GetStringAsync($"{baseUrl}/recordingServers/{id}/storages");
-                            using var dDoc = JsonDocument.Parse(diskJson);
-                            if (dDoc.RootElement.TryGetProperty("array", out var disks)) {
-                                foreach (var d in disks.EnumerateArray()) {
-                                    string storageName = d.GetProperty("name").GetString();
-                                    
-                                    // Try multiple common property names for path in Milestone REST API
-                                    string path = "Unknown path";
-                                    if (d.TryGetProperty("path", out var p)) path = p.GetString();
-                                    else if (d.TryGetProperty("storagePath", out var sp)) path = sp.GetString();
-                                    else if (d.TryGetProperty("diskPath", out var dp)) path = dp.GetString();
-                                    
-                                    _logger.LogDebug($"[Milestone] Storage '{storageName}' raw: {d.GetRawText()}");
-
-                                    newInfra.Add(new InfrastructureHealth { 
-                                        Name = $"Storage: {storageName}", 
-                                        Type = "storage", 
-                                        Status = "ONLINE", 
-                                        Description = $"Path: {path}",
-                                        ConnectorId = cid,
-                                        MachineName = name // Link storage to THIS recording server
-                                    });
-                                }
-                            }
-                        } catch { }
                     }
                 }
                 _globalStates[cid].Infrastructure = newInfra;
@@ -294,30 +253,22 @@ namespace LightInsightService.Sockets.Milestone.Health
             } catch { }
         }
 
-        private async Task<List<(string Id, bool Enabled)>> GetCamerasViaRest(ConnectorListModel config, string token)
+        private async Task FetchEventDefinitions(ConnectorListModel config, string token)
         {
-            var list = new List<(string, bool)>();
             try {
-                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                var json = await _httpClient.GetStringAsync($"http://{config.IpServer}:{config.Port}/api/rest/v1/cameras");
+                var request = new HttpRequestMessage(HttpMethod.Get, $"http://{config.IpServer}:{config.Port}/api/rest/v1/eventTypes");
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                var response = await _httpClient.SendAsync(request);
+                if (!response.IsSuccessStatusCode) return;
+
+                var json = await response.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(json);
                 if (doc.RootElement.TryGetProperty("array", out var array)) {
                     foreach (var item in array.EnumerateArray()) {
-                        list.Add((item.GetProperty("id").GetString(), item.TryGetProperty("enabled", out var e) ? e.GetBoolean() : true));
+                        _eventDefinitions[item.GetProperty("id").GetString()] = (item.GetProperty("name").GetString(), item.TryGetProperty("category", out var c) ? c.GetString() : "Unknown");
                     }
                 }
             } catch { }
-            return list;
-        }
-
-        private bool IsErrorState(string guid) 
-        {
-            if (_eventDefinitions.TryGetValue(guid, out var def))
-            {
-                string name = def.Name.ToLower();
-                return name.Contains("lost") || name.Contains("failed") || name.Contains("error") || name.Contains("stopped");
-            }
-            return guid.Contains("e14e849f") || guid.Contains("6f55a7a7") || guid.Contains("839754e6");
         }
 
         private async Task SendAsync(ClientWebSocket ws, object obj, string vmsName, CancellationToken ct) {
@@ -326,7 +277,7 @@ namespace LightInsightService.Sockets.Milestone.Health
         }
 
         private async Task<string> ReceiveAsync(ClientWebSocket ws, string vmsName, CancellationToken ct) {
-            var buffer = new byte[8192];
+            var buffer = new byte[16384];
             using var ms = new MemoryStream();
             try {
                 WebSocketReceiveResult result;
@@ -349,9 +300,28 @@ namespace LightInsightService.Sockets.Milestone.Health
                     new KeyValuePair<string, string>("client_id", "GrantValidatorClient"),
                 });
                 var response = await _httpClient.SendAsync(request);
-                if (!response.IsSuccessStatusCode) return null;
-                return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("access_token").GetString();
+                return response.IsSuccessStatusCode ? JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("access_token").GetString() : null;
             } catch { return null; }
+        }
+
+        private bool IsErrorState(string guid) => guid.Contains("6baad64b") || guid.Contains("a334af1c") || guid.Contains("0ee90664");
+
+        private async Task<List<(string Id, bool Enabled)>> GetCamerasViaRest(ConnectorListModel config, string token)
+        {
+            var list = new List<(string, bool)>();
+            try {
+                var request = new HttpRequestMessage(HttpMethod.Get, $"http://{config.IpServer}:{config.Port}/api/rest/v1/cameras");
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                var response = await _httpClient.SendAsync(request);
+                if (response.IsSuccessStatusCode) {
+                    var json = await response.Content.ReadAsStringAsync();
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("array", out var array)) {
+                        foreach (var item in array.EnumerateArray()) list.Add((item.GetProperty("id").GetString(), true));
+                    }
+                }
+            } catch { }
+            return list;
         }
     }
 }
