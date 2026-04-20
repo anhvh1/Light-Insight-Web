@@ -1,0 +1,111 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# ----------------------------------------------------------------------------
+# 1. QUAN TRỌNG NHẤT: BẢO MẬT & MÔI TRƯỜNG (PHẢI CÓ)
+# ----------------------------------------------------------------------------
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.secret
+*.pem
+*.key
+
+# ----------------------------------------------------------------------------
+# 2. DEPENDENCIES (THƯ VIỆN)
+# ----------------------------------------------------------------------------
+node_modules/
+jspm_packages/
+web_modules/
+
+# ----------------------------------------------------------------------------
+# 3. BUILD & OUTPUT (SẢN PHẨM ĐẦU RA)
+# ----------------------------------------------------------------------------
+dist/
+dist-ssr/
+build/
+out/
+.vercel
+.netlify
+*.tsbuildinfo
+
+# ----------------------------------------------------------------------------
+# 4. LOGS & DEBUGGING
+# ----------------------------------------------------------------------------
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+logs/
+*.log
+
+# ----------------------------------------------------------------------------
+# 5. EDITOR & IDE (HỖ TRỢ LÀM VIỆC NHÓM)
+# ----------------------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# ----------------------------------------------------------------------------
+# 6. HỆ ĐIỀU HÀNH (WINDOWS & LINUX)
+# ----------------------------------------------------------------------------
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+desktop.ini
+
+# Linux (Ubuntu)
+.DS_Store
+.AppleDouble
+.LSOverride
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ----------------------------------------------------------------------------
+# 7. TESTING & COVERAGE
+# ----------------------------------------------------------------------------
+/coverage
+/.nyc_output
+.cypress/screenshots/
+.cypress/videos/
+
+# ----------------------------------------------------------------------------
+# 8. CÁC CÔNG CỤ KHÁC (Vite, TanStack)
+# ----------------------------------------------------------------------------
+.vite/
+.turbo/
+.cache/

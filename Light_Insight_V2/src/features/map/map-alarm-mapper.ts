@@ -1,0 +1,94 @@
+import type { Alarm } from '@/types';
+
+export interface AlarmPayload {
+  alarmId?: string;
+  alarmName?: string;
+  location?: string;
+  message?: string;
+  priorityLevel?: number;
+  priorityName?: string;
+  source?: string;
+  stateLevel?: number;
+  stateName?: string;
+  time?: string;
+  type?: string;
+  connectorName?: string;
+  ipadress?: string;
+}
+
+let counter = 0;
+
+function generateId(): string {
+  counter += 1;
+  return `ALM-${Date.now()}-${counter}`;
+}
+
+function formatDisplayTime(value?: string): string {
+  if (!value) return '';
+
+  const timeMatch = value.match(/\b\d{2}:\d{2}:\d{2}\b/);
+  if (timeMatch) {
+    return timeMatch[0];
+  }
+
+  return value;
+}
+
+function normalizePriority(priorityName?: string): string {
+  const normalized = (priorityName ?? '').trim().toLowerCase();
+  if (normalized === 'critical') return 'critical';
+  if (normalized === 'high') return 'high';
+  if (normalized === 'medium') return 'medium';
+  if (normalized === 'low') return 'low';
+  return 'medium';
+}
+
+function normalizeStatus(stateName?: string): string {
+  const normalized = (stateName ?? '').trim().toLowerCase();
+  if (normalized === 'new') return 'new';
+  if (normalized === 'in progress' || normalized === 'progress' || normalized === 'in_progress') return 'in progress';
+  if (normalized === 'on hold' || normalized === 'hold' || normalized === 'on_hold') return 'on hold';
+  if (normalized === 'close' || normalized === 'closed') return 'close';
+  return normalized || 'new';
+}
+
+function toAlarm(payload: AlarmPayload, isNew: boolean): Alarm {
+  const id = payload.alarmId?.trim() || generateId();
+  const statusByLevel: Record<number, { status: string; label: string }> = {
+    1: { status: 'new', label: 'New' },
+    4: { status: 'in progress', label: 'In progress' },
+    9: { status: 'on hold', label: 'On hold' },
+    11: { status: 'close', label: 'Close' },
+  };
+  const level = payload.stateLevel ?? -1;
+  const stateName = payload.stateName?.trim();
+  const mapped = statusByLevel[level];
+  const status = mapped?.status ?? normalizeStatus(stateName);
+  const statusLabel = stateName && stateName.length > 0 ? stateName : (mapped?.label ?? status);
+
+  return {
+    id,
+    title: payload.message ?? payload.alarmName ?? '',
+    pri: normalizePriority(payload.priorityName),
+    src: payload.source ?? '',
+    status,
+    statusLabel,
+    statusLevel: payload.stateLevel,
+    time: formatDisplayTime(payload.time),
+    type: 'light',
+    typeLabel: payload.type?.trim() || 'Hệ thống',
+    loc: payload.location ?? '',
+    corr: 0,
+    isNew,
+    connectorName: payload.connectorName,
+    ipadress: payload.ipadress,
+  };
+}
+
+export function normalizeSignalRAlarm(payload: AlarmPayload): Alarm {
+  return toAlarm(payload, true);
+}
+
+export function normalizeApiAlarm(payload: AlarmPayload): Alarm {
+  return toAlarm(payload, false);
+}

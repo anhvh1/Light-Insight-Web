@@ -1,0 +1,11 @@
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.sln.docstates
+.vs/
+.idea/
+.vscode/
+appsettings.Development.json
+publish.*
+publish-single

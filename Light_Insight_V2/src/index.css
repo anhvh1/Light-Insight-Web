@@ -1,0 +1,148 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Light Insight (PSIM) Color Palette */
+  --bg0: #070b14;
+  --bg1: #0d1220;
+  --bg2: #121929;
+  --bg3: #1a2236;
+  --bg4: #222d42;
+  --border-dim: rgba(255, 255, 255, 0.07);
+  --border-brighter: rgba(255, 255, 255, 0.13);
+  --t0: #f0f4ff;
+  --t1: #a8b4cc;
+  --t2: #5e6e8a;
+  --accent: #00c2ff;
+  --accent2: #0080ff;
+  --red: #ff3b5c;
+  --orange: #ff8c00;
+  --yellow: #ffcc00;
+  --green: #00d68f;
+  --purple: #9b6dff;
+  --teal: #00e5cc;
+
+  /* shadcn/ui base variables - Mapping to Light Insight Colors */
+  --background: var(--bg0);
+  --foreground: var(--t0);
+  --card: var(--bg1);
+  --card-foreground: var(--t0);
+  --popover: var(--bg2);
+  --popover-foreground: var(--t0);
+  --primary: var(--accent);
+  --primary-foreground: var(--bg0);
+  --secondary: var(--bg3);
+  --secondary-foreground: var(--t1);
+  --muted: var(--bg2);
+  --muted-foreground: var(--t2);
+  --accent-ui: var(--bg4);
+  --accent-foreground: var(--accent);
+  --destructive: var(--red);
+  --destructive-foreground: var(--t0);
+  --border: var(--border-dim);
+  --input: var(--bg3);
+  --ring: var(--accent);
+  --radius: 0.625rem;
+
+  /* Font definitions */
+  --sans: 'Geist Variable', sans-serif;
+  --heading: 'Syne', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@theme inline {
+  --font-sans: var(--sans);
+  --font-heading: var(--heading);
+  --font-mono: var(--mono);
+
+  --color-bg-0: var(--bg0);
+  --color-bg-1: var(--bg1);
+  --color-bg-2: var(--bg2);
+  --color-bg-3: var(--bg3);
+  --color-bg-4: var(--bg4);
+  
+  --color-t-0: var(--t0);
+  --color-t-1: var(--t1);
+  --color-t-2: var(--t2);
+  
+  --color-psim-accent: var(--accent);
+  --color-psim-accent2: var(--accent2);
+  --color-psim-red: var(--red);
+  --color-psim-orange: var(--orange);
+  --color-psim-yellow: var(--yellow);
+  --color-psim-green: var(--green);
+  
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent-ui);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    overflow: hidden;
+    height: 100vh;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading font-semibold;
+  }
+
+  /* Custom Scrollbar Styles */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 194, 255, 0.15);
+    border-radius: 10px;
+    transition: all 0.3s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 194, 255, 0.4);
+  }
+
+  /* Support for Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 194, 255, 0.15) transparent;
+  }
+}
+
