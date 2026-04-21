@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useBlocker } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -13,6 +14,7 @@ import {
   Zap,
   AlertCircle,
   CheckCircle2,
+  Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { alarmApi } from '@/lib/alarm-api';
@@ -36,6 +38,30 @@ interface SopDraft {
   steps: SopStep[];
 }
 
+interface ConnectorOption {
+  Id?: string;
+  id?: string;
+  Name?: string;
+  name?: string;
+}
+
+interface FlashMessage {
+  type: 'success' | 'error';
+  text: string;
+}
+
+interface ConfirmDialogState {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  neutralLabel?: string;
+  onConfirm: () => void;
+  onCancel?: () => void;
+  onNeutral?: () => void;
+}
+
 function emptyDraft(): SopDraft {
   return {
     id: null,
@@ -50,9 +76,9 @@ function normalizeSteps(steps: SopStep[]): SopStep[] {
   return steps.map((s, idx) => ({ ...s, step_order: idx + 1 }));
 }
 
-interface FlashMessage {
-  type: 'success' | 'error';
-  text: string;
+function cloneDraft(value: SopDraft | null): SopDraft | null {
+  if (!value) return null;
+  return JSON.parse(JSON.stringify(value)) as SopDraft;
 }
 
 export function SopBuilderSection() {
@@ -60,20 +86,37 @@ export function SopBuilderSection() {
 
   const [keyword, setKeyword] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pendingSelectId, setPendingSelectId] = useState<string | null>(null);
   const [draft, setDraft] = useState<SopDraft | null>(null);
+  const [originalDraft, setOriginalDraft] = useState<SopDraft | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [flash, setFlash] = useState<FlashMessage | null>(null);
+  const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [pendingNavBlocker, setPendingNavBlocker] = useState<any>(null);
 
   const connectorsQuery = useQuery({
     queryKey: ['connectors-list'],
     queryFn: priorityApi.getAllConnectors,
   });
 
-  const selectedConnectorId = useMemo(() => {
-    const firstConnector = (connectorsQuery.data?.Data ?? [])[0] as
-      | { Id?: string; id?: string }
-      | undefined;
-    return firstConnector?.Id ?? firstConnector?.id ?? null;
-  }, [connectorsQuery.data]);
+  const connectors = useMemo(
+    () => (connectorsQuery.data?.Data ?? []) as ConnectorOption[],
+    [connectorsQuery.data]
+  );
+
+  useEffect(() => {
+    if (!connectors.length) {
+      setSelectedConnectorId(null);
+      return;
+    }
+    const hasCurrent = connectors.some(
+      (connector) => (connector.Id ?? connector.id) === selectedConnectorId
+    );
+    if (!selectedConnectorId || !hasCurrent) {
+      setSelectedConnectorId(connectors[0].Id ?? connectors[0].id ?? null);
+    }
+  }, [connectors, selectedConnectorId]);
 
   const cameraOptionsQuery = useQuery({
     queryKey: ['camera-dropdown', selectedConnectorId],
@@ -86,18 +129,13 @@ export function SopBuilderSection() {
     [cameraOptionsQuery.data]
   );
 
-  // --- List query ---
   const listQuery = useQuery({
     queryKey: ['sop-list', keyword],
-    queryFn: () =>
-      sopApi.getPaged({ Keyword: keyword, Page: 1, PageSize: 200 }),
+    queryFn: () => sopApi.getPaged({ Keyword: keyword, Page: 1, PageSize: 200 }),
   });
 
   const sopList = useMemo(() => listQuery.data?.Data ?? [], [listQuery.data]);
-
-  // --- Detail query ---
-  const detailEnabled =
-    !!selectedId && selectedId !== NEW_DRAFT_ID;
+  const detailEnabled = !!selectedId && selectedId !== NEW_DRAFT_ID;
 
   const detailQuery = useQuery({
     queryKey: ['sop-detail', selectedId],
@@ -105,19 +143,25 @@ export function SopBuilderSection() {
     enabled: detailEnabled,
   });
 
-  // --- Sync draft with selected SOP / new flow ---
   useEffect(() => {
     if (!selectedId) {
       setDraft(null);
+      setOriginalDraft(null);
+      setIsEditing(false);
       return;
     }
+
     if (selectedId === NEW_DRAFT_ID) {
-      setDraft(emptyDraft());
+      const created = emptyDraft();
+      setDraft(created);
+      setOriginalDraft(cloneDraft(created));
+      setIsEditing(true);
       return;
     }
+
     const detail = detailQuery.data?.Data;
     if (detail && detail.id === selectedId) {
-      setDraft({
+      const loadedDraft: SopDraft = {
         id: detail.id,
         name: detail.name ?? '',
         description: detail.description ?? '',
@@ -136,18 +180,37 @@ export function SopBuilderSection() {
             action_payload: s.action_payload ?? {},
           }))
         ),
-      });
+      };
+      setDraft(loadedDraft);
+      setOriginalDraft(cloneDraft(loadedDraft));
+      setIsEditing(false);
     }
   }, [selectedId, detailQuery.data]);
 
-  // --- Auto dismiss flash ---
   useEffect(() => {
     if (!flash) return;
     const t = setTimeout(() => setFlash(null), 4000);
     return () => clearTimeout(t);
   }, [flash]);
 
-  // --- Mutations ---
+  const isDirty = useMemo(() => {
+    if (!isEditing || !draft || !originalDraft) return false;
+    return JSON.stringify(draft) !== JSON.stringify(originalDraft);
+  }, [draft, originalDraft, isEditing]);
+
+  const closeDialog = () => setConfirmDialog(null);
+
+  const proceedPendingActions = () => {
+    if (pendingSelectId !== null) {
+      setSelectedId(pendingSelectId);
+      setPendingSelectId(null);
+    }
+    if (pendingNavBlocker) {
+      pendingNavBlocker.proceed();
+      setPendingNavBlocker(null);
+    }
+  };
+
   const createMutation = useMutation({
     mutationFn: sopApi.create,
     onSuccess: (res) => {
@@ -155,21 +218,21 @@ export function SopBuilderSection() {
         setFlash({ type: 'success', text: 'Thêm SOP thành công.' });
         queryClient.invalidateQueries({ queryKey: ['sop-list'] });
         const newId = (res as any).Data as string | undefined;
-        if (newId) setSelectedId(newId);
+        if (newId) {
+          setSelectedId(newId);
+        }
+        setIsEditing(false);
+        setOriginalDraft(cloneDraft(draft));
+        closeDialog();
+        proceedPendingActions();
       } else {
-        setFlash({
-          type: 'error',
-          text: res.Message || 'Không thể thêm SOP.',
-        });
+        setFlash({ type: 'error', text: res.Message || 'Không thể thêm SOP.' });
       }
     },
     onError: (err: any) => {
       setFlash({
         type: 'error',
-        text:
-          err?.response?.data?.Message ||
-          err?.message ||
-          'Lỗi khi thêm SOP.',
+        text: err?.response?.data?.Message || err?.message || 'Lỗi khi thêm SOP.',
       });
     },
   });
@@ -181,20 +244,18 @@ export function SopBuilderSection() {
         setFlash({ type: 'success', text: 'Cập nhật SOP thành công.' });
         queryClient.invalidateQueries({ queryKey: ['sop-list'] });
         queryClient.invalidateQueries({ queryKey: ['sop-detail', selectedId] });
+        setOriginalDraft(cloneDraft(draft));
+        setIsEditing(false);
+        closeDialog();
+        proceedPendingActions();
       } else {
-        setFlash({
-          type: 'error',
-          text: res.Message || 'Không thể cập nhật SOP.',
-        });
+        setFlash({ type: 'error', text: res.Message || 'Không thể cập nhật SOP.' });
       }
     },
     onError: (err: any) => {
       setFlash({
         type: 'error',
-        text:
-          err?.response?.data?.Message ||
-          err?.message ||
-          'Lỗi khi cập nhật SOP.',
+        text: err?.response?.data?.Message || err?.message || 'Lỗi khi cập nhật SOP.',
       });
     },
   });
@@ -208,23 +269,18 @@ export function SopBuilderSection() {
         if (selectedId === id) {
           setSelectedId(null);
           setDraft(null);
+          setOriginalDraft(null);
+          setIsEditing(false);
         }
       } else {
-        setFlash({
-          type: 'error',
-          text: res.Message || 'Không thể xóa SOP.',
-        });
+        setFlash({ type: 'error', text: res.Message || 'Không thể xóa SOP.' });
       }
     },
     onError: (err: any) => {
-      setFlash({
-        type: 'error',
-        text: err?.message || 'Lỗi khi xóa SOP.',
-      });
+      setFlash({ type: 'error', text: err?.message || 'Lỗi khi xóa SOP.' });
     },
   });
 
-  // --- Draft mutators ---
   const patchDraft = (patch: Partial<SopDraft>) =>
     setDraft((d) => (d ? { ...d, ...patch } : d));
 
@@ -233,10 +289,7 @@ export function SopBuilderSection() {
       d
         ? {
             ...d,
-            triggers: [
-              ...d.triggers,
-              { vms_camera_id: '', event_name: '' },
-            ],
+            triggers: [...d.triggers, { vms_camera_id: '', event_name: '' }],
           }
         : d
     );
@@ -246,9 +299,7 @@ export function SopBuilderSection() {
       d
         ? {
             ...d,
-            triggers: d.triggers.map((t, i) =>
-              i === idx ? { ...t, ...patch } : t
-            ),
+            triggers: d.triggers.map((t, i) => (i === idx ? { ...t, ...patch } : t)),
           }
         : d
     );
@@ -308,7 +359,6 @@ export function SopBuilderSection() {
       return { ...d, steps: normalizeSteps(clone) };
     });
 
-  // --- Save handler ---
   const handleSave = () => {
     if (!draft) return;
 
@@ -357,241 +407,346 @@ export function SopBuilderSection() {
   };
 
   const handleDelete = (id: string, name: string) => {
-    if (!window.confirm(`Xóa SOP "${name}"? Thao tác này không thể hoàn tác.`)) {
-      return;
-    }
-    deleteMutation.mutate(id);
+    setConfirmDialog({
+      open: true,
+      title: 'Xóa SOP',
+      message: `Xóa SOP "${name}"? Thao tác này không thể hoàn tác.`,
+      confirmLabel: 'Xóa',
+      cancelLabel: 'Hủy',
+      onConfirm: () => {
+        closeDialog();
+        deleteMutation.mutate(id);
+      },
+      onCancel: closeDialog,
+    });
   };
 
-  const isSaving =
-    createMutation.isPending || updateMutation.isPending;
+  const requestSelect = (id: string) => {
+    if (!isDirty) {
+      setSelectedId(id);
+      return;
+    }
+    setPendingSelectId(id);
+    setConfirmDialog({
+      open: true,
+      title: 'Bạn có thay đổi chưa lưu',
+      message: 'Bạn muốn lưu thay đổi trước khi chuyển SOP không?',
+      confirmLabel: 'Lưu',
+      neutralLabel: 'Không lưu',
+      cancelLabel: 'Hủy',
+      onConfirm: () => handleSave(),
+      onNeutral: () => {
+        closeDialog();
+        if (originalDraft) {
+          setDraft(cloneDraft(originalDraft));
+        }
+        proceedPendingActions();
+      },
+      onCancel: () => {
+        setPendingSelectId(null);
+        closeDialog();
+      },
+    });
+  };
 
-  const filteredList = sopList; // Server-side search đã lọc theo keyword
+  const blocker: any = useBlocker({
+    shouldBlockFn: () => isDirty,
+    withResolver: true,
+    disabled: !isDirty,
+    enableBeforeUnload: false,
+  } as any);
+
+  useEffect(() => {
+    if (!blocker || blocker.status !== 'blocked' || !isDirty) return;
+    setPendingNavBlocker(blocker);
+    setConfirmDialog({
+      open: true,
+      title: 'Bạn có thay đổi chưa lưu',
+      message: 'Bạn muốn lưu thay đổi trước khi rời trang không?',
+      confirmLabel: 'Lưu',
+      neutralLabel: 'Không lưu',
+      cancelLabel: 'Hủy',
+      onConfirm: () => handleSave(),
+      onNeutral: () => {
+        closeDialog();
+        if (originalDraft) {
+          setDraft(cloneDraft(originalDraft));
+        }
+        if (blocker.proceed) {
+          blocker.proceed();
+        }
+        setPendingNavBlocker(null);
+      },
+      onCancel: () => {
+        closeDialog();
+        if (blocker.reset) {
+          blocker.reset();
+        }
+        setPendingNavBlocker(null);
+      },
+    });
+  }, [blocker, isDirty, originalDraft]);
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+  const filteredList = sopList;
 
   return (
-    <div className="flex h-full gap-4 overflow-hidden">
-      {/* LEFT: SOP list */}
-      <aside className="w-[260px] shrink-0 flex flex-col bg-bg1 border border-white/5 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between shrink-0">
-          <h3 className="text-[11px] font-bold text-t-2 uppercase tracking-[0.2em]">
-            Loại Incident
-          </h3>
-          <button
-            onClick={() => listQuery.refetch()}
-            className="p-1 hover:bg-white/5 rounded text-t-2 transition-colors"
-            title="Tải lại"
-          >
-            <RefreshCcw
-              size={12}
-              className={listQuery.isFetching ? 'animate-spin' : ''}
-            />
-          </button>
-        </div>
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="px-1 pb-3 shrink-0">
+        <h2 className="text-[15px] font-bold text-white">Quản lý quy trình xử lý sự cố</h2>
+      </div>
 
-        <div className="p-3 shrink-0">
-          <div className="relative">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-t-2"
-              size={13}
-            />
-            <input
-              className="w-full bg-black/20 border border-white/10 rounded-lg h-9 pl-9 pr-4 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all"
-              placeholder="Tìm SOP theo tên"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-            />
+      <div className="flex flex-1 gap-4 overflow-hidden">
+        <aside className="w-[260px] shrink-0 flex flex-col bg-bg1 border border-white/5 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between shrink-0">
+            <h3 className="text-[11px] font-bold text-t-2 uppercase tracking-[0.2em]">
+              Danh sách SOP
+            </h3>
+            <button
+              onClick={() => listQuery.refetch()}
+              className="p-1 hover:bg-white/5 rounded text-t-2 transition-colors"
+              title="Tải lại"
+            >
+              <RefreshCcw size={12} className={listQuery.isFetching ? 'animate-spin' : ''} />
+            </button>
           </div>
-        </div>
 
-        <div className="flex-1 overflow-y-auto scrollbar-thin px-3 pb-3 flex flex-col gap-1.5">
-          {filteredList.map((sop) => {
-            const active = selectedId === sop.Id;
-            return (
-              <div
-                key={sop.Id}
-                onClick={() => setSelectedId(sop.Id)}
-                className={cn(
-                  'group px-3 py-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between',
-                  active
-                    ? 'bg-psim-accent/15 border-psim-accent/20'
-                    : 'bg-white/[0.02] border-white/5 hover:border-psim-accent/30 hover:bg-white/5'
-                )}
-              >
-                <div className="min-w-0 flex-1">
-                  <div
-                    className={cn(
-                      'text-[12px] font-semibold truncate',
-                      active ? 'text-psim-accent' : 'text-t-1'
-                    )}
-                  >
-                    {sop.Name}
-                  </div>
-                  {sop.Description && (
-                    <div className="text-[10px] text-t-2 truncate mt-0.5">
-                      {sop.Description}
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(sop.Id, sop.Name);
-                  }}
-                  className="ml-2 p-1 rounded text-t-2 hover:text-psim-red hover:bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Xóa SOP"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            );
-          })}
-
-          {!listQuery.isLoading && filteredList.length === 0 && (
-            <div className="py-8 text-center opacity-30 text-[10px] uppercase font-bold tracking-widest">
-              Chưa có SOP
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={() => {
-            setSelectedId(NEW_DRAFT_ID);
-          }}
-          className="shrink-0 mx-3 mb-3 h-9 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-psim-accent/15 border border-psim-accent/20 text-psim-accent hover:bg-psim-accent/20 transition-all flex items-center justify-center gap-2"
-        >
-          <Plus size={14} />
-          Thêm loại mới
-        </button>
-      </aside>
-
-      {/* RIGHT: Editor */}
-      <main className="flex-1 flex flex-col bg-bg1 border border-white/5 rounded-xl overflow-hidden">
-        {!draft ? (
-          <EmptyEditorState />
-        ) : (
-          <>
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-white/5 flex items-center gap-3 shrink-0">
-              <div className="flex items-center gap-2 text-t-2 text-[11px] font-bold uppercase tracking-widest shrink-0">
-                <ClipboardList size={14} />
-                SOP
-              </div>
-              <input
-                value={draft.name}
-                onChange={(e) => patchDraft({ name: e.target.value })}
-                placeholder="Tên SOP (bắt buộc)"
-                className="flex-1 bg-transparent text-[16px] font-bold text-white outline-none border-b border-white/10 focus:border-psim-accent/60 transition-all pb-1"
+          <div className="p-3 shrink-0">
+            <div className="relative">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-t-2"
+                size={13}
               />
-              <button
-                onClick={addStep}
-                className="h-9 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-white/5 border border-white/10 text-t-1 hover:bg-white/10 transition-all flex items-center gap-2"
-              >
-                <Plus size={14} />
-                Thêm bước
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="h-9 px-4 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-psim-accent text-bg0 hover:brightness-110 shadow-lg shadow-psim-accent/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-              >
-                <Save size={14} />
-                {isSaving ? 'Đang lưu...' : 'Lưu SOP'}
-              </button>
+              <input
+                className="w-full bg-black/20 border border-white/10 rounded-lg h-9 pl-9 pr-4 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all"
+                placeholder="Tìm SOP theo tên"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+              />
             </div>
+          </div>
 
-            {/* Flash */}
-            {flash && (
-              <div
-                className={cn(
-                  'mx-5 mt-4 px-4 py-2.5 rounded-lg text-[11px] font-semibold flex items-center gap-2 border',
-                  flash.type === 'success'
-                    ? 'bg-psim-green/10 border-psim-green/40 text-psim-green'
-                    : 'bg-psim-red/10 border-psim-red/40 text-psim-red'
-                )}
-              >
-                {flash.type === 'success' ? (
-                  <CheckCircle2 size={14} />
-                ) : (
-                  <AlertCircle size={14} />
-                )}
-                <span>{flash.text}</span>
-                <button
-                  onClick={() => setFlash(null)}
-                  className="ml-auto text-current opacity-60 hover:opacity-100"
+          <div className="flex-1 overflow-y-auto scrollbar-thin px-3 pb-3 flex flex-col gap-1.5">
+            {filteredList.map((sop) => {
+              const active = selectedId === sop.Id;
+              return (
+                <div
+                  key={sop.Id}
+                  onClick={() => requestSelect(sop.Id)}
+                  className={cn(
+                    'group px-3 py-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between',
+                    active
+                      ? 'bg-psim-accent/15 border-psim-accent/20'
+                      : 'bg-white/[0.02] border-white/5 hover:border-psim-accent/30 hover:bg-white/5'
+                  )}
                 >
-                  <X size={12} />
-                </button>
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className={cn(
+                        'text-[12px] font-semibold truncate',
+                        active ? 'text-psim-accent' : 'text-t-1'
+                      )}
+                    >
+                      {sop.Name}
+                    </div>
+                    {sop.Description && (
+                      <div className="text-[10px] text-t-2 truncate mt-0.5">{sop.Description}</div>
+                    )}
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(sop.Id, sop.Name);
+                    }}
+                    className="ml-2 p-1 rounded text-t-2 hover:text-psim-red hover:bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Xóa SOP"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              );
+            })}
+
+            {!listQuery.isLoading && filteredList.length === 0 && (
+              <div className="py-8 text-center opacity-30 text-[10px] uppercase font-bold tracking-widest">
+                Chưa có SOP
               </div>
             )}
+          </div>
 
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 flex flex-col gap-5">
-              {/* Description */}
-              <section>
-                <label className="text-[10px] font-bold text-t-2 uppercase tracking-[0.2em] block mb-1.5">
-                  Mô tả
-                </label>
-                <textarea
-                  value={draft.description}
-                  onChange={(e) =>
-                    patchDraft({ description: e.target.value })
-                  }
-                  rows={2}
-                  placeholder="Mô tả ngắn gọn SOP này xử lý tình huống gì..."
-                  className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white outline-none focus:border-psim-accent/50 transition-all resize-none"
+          <button
+            onClick={() => requestSelect(NEW_DRAFT_ID)}
+            className="shrink-0 mx-3 mb-3 h-9 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-psim-accent/15 border border-psim-accent/20 text-psim-accent hover:bg-psim-accent/20 transition-all flex items-center justify-center gap-2"
+          >
+            <Plus size={14} />
+            Thêm loại mới
+          </button>
+        </aside>
+
+        <main className="flex-1 flex flex-col bg-bg1 border border-white/5 rounded-xl overflow-hidden">
+          {!draft ? (
+            <EmptyEditorState />
+          ) : (
+            <>
+              <div className="px-5 py-4 border-b border-white/5 flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2 text-[16px] font-bold text-white shrink-0">
+                  <ClipboardList size={15} />
+                  SOP:
+                </div>
+                <input
+                  value={draft.name}
+                  onChange={(e) => patchDraft({ name: e.target.value })}
+                  placeholder="Tên SOP (bắt buộc)"
+                  disabled={!isEditing}
+                  className="flex-1 bg-transparent text-[16px] font-bold text-white outline-none border-b border-white/10 focus:border-psim-accent/60 transition-all pb-1 disabled:opacity-100 disabled:text-white disabled:cursor-default"
                 />
-              </section>
+                {!isEditing ? (
+                  <button
+                    key="edit-mode-button"
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                      e.currentTarget.blur();
+                      setIsEditing(true);
+                    }}
+                    className="h-9 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-psim-accent text-bg0 hover:brightness-110 shadow-lg shadow-psim-accent/20 transition-all flex items-center gap-2"
+                  >
+                    <Pencil size={14} />
+                    Chỉnh sửa
+                  </button>
+                ) : (
+                  <button
+                    key="cancel-mode-button"
+                    type="button"
+                    onClick={(e) => {
+                      e.currentTarget.blur();
+                      setDraft(cloneDraft(originalDraft));
+                      setIsEditing(false);
+                    }}
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="h-9 px-3 rounded-lg text-[12px] font-semibold tracking-normal normal-case bg-psim-red/15 border border-psim-red/30 text-psim-red hover:bg-psim-red/20 flex items-center gap-2 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none active:outline-none active:ring-0 [WebkitTapHighlightColor:transparent]"
+                  >
+                    <X size={14} />
+                    Hủy
+                  </button>
+                )}
+                {isEditing && (
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving || !isDirty}
+                    className={cn(
+                      'h-9 px-4 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-psim-accent text-bg0 shadow-lg shadow-psim-accent/20 transition-all flex items-center gap-2',
+                      isDirty && !isSaving
+                        ? 'hover:brightness-110'
+                        : 'saturate-50 opacity-80 cursor-not-allowed'
+                    )}
+                  >
+                    <Save size={14} />
+                    {isSaving ? 'Đang lưu...' : 'Lưu SOP'}
+                  </button>
+                )}
+              </div>
 
-              {/* Triggers */}
-              <TriggersEditor
-                cameraOptions={cameraOptions}
-                cameraLoading={cameraOptionsQuery.isLoading}
-                triggers={draft.triggers}
-                onAdd={addTrigger}
-                onUpdate={updateTrigger}
-                onRemove={removeTrigger}
-              />
+              {flash && (
+                <div
+                  className={cn(
+                    'mx-5 mt-4 px-4 py-2.5 rounded-lg text-[11px] font-semibold flex items-center gap-2 border',
+                    flash.type === 'success'
+                      ? 'bg-psim-green/10 border-psim-green/40 text-psim-green'
+                      : 'bg-psim-red/10 border-psim-red/40 text-psim-red'
+                  )}
+                >
+                  {flash.type === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                  <span>{flash.text}</span>
+                  <button
+                    onClick={() => setFlash(null)}
+                    className="ml-auto text-current opacity-60 hover:opacity-100"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
 
-              {/* Steps */}
-              <StepsEditor
-                cameraOptions={cameraOptions}
-                cameraLoading={cameraOptionsQuery.isLoading}
-                steps={draft.steps}
-                onAdd={addStep}
-                onUpdate={updateStep}
-                onRemove={removeStep}
-                onMove={moveStep}
-              />
+              <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 flex flex-col gap-5">
+                <section>
+                  <label className="text-[10px] font-bold text-t-2 uppercase tracking-[0.2em] block mb-1.5">
+                    Mô tả
+                  </label>
+                  <textarea
+                    value={draft.description}
+                    onChange={(e) => patchDraft({ description: e.target.value })}
+                    rows={2}
+                    disabled={!isEditing}
+                    placeholder="Mô tả ngắn gọn SOP này xử lý tình huống gì..."
+                    className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white outline-none focus:border-psim-accent/50 transition-all resize-none disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
+                  />
+                </section>
 
-            </div>
-          </>
-        )}
-      </main>
+                <TriggersEditor
+                  readOnly={!isEditing}
+                  cameraOptions={cameraOptions}
+                  cameraLoading={cameraOptionsQuery.isLoading}
+                  connectors={connectors}
+                  connectorsLoading={connectorsQuery.isLoading}
+                  selectedConnectorId={selectedConnectorId}
+                  onConnectorChange={setSelectedConnectorId}
+                  triggers={draft.triggers}
+                  onAdd={addTrigger}
+                  onUpdate={updateTrigger}
+                  onRemove={removeTrigger}
+                />
+
+                <StepsEditor
+                  readOnly={!isEditing}
+                  cameraOptions={cameraOptions}
+                  cameraLoading={cameraOptionsQuery.isLoading}
+                  steps={draft.steps}
+                  onAdd={addStep}
+                  onUpdate={updateStep}
+                  onRemove={removeStep}
+                  onMove={moveStep}
+                />
+              </div>
+            </>
+          )}
+        </main>
+      </div>
+
+      <ConfirmDialog
+        open={!!confirmDialog?.open}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        confirmLabel={confirmDialog?.confirmLabel}
+        cancelLabel={confirmDialog?.cancelLabel}
+        neutralLabel={confirmDialog?.neutralLabel}
+        onConfirm={() => confirmDialog?.onConfirm?.()}
+        onCancel={() => confirmDialog?.onCancel?.()}
+        onNeutral={() => confirmDialog?.onNeutral?.()}
+      />
     </div>
   );
 }
-
-// ---------- Sub-components ----------
 
 function EmptyEditorState() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center opacity-30 gap-3">
       <Zap size={42} />
       <div className="text-center">
-        <div className="text-[13px] font-bold uppercase tracking-widest">
-          Chưa chọn SOP
-        </div>
-        <div className="text-[11px] mt-1">
-          Chọn 1 SOP ở cột trái hoặc bấm "Thêm loại mới" để bắt đầu.
-        </div>
+        <div className="text-[13px] font-bold uppercase tracking-widest">Chưa chọn SOP</div>
+        <div className="text-[11px] mt-1">Chọn 1 SOP ở cột trái hoặc bấm "Thêm loại mới" để bắt đầu.</div>
       </div>
     </div>
   );
 }
 
 interface TriggersEditorProps {
+  readOnly: boolean;
   cameraOptions: CameraDropdownOption[];
   cameraLoading: boolean;
+  connectors: ConnectorOption[];
+  connectorsLoading: boolean;
+  selectedConnectorId: string | null;
+  onConnectorChange: (value: string) => void;
   triggers: SopTrigger[];
   onAdd: () => void;
   onUpdate: (idx: number, patch: Partial<SopTrigger>) => void;
@@ -599,8 +754,13 @@ interface TriggersEditorProps {
 }
 
 function TriggersEditor({
+  readOnly,
   cameraOptions,
   cameraLoading,
+  connectors,
+  connectorsLoading,
+  selectedConnectorId,
+  onConnectorChange,
   triggers,
   onAdd,
   onUpdate,
@@ -608,17 +768,44 @@ function TriggersEditor({
 }: TriggersEditorProps) {
   return (
     <section>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 gap-3">
         <label className="text-[10px] font-bold text-t-2 uppercase tracking-[0.2em]">
           Thiết bị kích hoạt SOP
         </label>
-        <button
-          onClick={onAdd}
-          className="text-[10px] font-bold uppercase tracking-wider text-psim-accent hover:text-white transition-colors flex items-center gap-1"
-        >
-          <Plus size={12} />
-          Thêm trigger
-        </button>
+        {!readOnly && (
+          <div className="flex items-center gap-3">
+            <select
+              value={selectedConnectorId ?? ''}
+              onChange={(e) => onConnectorChange(e.target.value)}
+              disabled={connectorsLoading || connectors.length === 0}
+              className="min-w-[180px] bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
+            >
+              <option value="" className="bg-[#161b2e]">
+                {connectorsLoading
+                  ? 'Đang tải VMS...'
+                  : connectors.length === 0
+                    ? 'Chưa có hệ thống VMS'
+                    : 'Chọn hệ thống VMS'}
+              </option>
+              {connectors.map((connector) => {
+                const id = connector.Id ?? connector.id ?? '';
+                const name = connector.Name ?? connector.name ?? id;
+                return (
+                  <option key={id} value={id} className="bg-[#161b2e]">
+                    {name}
+                  </option>
+                );
+              })}
+            </select>
+            <button
+              onClick={onAdd}
+              className="text-[10px] font-bold uppercase tracking-wider text-psim-accent hover:text-white transition-colors flex items-center gap-1"
+            >
+              <Plus size={12} />
+              Thêm thiết bị kích hoạt
+            </button>
+          </div>
+        )}
       </div>
 
       {triggers.length === 0 ? (
@@ -634,11 +821,9 @@ function TriggersEditor({
             >
               <select
                 value={t.vms_camera_id}
-                onChange={(e) =>
-                  onUpdate(idx, { vms_camera_id: e.target.value })
-                }
-                disabled={cameraLoading || cameraOptions.length === 0}
-                className="bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-60"
+                onChange={(e) => onUpdate(idx, { vms_camera_id: e.target.value })}
+                disabled={readOnly || cameraLoading || cameraOptions.length === 0}
+                className="bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
               >
                 <option value="" className="bg-[#161b2e]">
                   {cameraLoading
@@ -654,30 +839,27 @@ function TriggersEditor({
                     </option>
                   )}
                 {cameraOptions.map((camera) => (
-                  <option
-                    key={camera.id}
-                    value={camera.id}
-                    className="bg-[#161b2e]"
-                  >
+                  <option key={camera.id} value={camera.id} className="bg-[#161b2e]">
                     {camera.name}
                   </option>
                 ))}
               </select>
               <input
                 value={t.event_name}
-                onChange={(e) =>
-                  onUpdate(idx, { event_name: e.target.value })
-                }
+                onChange={(e) => onUpdate(idx, { event_name: e.target.value })}
+                disabled={readOnly}
                 placeholder="Event name (vd: LPR_UNKNOWN)"
-                className="bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all"
+                className="bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
               />
-              <button
-                onClick={() => onRemove(idx)}
-                className="h-8 w-8 flex items-center justify-center rounded text-t-2 hover:text-psim-red hover:bg-white/5 transition-colors"
-                title="Xóa trigger"
-              >
-                <X size={14} />
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={() => onRemove(idx)}
+                  className="h-8 w-8 flex items-center justify-center rounded text-t-2 hover:text-psim-red hover:bg-white/5 transition-colors"
+                  title="Xóa trigger"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -687,6 +869,7 @@ function TriggersEditor({
 }
 
 interface StepsEditorProps {
+  readOnly: boolean;
   cameraOptions: CameraDropdownOption[];
   cameraLoading: boolean;
   steps: SopStep[];
@@ -697,6 +880,7 @@ interface StepsEditorProps {
 }
 
 function StepsEditor({
+  readOnly,
   cameraOptions,
   cameraLoading,
   steps,
@@ -708,16 +892,16 @@ function StepsEditor({
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
-        <label className="text-[10px] font-bold text-t-2 uppercase tracking-[0.2em]">
-          Các bước xử lý
-        </label>
-        <button
-          onClick={onAdd}
-          className="text-[10px] font-bold uppercase tracking-wider text-psim-accent hover:text-white transition-colors flex items-center gap-1"
-        >
-          <Plus size={12} />
-          Thêm bước
-        </button>
+        <label className="text-[10px] font-bold text-t-2 uppercase tracking-[0.2em]">Các bước xử lý</label>
+        {!readOnly && (
+          <button
+            onClick={onAdd}
+            className="text-[10px] font-bold uppercase tracking-wider text-psim-accent hover:text-white transition-colors flex items-center gap-1"
+          >
+            <Plus size={12} />
+            Thêm bước
+          </button>
+        )}
       </div>
 
       {steps.length === 0 ? (
@@ -738,26 +922,20 @@ function StepsEditor({
               <div className="flex-1 grid grid-cols-12 gap-2">
                 <input
                   value={s.step_name}
-                  onChange={(e) =>
-                    onUpdate(idx, { step_name: e.target.value })
-                  }
+                  onChange={(e) => onUpdate(idx, { step_name: e.target.value })}
+                  disabled={readOnly}
                   placeholder="Tên bước (vd: Kiểm tra biển số với whitelist BMS)"
-                  className="col-span-12 bg-black/20 border border-white/10 rounded h-8 px-2 text-[12px] text-white outline-none focus:border-psim-accent/50 transition-all"
+                  className="col-span-12 bg-black/20 border border-white/10 rounded h-8 px-2 text-[12px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
                 />
 
                 <select
                   value={s.execution_type}
-                  onChange={(e) =>
-                    onUpdate(idx, { execution_type: e.target.value })
-                  }
-                  className="col-span-3 bg-black/40 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all cursor-pointer"
+                  onChange={(e) => onUpdate(idx, { execution_type: e.target.value })}
+                  disabled={readOnly}
+                  className="col-span-3 bg-black/40 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
                 >
                   {EXECUTION_TYPES.map((t) => (
-                    <option
-                      key={t.value}
-                      value={t.value}
-                      className="bg-[#161b2e]"
-                    >
+                    <option key={t.value} value={t.value} className="bg-[#161b2e]">
                       {t.label}
                     </option>
                   ))}
@@ -770,8 +948,8 @@ function StepsEditor({
                       target_device_id: e.target.value || null,
                     })
                   }
-                  disabled={cameraLoading || cameraOptions.length === 0}
-                  className="col-span-5 bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all cursor-pointer disabled:opacity-60"
+                  disabled={readOnly || cameraLoading || cameraOptions.length === 0}
+                  className="col-span-5 bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
                 >
                   <option value="" className="bg-[#161b2e]">
                     {cameraLoading
@@ -781,22 +959,13 @@ function StepsEditor({
                         : 'Chọn thiết bị'}
                   </option>
                   {s.target_device_id &&
-                    !cameraOptions.some(
-                      (camera) => camera.id === s.target_device_id
-                    ) && (
-                      <option
-                        value={s.target_device_id}
-                        className="bg-[#161b2e]"
-                      >
+                    !cameraOptions.some((camera) => camera.id === s.target_device_id) && (
+                      <option value={s.target_device_id} className="bg-[#161b2e]">
                         {s.target_device_id}
                       </option>
                     )}
                   {cameraOptions.map((camera) => (
-                    <option
-                      key={camera.id}
-                      value={camera.id}
-                      className="bg-[#161b2e]"
-                    >
+                    <option key={camera.id} value={camera.id} className="bg-[#161b2e]">
                       {camera.name}
                     </option>
                   ))}
@@ -804,44 +973,113 @@ function StepsEditor({
 
                 <input
                   value={s.action_code}
-                  onChange={(e) =>
-                    onUpdate(idx, { action_code: e.target.value })
-                  }
+                  onChange={(e) => onUpdate(idx, { action_code: e.target.value })}
+                  disabled={readOnly}
                   placeholder="Action code"
-                  className="col-span-4 bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all"
+                  className="col-span-4 bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
                 />
               </div>
 
-              <div className="shrink-0 flex flex-col gap-1">
-                <button
-                  onClick={() => onMove(idx, -1)}
-                  disabled={idx === 0}
-                  className="h-6 w-6 flex items-center justify-center rounded text-t-2 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                  title="Lên"
-                >
-                  <ArrowUp size={12} />
-                </button>
-                <button
-                  onClick={() => onMove(idx, 1)}
-                  disabled={idx === steps.length - 1}
-                  className="h-6 w-6 flex items-center justify-center rounded text-t-2 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                  title="Xuống"
-                >
-                  <ArrowDown size={12} />
-                </button>
-              </div>
+              {!readOnly && (
+                <>
+                  <div className="shrink-0 flex flex-col gap-1">
+                    <button
+                      onClick={() => onMove(idx, -1)}
+                      disabled={idx === 0}
+                      className="h-6 w-6 flex items-center justify-center rounded text-t-2 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Lên"
+                    >
+                      <ArrowUp size={12} />
+                    </button>
+                    <button
+                      onClick={() => onMove(idx, 1)}
+                      disabled={idx === steps.length - 1}
+                      className="h-6 w-6 flex items-center justify-center rounded text-t-2 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Xuống"
+                    >
+                      <ArrowDown size={12} />
+                    </button>
+                  </div>
 
-              <button
-                onClick={() => onRemove(idx)}
-                className="shrink-0 h-8 w-8 flex items-center justify-center rounded text-t-2 hover:text-psim-red hover:bg-white/5 transition-colors"
-                title="Xóa bước"
-              >
-                <X size={14} />
-              </button>
+                  <button
+                    onClick={() => onRemove(idx)}
+                    className="shrink-0 h-8 w-8 flex items-center justify-center rounded text-t-2 hover:text-psim-red hover:bg-white/5 transition-colors"
+                    title="Xóa bước"
+                  >
+                    <X size={14} />
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>
       )}
     </section>
+  );
+}
+
+function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'Đồng ý',
+  cancelLabel = 'Hủy',
+  neutralLabel,
+  onConfirm,
+  onCancel,
+  onNeutral,
+}: {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  neutralLabel?: string;
+  onConfirm: () => void;
+  onCancel?: () => void;
+  onNeutral?: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onCancel?.();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onCancel]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[1px] flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-bg1 border border-white/10 rounded-xl shadow-2xl shadow-black/40 p-4">
+        <div className="text-[14px] font-semibold text-white">{title}</div>
+        <div className="mt-2 text-[12px] text-t-2 leading-relaxed">{message}</div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="h-9 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-psim-red/15 border border-psim-red/30 text-psim-red hover:bg-psim-red/20 transition-all"
+          >
+            {cancelLabel}
+          </button>
+          {neutralLabel && (
+            <button
+              onClick={onNeutral}
+              className="h-9 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-white/5 border border-white/10 text-t-1 hover:bg-white/10 transition-all"
+            >
+              {neutralLabel}
+            </button>
+          )}
+          <button
+            onClick={onConfirm}
+            className="h-9 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-psim-accent text-bg0 hover:brightness-110 transition-all"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
