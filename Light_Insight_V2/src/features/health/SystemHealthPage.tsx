@@ -210,11 +210,20 @@ export function SystemHealthPage() {
   const connectors = healthResponse?.Data?.Connectors || [];
   const allInfrastructure = healthResponse?.Data?.Infrastructure || [];
 
-  // LỌC INFRASTRUCTURE THEO CONNECTOR ĐANG CHỌN
-  const filteredInfrastructure = useMemo(() => {
-    return allInfrastructure.filter(item => 
+  // LỌC VÀ NHÓM INFRASTRUCTURE THEO MÁY CHỦ (MACHINE)
+  const groupedInfrastructure = useMemo(() => {
+    const filtered = allInfrastructure.filter(item => 
       item.ConnectorId === selectedConnectorId || item.ConnectorId === 'LOCAL'
     );
+
+    const groups: Record<string, typeof allInfrastructure> = {};
+    filtered.forEach(item => {
+      const groupKey = item.MachineName || (item.ConnectorId === 'LOCAL' ? 'LOCAL' : 'Unknown');
+      if (!groups[groupKey]) groups[groupKey] = [];
+      groups[groupKey].push(item);
+    });
+
+    return groups;
   }, [allInfrastructure, selectedConnectorId]);
 
   return (
@@ -293,54 +302,68 @@ export function SystemHealthPage() {
               {/* <span className="text-[9px] font-bold text-psim-accent bg-psim-accent/10 px-2 py-0.5 rounded uppercase">{selectedConnectorId || 'Global'} View</span> */}
             </div>
             <div className="flex-1 overflow-y-auto px-3 pb-6 scrollbar-thin scrollbar-thumb-psim-accent/20">
-              <div className="flex flex-col gap-1">
-                {filteredInfrastructure.length > 0 ? filteredInfrastructure.map((item, i) => {
+              <div className="flex flex-col gap-4">
+                {Object.keys(groupedInfrastructure).length > 0 ? Object.entries(groupedInfrastructure).map(([machineName, items], mi) => {
+                  const machineStats = items.find(item => item.CpuUsage !== undefined);
                   return (
-                  <div key={i} className="flex items-center gap-3 px-3 py-2 bg-bg-2 border border-white/[0.03] rounded-[6px] hover:border-psim-accent/20 transition-all group">
-                    <div className="text-[15px] grayscale group-hover:grayscale-0 transition-all shrink-0">{item.Type === 'camera' ? '📷' : item.Type === 'storage' ? '💾' : '🖥️'}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className={cn("text-[12px] font-semibold tracking-tight truncate uppercase", item.Status === 'OFFLINE' ? "text-psim-red" : "text-t1")}>{item.Name}</div>
-                      <div className="text-[10px] text-t-2 font-mono uppercase tracking-tighter">{item.Description}</div>
-                      
-                      {item.Type === 'server' && item.CpuUsage !== undefined && item.CpuUsage !== null && (
-                        <div className="grid grid-cols-2 gap-x-4">
-                          <UsageBar label="CPU" value={item.CpuUsage} colorClass={item.CpuUsage > 80 ? "bg-psim-red" : "bg-psim-green"} />
-                          <UsageBar 
-                            label="RAM" 
-                            value={item.RamUsage || 0} 
-                            colorClass={(item.RamUsage || 0) > 80 ? "bg-psim-red" : "bg-psim-green"}
-                            detail={item.TotalRamGb ? `${item.FreeRamGb}GB free / ${item.TotalRamGb}GB` : undefined}
-                          />
-                          {item.Disks?.map((disk, di) => (
-                            <UsageBar 
-                              key={di} 
-                              label={`Disk ${disk.DriveName}`} 
-                              value={disk.UsagePercentage} 
-                              colorClass={disk.UsagePercentage > 90 ? "bg-psim-red" : "bg-psim-green"}
-                              detail={`${disk.FreeSpace}GB free / ${disk.TotalSize}GB`}
-                            />
-                          ))}
+                    <div key={mi} className="bg-bg-2/40 border border-white/5 rounded-xl overflow-hidden shadow-sm">
+                      {/* Machine Header with Hardware Metrics */}
+                      <div className="bg-white/5 px-4 py-2.5 flex flex-col gap-1 border-b border-white/5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-bold text-t0 uppercase tracking-tight">{machineName}</span>
+                          </div>
+                          {/* <div className="flex items-center gap-2">
+                            {machineStats ? <span className="text-[8px] text-psim-green font-bold uppercase tracking-widest">AGENT</span> : null}
+                          </div> */}
                         </div>
-                      )}
+                        
+                        {machineStats && (
+                          <div className="grid grid-cols-2 gap-x-4">
+                            <UsageBar label="CPU" value={machineStats.CpuUsage || 0} colorClass={machineStats.CpuUsage! > 80 ? "bg-psim-red" : "bg-psim-green"} />
+                            <UsageBar 
+                              label="RAM" 
+                              value={machineStats.RamUsage || 0} 
+                              colorClass={(machineStats.RamUsage || 0) > 80 ? "bg-psim-red" : "bg-psim-green"}
+                              detail={machineStats.TotalRamGb ? `${machineStats.FreeRamGb}GB free` : undefined}
+                            />
+                          </div>
+                        )}
+                      </div>
 
-                      {item.Type === 'storage' && item.Disks && item.Disks.length > 0 && (
-                        <div className="mt-1">
-                          {/* Try to find matching disk if the storage name contains a drive letter like (C:) */}
-                          {item.Disks.filter(d => item.Name.includes(d.DriveName.replace('\\','')) || item.Disks!.length === 1).map((disk, di) => (
-                            <UsageBar 
-                              key={di} 
-                              label="Usage" 
-                              value={disk.UsagePercentage} 
-                              colorClass={disk.UsagePercentage > 90 ? "bg-psim-red" : "bg-psim-green"}
-                              detail={`${disk.FreeSpace}GB free / ${disk.TotalSize}GB`}
-                            />
-                          ))}
-                        </div>
-                      )}
+                      {/* Machine Child Items (Recording Servers & Storage) */}
+                      <div className="p-1.5 flex flex-col gap-1">
+                        {items.map((item, i) => (
+                          <div key={i} className="flex items-center gap-2.5 px-2.5 py-2 bg-bg-2/30 border border-white/[0.02] rounded-lg group">
+                            <div className="text-[14px] opacity-70 group-hover:opacity-100 transition-all shrink-0">
+                              {item.Type === 'camera' ? '📷' : item.Type === 'storage' ? '💾' : '⚙️'}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className={cn("text-[11px] font-semibold tracking-tight truncate uppercase", item.Status === 'OFFLINE' ? "text-psim-red" : "text-t1")}>{item.Name}</div>
+                              <div className="text-[9px] text-t-2 font-mono uppercase tracking-tighter opacity-50">{item.Description}</div>
+                              
+                              {/* Storage-specific usage bar */}
+                              {item.Type === 'storage' && item.Disks && item.Disks.length > 0 && (
+                                <div className="mt-1 max-w-[90%]">
+                                  {item.Disks.filter(d => item.Description.includes(d.DriveName.replace('\\','')) || item.Disks!.length === 1).map((disk, di) => (
+                                    <UsageBar 
+                                      key={di} 
+                                      label={`Disk ${disk.DriveName}`} 
+                                      value={disk.UsagePercentage} 
+                                      colorClass={disk.UsagePercentage > 90 ? "bg-psim-red" : "bg-psim-green"}
+                                      detail={`${disk.FreeSpace}GB free / ${disk.TotalSize}GB`}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <StatusBadge status={item.Status} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <StatusBadge status={item.Status} />
-                  </div>
-                )}) : (
+                  );
+                }) : (
                   <div className="py-10 text-center opacity-20 text-[11px] uppercase font-bold tracking-widest italic">Không có dữ liệu hạ tầng cho kết nối này</div>
                 )}
               </div>

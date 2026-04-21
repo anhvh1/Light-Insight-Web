@@ -64,7 +64,6 @@ builder.Services.AddScoped<ISystemHealth, SystemHealthBUS>();
 builder.Services.AddScoped<IAuditLog, AuditLogBUS>();
 builder.Services.AddScoped<IToken, TokenBUS>();
 builder.Services.AddScoped<GetAnalyticsEvents>();
-builder.Services.AddScoped<MilestoneSystemProber>();
 builder.Services.AddScoped<LightInsightDAL.Repositories.General.SystemConfigDAL>();
 builder.Services.AddScoped<ISystemConfig, SystemConfigBUS>();
 builder.Services.AddSingleton<ICameraStatusService, CameraStatusService>();

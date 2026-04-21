@@ -237,17 +237,52 @@ namespace LightInsightService.Sockets.Milestone.Health
 
                 if (doc.RootElement.TryGetProperty("array", out var servers)) {
                     foreach (var s in servers.EnumerateArray()) {
+                        string id = s.GetProperty("id").GetString();
                         string name = s.GetProperty("name").GetString();
+                        // Milestone 2025 R2 often uses 'hostname' or 'address' for the physical machine link
+                        string hostname = s.TryGetProperty("hostname", out var h) ? h.GetString() : 
+                                         (s.TryGetProperty("address", out var a) ? a.GetString() : name);
+
+                        bool enabled = s.TryGetProperty("enabled", out var en) ? en.GetBoolean() : true;
+
+                        // Add the Recording Server as a "Parent" item
                         newInfra.Add(new InfrastructureHealth { 
-                            Name = name, 
+                            Name = $"Recording server: {name}", 
                             Type = "server", 
-                            Status = "ONLINE", 
-                            Description = $"Last update: {DateTime.Now:HH:mm:ss}",
+                            Status = enabled ? "ONLINE" : "OFFLINE", 
+                            // Description = $"Host: {hostname}",
                             ConnectorId = cid,
-                            MachineName = name 
+                            MachineName = hostname // This is our key for Agent Metrics
                         });
+
+                        // Fetch Storages for THIS specific Recording Server
+                        try {
+                            var sReq = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/recordingServers/{id}/storages");
+                            sReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                            var sRes = await _httpClient.SendAsync(sReq);
+                            if (sRes.IsSuccessStatusCode) {
+                                var diskJson = await sRes.Content.ReadAsStringAsync();
+                                using var dDoc = JsonDocument.Parse(diskJson);
+                                if (dDoc.RootElement.TryGetProperty("array", out var disks)) {
+                                    foreach (var d in disks.EnumerateArray()) {
+                                        string storageName = d.GetProperty("name").GetString();
+                                        string diskPath = d.TryGetProperty("diskPath", out var p) ? p.GetString() : "Unknown path";
+
+                                        newInfra.Add(new InfrastructureHealth { 
+                                            Name = $"Storage: {storageName}", 
+                                            Type = "storage", 
+                                            Status = "ONLINE", 
+                                            Description = $"Disk path: {diskPath}",
+                                            ConnectorId = cid,
+                                            MachineName = hostname // Link storage to the same physical machine
+                                        });
+                                    }
+                                }
+                            }
+                        } catch { }
                     }
                 }
+
                 _globalStates[cid].Infrastructure = newInfra;
                 await PushUpdate(cid);
             } catch { }
