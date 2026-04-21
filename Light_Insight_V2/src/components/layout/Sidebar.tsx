@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   BellRing
 } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
 import { useAlarmSignalR } from '@/features/alarms/useAlarmSignalR';
@@ -60,6 +61,18 @@ const configSubItems = [
 
 export function Sidebar() {
   const { bellCount, refreshAlarms } = useAlarmSignalR();
+  const [showConfigMenu, setShowConfigMenu] = useState(false);
+  const configRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (configRef.current && !configRef.current.contains(event.target as Node)) {
+        setShowConfigMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <nav className="w-14.5 bg-bg-1 border-r border-border-dim flex flex-col items-center py-2 gap-0.5 shrink-0 h-full z-[1000] overflow-visible">
@@ -73,10 +86,18 @@ export function Sidebar() {
         const isConfig = item.id === 'config';
         
         return (
-          <div key={item.id} className="relative group">
+          <div 
+            key={item.id} 
+            className="relative group"
+            ref={isConfig ? configRef : undefined}
+          >
             <Link
               to={item.path as any}
-              onClick={() => {
+              onClick={(e) => {
+                if (isConfig) {
+                  e.preventDefault();
+                  setShowConfigMenu(!showConfigMenu);
+                }
                 if (item.id === 'alarm') {
                   void refreshAlarms();
                 }
@@ -110,7 +131,12 @@ export function Sidebar() {
 
             {/* Submenu for Config */}
             {isConfig && (
-              <div className="absolute left-full top-0 ml-1 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-hover:translate-x-1 transition-all z-[9999]">
+              <div className={cn(
+                "absolute left-full top-0 ml-1 transition-all z-[9999]",
+                showConfigMenu 
+                  ? "opacity-100 translate-x-1 pointer-events-auto" 
+                  : "opacity-0 pointer-events-none translate-x-0"
+              )}>
                 <div className="bg-[#111625] border border-white/10 rounded-xl shadow-2xl py-3 px-1 w-[240px] flex flex-col gap-4 overflow-hidden relative">
                   {/* Decorative background accent */}
                   <div className="absolute top-0 right-0 w-32 h-32 bg-psim-accent/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
@@ -129,6 +155,7 @@ export function Sidebar() {
                             <Link
                               key={sIdx}
                               to={sub.path as any}
+                              onClick={() => setShowConfigMenu(false)}
                               activeProps={{ className: 'bg-psim-accent/15 text-psim-accent border-psim-accent/20' }}
                               inactiveProps={{ className: 'text-t2 hover:bg-white/5 hover:text-t1 border-transparent' }}
                               className="flex items-center gap-3 px-3 py-2 rounded-lg text-[11.5px] font-semibold transition-all border group/sub"
