@@ -77,6 +77,11 @@ export interface AnalyticsEvent {
   Name: string;
 }
 
+export interface CameraDropdownOption {
+  id: string;
+  name: string;
+}
+
 export interface PriorityMapping {
   ID: number;
   PriorityID: number;
@@ -92,6 +97,26 @@ export interface ApiResponse<T> {
   TotalRow: number;
 }
 
+// --- INCIDENT API TYPES ---
+export interface IncidentApiItem {
+  id: string;
+  sop_id: string | null;
+  priority: string;
+  source_id: string;
+  status: string;
+  type: string;
+  user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IncidentPagingParams {
+  Keyword?: string;
+  Status?: string;
+  Page?: number;
+  PageSize?: number;
+}
+
 export interface MapTreeNode {
   Id: string;
   Name: string;
@@ -100,4 +125,36 @@ export interface MapTreeNode {
   Children: MapTreeNode[];
   MapImagePath: string | null;
   CreatedAt: string;
+}
+
+// --- SOP TYPES ---
+export interface SopTrigger {
+  vms_camera_id: string;
+  event_name: string;
+}
+
+export interface SopStep {
+  id?: string;
+  step_order: number;
+  step_name: string;
+  execution_type: string;
+  target_device_id: string | null;
+  action_code: string;
+  action_payload?: unknown;
+}
+
+export interface SopListItem {
+  Id: string;
+  Name: string;
+  Description: string | null;
+  CreatedAt: string;
+}
+
+export interface SopDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  triggers: SopTrigger[];
+  steps: SopStep[];
 }

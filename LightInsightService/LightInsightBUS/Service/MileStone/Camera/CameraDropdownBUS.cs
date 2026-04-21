@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -47,6 +47,7 @@ namespace LightInsightBUS.Service.MileStone.Camera
                 {
                     resultList.Add(new CameraDropDown
                     {
+                        id = item.id,
                         name = item.name
                     });
                 }
