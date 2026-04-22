@@ -383,13 +383,13 @@ export function ImageMapCanvas({
                             transform: 'translateX(-50%)',
                             padding: '2px 8px',
                             borderRadius: 4,
-                            background: 'var(--bg2)',
-                            border: '1px solid var(--border-dim)',
-                            color: 'var(--t0)',
+                            background: '#ffffff',
+                            border: '1px solid rgba(0, 0, 0, 0.1)',
+                            color: '#000000',
                             fontSize: 10,
                             fontWeight: 600,
                             whiteSpace: 'nowrap',
-                            boxShadow: '0 4px 10px rgba(0,0,0,0.3)'
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
                           }}
                         >
                           {label}

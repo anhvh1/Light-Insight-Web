@@ -54,6 +54,10 @@ export const toPositionRequest = (position: any) => {
 
   const rawX = position.x ?? position.PosX ?? position.posX ?? 0;
   const rawY = position.y ?? position.PosY ?? position.posY ?? 0;
+  
+  const lat = position.latitude ?? position.Latitude ?? 0;
+  const lng = position.longitude ?? position.Longitude ?? 0;
+  const isGeo = lat !== 0 || lng !== 0;
 
   return {
     cameraId: id,
@@ -63,11 +67,11 @@ export const toPositionRequest = (position: any) => {
     x: rawX > 1 ? rawX / 100 : rawX,
     y: rawY > 1 ? rawY / 100 : rawY,
     angleDegrees: position.angleDegrees ?? position.AngleDegrees ?? position.Rotation ?? position.rotation ?? 0,
-    fovDegrees: position.fovDegrees ?? position.FovDegrees ?? position.fovWidth ?? position.FovWidth ?? 140,
-    range: position.range ?? position.Range ?? position.fovLength ?? position.FovLength ?? 100,
+    fovDegrees: position.fovDegrees ?? position.FovDegrees ?? position.fovWidth ?? position.FovWidth ?? 60,
+    range: position.range ?? position.Range ?? position.fovLength ?? position.FovLength ?? (isGeo ? 25 : 0.25),
     iconScale: position.iconScale ?? position.IconScale ?? 1,
-    latitude: position.latitude ?? position.Latitude ?? 0,
-    longitude: position.longitude ?? position.Longitude ?? 0,
+    latitude: lat,
+    longitude: lng,
     VmsId: position.VmsId ?? position.vmsId ?? position.Vmsid ?? 0,
     Type: position.Type ?? position.type ?? 0,
     Connectorid: position.Connectorid || position.connectorId || position.ConnectorId || position.ConnectorID || position.connectorid || null,

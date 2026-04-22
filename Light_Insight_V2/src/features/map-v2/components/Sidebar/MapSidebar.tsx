@@ -15,7 +15,7 @@ interface MapSidebarProps {
   onEditMap: (map: MapLayoutResponse) => void;
   onDeleteMap: (map: MapLayoutResponse) => void;
   resolveMapTypeLabel: (type?: MapLayoutType | null) => string;
-  
+
   connectors: ConnectorResponse[];
   selectedConnectorId: string | null;
   onSelectConnector: (id: string | null) => void;
@@ -28,7 +28,7 @@ interface MapSidebarProps {
   onSelectCamera: (id: string) => void;
   isMapActive: boolean;
   positionsByCamera: Map<string, any>;
-  
+
   t: (key: string, params?: any) => string;
 }
 
@@ -59,10 +59,10 @@ export function MapSidebar({
     <Paper
       radius="lg"
       withBorder
-      style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        minHeight: 0, 
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
         overflow: 'hidden',
         backgroundColor: 'var(--bg1)',
         borderColor: 'var(--border-dim)'
@@ -72,10 +72,10 @@ export function MapSidebar({
       <Tabs defaultValue="maps" variant="pills" color="brand" styles={{
         root: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 },
         panel: { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '16px' },
-        list: { 
-          padding: '8px', 
+        list: {
+          padding: '8px',
           borderBottom: '1px solid var(--border-dim)',
-          backgroundColor: 'rgba(0,0,0,0.1)' 
+          backgroundColor: 'rgba(0,0,0,0.1)'
         },
         tab: {
           fontWeight: 600,
@@ -123,7 +123,7 @@ export function MapSidebar({
               leftSection={<IconFilter size={14} style={{ color: 'var(--t2)' }} />}
               size="xs"
               styles={{
-                input: { backgroundColor: 'var(--bg3)', borderColor: 'var(--border-dim)', color: 'var(--t0)' }
+                input: { backgroundColor: 'var(--bg3)', borderColor: 'var(--border-dim)', color: 'var(--t0)', fontSize: '12px' }
               }}
             />
             <ScrollArea type="auto" style={{ flex: 1, minHeight: 120 }}>

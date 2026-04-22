@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { cn } from '@/lib/utils';
@@ -14,7 +14,6 @@ interface GeoMapCanvasProps {
   activeMap: any;
   geoStyleUrl: string | undefined;
   markers: any[];
-  geoFovFeatures: any[];
   alarmsBySource: Map<string, Alarm>;
   cameraStatusMap: Map<string, any>;
   onMarkerClick: (alarm: Alarm) => void;
@@ -32,7 +31,6 @@ export function GeoMapCanvas({
   activeMap,
   geoStyleUrl,
   markers,
-  geoFovFeatures,
   alarmsBySource,
   cameraStatusMap,
   onMarkerClick,
@@ -42,11 +40,34 @@ export function GeoMapCanvas({
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
   const mapMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const [geoZoom, setGeoZoom] = useState<number>(11);
+  const [isMapReady, setIsMapReady] = useState(false);
 
   const initialViewRef = useRef({
       center: [106.6113, 10.7254] as [number, number],
       zoom: 11
   });
+
+  // Calculate Geo FOV Features as SVG points Map
+  const geoFovShapes = useMemo(() => {
+    const shapeMap = new Map<string, { points: string }>();
+    markers
+      .filter((m) => m.latitude != null && m.longitude != null && m.latitude !== 0)
+      .forEach((m) => {
+        const angle = m.angleDegrees || 0;
+        const fov = m.fovDegrees || 60;
+        const rangeValue = m.range || 25;
+        const iconScale = m.iconScale || 1;
+        
+        // Use a consistent pixel range for FOV in Geo Map to ensure visibility
+        const viewScale = getGeoMarkerScale(geoZoom);
+        const rangePixels = rangeValue * 3 * iconScale * viewScale; 
+        
+        shapeMap.set(m.cameraId, {
+          points: Geometry.buildImageSectorPoints(0, 0, angle, rangePixels, fov)
+        });
+      });
+    return shapeMap;
+  }, [markers, geoZoom]);
 
   useEffect(() => {
     if (!geoStyleUrl || !mapContainerRef.current || mapInstanceRef.current) return;
@@ -68,35 +89,11 @@ export function GeoMapCanvas({
       zoom: zoom
     });
 
-    const updateFovData = () => {
-      if (!map.isStyleLoaded()) return;
-      const source = map.getSource('camerfov') as maplibregl.GeoJSONSource | undefined;
-      
-      if (!source) {
-        map.addSource('camerfov', { type: 'geojson', data: { type: 'FeatureCollection', features: geoFovFeatures } });
-        map.addLayer({ 
-          id: 'camerfov-fill', 
-          type: 'fill', 
-          source: 'camerfov', 
-          paint: { 'fill-color': '#00c2ff', 'fill-opacity': 0.15 } 
-        });
-        map.addLayer({ 
-          id: 'camerfov-outline', 
-          type: 'line', 
-          source: 'camerfov', 
-          paint: { 'line-color': '#00c2ff', 'line-width': 1, 'line-opacity': 0.5 } 
-        });
-      } else {
-        source.setData({ type: 'FeatureCollection', features: geoFovFeatures });
-      }
-    };
-
     map.on('load', () => {
+      setIsMapReady(true);
       setGeoZoom(map.getZoom());
-      updateFovData();
     });
 
-    map.on('styledata', () => updateFovData());
     map.on('zoom', () => setGeoZoom(map.getZoom()));
 
     mapInstanceRef.current = map;
@@ -104,6 +101,7 @@ export function GeoMapCanvas({
     return () => {
       map.remove();
       mapInstanceRef.current = null;
+      setIsMapReady(false);
     };
   }, [geoStyleUrl, activeMap?.id]);
 
@@ -117,20 +115,10 @@ export function GeoMapCanvas({
       });
   };
 
-  // Sync FOV layer
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-    const source = map.getSource('camerfov') as maplibregl.GeoJSONSource | undefined;
-    if (source) {
-      source.setData({ type: 'FeatureCollection', features: geoFovFeatures });
-    }
-  }, [geoFovFeatures]);
-
   // Update markers
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map) return;
+    if (!map || !isMapReady) return;
 
     const markerMap = mapMarkersRef.current;
     const nextIds = new Set<string>();
@@ -148,14 +136,15 @@ export function GeoMapCanvas({
       
       const angle = m.angleDegrees || 0;
       const iconScale = m.iconScale || 1;
+      const fovShape = geoFovShapes.get(cameraId);
 
       const existing = markerMap.get(cameraId);
 
       if (existing) {
         existing.setLngLat([m.longitude, m.latitude]);
-        updateMarkerElement(existing.getElement(), m, angle, iconScale, alarmForMarker, isOffline, viewScale);
+        updateMarkerElement(existing.getElement(), m, angle, iconScale, alarmForMarker, isOffline, viewScale, fovShape);
       } else {
-        const el = createMarkerElement(m, angle, iconScale, alarmForMarker, isOffline, viewScale, () => {
+        const el = createMarkerElement(m, angle, iconScale, alarmForMarker, isOffline, viewScale, fovShape, () => {
            if (alarmForMarker) onMarkerClick(alarmForMarker);
         });
         const marker = new maplibregl.Marker({ element: el }).setLngLat([m.longitude, m.latitude]).addTo(map);
@@ -169,9 +158,9 @@ export function GeoMapCanvas({
         markerMap.delete(id);
       }
     }
-  }, [markers, alarmsBySource, cameraStatusMap, geoZoom]);
+  }, [markers, alarmsBySource, cameraStatusMap, geoZoom, isMapReady]);
 
-  function createMarkerElement(m: any, angle: number, iconScale: number, alarm: Alarm | undefined, isOffline: boolean, viewScale: number, onClick: () => void) {
+  function createMarkerElement(m: any, angle: number, iconScale: number, alarm: Alarm | undefined, isOffline: boolean, viewScale: number, fovShape: any, onClick: () => void) {
     const container = document.createElement('div');
     container.className = 'cursor-pointer group/marker relative';
     
@@ -190,10 +179,35 @@ export function GeoMapCanvas({
     label.innerText = `${m.CameraName}${isOffline ? ' (OFFLINE)' : ''}`;
 
     const rotateContainer = document.createElement('div');
-    rotateContainer.className = 'relative flex items-center justify-center';
+    rotateContainer.className = cn(
+      'relative flex items-center justify-center',
+      alarm && 'marker-alarm-blink'
+    );
     const finalSize = Math.round(32 * iconScale * viewScale);
     rotateContainer.style.width = `${finalSize}px`;
     rotateContainer.style.height = `${finalSize}px`;
+
+    // FOV SVG with viewBox to ensure proper coordinate system
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("width", "200");
+    svg.setAttribute("height", "200");
+    svg.setAttribute("viewBox", "-100 -100 200 200");
+    svg.style.position = "absolute";
+    svg.style.left = "50%";
+    svg.style.top = "50%";
+    svg.style.transform = "translate(-50%, -50%)";
+    svg.style.overflow = "visible";
+    svg.style.pointerEvents = "none";
+    svg.style.zIndex = "0";
+    svg.classList.add("fov-svg");
+
+    const polygon = document.createElementNS(svgNS, "polygon");
+    if (fovShape) polygon.setAttribute("points", fovShape.points);
+    polygon.setAttribute("fill", alarm ? "rgba(255, 107, 0, 0.25)" : "rgba(0, 194, 255, 0.25)");
+    polygon.setAttribute("stroke", alarm ? "#ff6b00" : "#00c2ff");
+    polygon.setAttribute("stroke-width", "2");
+    svg.appendChild(polygon);
 
     const icon = document.createElement('div');
     icon.className = 'marker-icon-dynamic';
@@ -206,6 +220,7 @@ export function GeoMapCanvas({
       ? `drop-shadow(0 0 8px ${alarmStyles[alarm.pri] || '#fff'})` 
       : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45))';
 
+    rotateContainer.appendChild(svg);
     rotateContainer.appendChild(icon);
     inner.appendChild(label);
     inner.appendChild(rotateContainer);
@@ -214,7 +229,13 @@ export function GeoMapCanvas({
     return container;
   }
 
-  function updateMarkerElement(el: HTMLElement, m: any, angle: number, iconScale: number, alarm: Alarm | undefined, isOffline: boolean, viewScale: number) {
+  function updateMarkerElement(el: HTMLElement, m: any, angle: number, iconScale: number, alarm: Alarm | undefined, isOffline: boolean, viewScale: number, fovShape: any) {
+    const rotateContainer = el.querySelector('.relative.flex.items-center.justify-center') as HTMLElement;
+    if (rotateContainer) {
+      if (alarm) rotateContainer.classList.add('marker-alarm-blink');
+      else rotateContainer.classList.remove('marker-alarm-blink');
+    }
+
     const label = el.querySelector('.marker-label') as HTMLElement;
     if (label) {
       label.className = cn(
@@ -224,11 +245,18 @@ export function GeoMapCanvas({
       label.innerText = `${m.CameraName}${isOffline ? ' (OFFLINE)' : ''}`;
     }
 
-    const rotateContainer = el.querySelector('.relative.flex.items-center.justify-center') as HTMLElement;
     if (rotateContainer) {
       const finalSize = Math.round(32 * iconScale * viewScale);
       rotateContainer.style.width = `${finalSize}px`;
       rotateContainer.style.height = `${finalSize}px`;
+    }
+
+    const polygon = el.querySelector('.fov-svg polygon') as SVGPolygonElement;
+    if (polygon && fovShape) {
+      polygon.setAttribute("points", fovShape.points);
+      polygon.setAttribute("fill", alarm ? "rgba(255, 107, 0, 0.25)" : "rgba(0, 194, 255, 0.25)");
+      polygon.setAttribute("stroke", alarm ? "#ff6b00" : "#00c2ff");
+      polygon.setAttribute("stroke-width", "2");
     }
 
     const icon = el.querySelector('.marker-icon-dynamic') as HTMLElement;
@@ -244,6 +272,15 @@ export function GeoMapCanvas({
 
   return (
     <div className="flex-1 relative bg-[#05070a] overflow-hidden">
+      <style>{`
+        @keyframes marker-alert-blink {
+          0%, 100% { opacity: 1; filter: drop-shadow(0 0 15px rgba(255, 107, 0, 0.8)); }
+          50% { opacity: 0.5; filter: drop-shadow(0 0 5px rgba(255, 0, 0, 0.4)); }
+        }
+        .marker-alarm-blink {
+          animation: marker-alert-blink 0.8s infinite ease-in-out;
+        }
+      `}</style>
       <div ref={mapContainerRef} className="w-full h-full" />
       
       <div className="absolute top-4 right-4 z-50">
@@ -283,7 +320,7 @@ export function GeoMapCanvas({
           </div>
           <div className="w-px h-3 bg-white/10" />
           <div className="flex items-center gap-2.5 text-[10px] font-black text-white/70 uppercase tracking-wider">
-            <div className="w-2 h-2 rounded-full bg-psim-accent shadow-[0_0_8px_#00c2ff]" /> Medium
+            <div className="w-2 h-2 rounded-full bg-psim-orange shadow-[0_0_8px_#00c2ff]" /> Medium
           </div>
           <div className="w-px h-3 bg-white/10" />
           <div className="flex items-center gap-2.5 text-[10px] font-black text-white/70 uppercase tracking-wider">

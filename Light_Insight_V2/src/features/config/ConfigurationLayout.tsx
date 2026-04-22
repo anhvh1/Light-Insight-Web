@@ -25,8 +25,7 @@ export function ConfigurationLayout() {
     { id: 'priority', label: 'Alarm Priority V3', icon: Sliders, group: 'Admin', path: '/config/priority' },
     { id: 'sop', label: 'SOP Builder', icon: ClipboardList, group: 'Admin', path: '/config/sop' },
     { id: 'connectors', label: 'Connectors', icon: Plug2, group: 'Admin', path: '/config/connectors' },
-    { id: 'map_management', label: 'Map Management', icon: MapIcon, group: 'Admin', path: '/config/map' },
-    { id: 'map_v2', label: 'Map Layout V2', icon: Zap, group: 'Admin', path: '/map-v2' },
+    { id: 'map_management', label: 'Map Management', icon: MapIcon, group: 'Admin', path: '/map-v2' },
     { id: 'escalation', label: 'Escalation Rules', icon: ShieldCheck, group: 'Hệ thống', path: '/config/escalation' },
     { id: 'notif', label: 'Notifications', icon: BellRing, group: 'Hệ thống', path: '/config/notif' },
   ];

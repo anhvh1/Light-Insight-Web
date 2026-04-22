@@ -728,8 +728,7 @@ export function MapLayoutManagerPanel() {
           </Box>
           <Box 
             ref={imageViewportSizeRef}
-            p="md" 
-            style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}
+            style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', padding: '5px 0' }}
           >
             {!activeMap ? (
               <Box h="100%" style={{ minHeight: 360, borderRadius: 16, border: '1px dashed var(--border-dim)', background: 'rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>

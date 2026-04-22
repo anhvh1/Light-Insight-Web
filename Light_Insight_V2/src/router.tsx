@@ -14,7 +14,6 @@ import { IncidentManagement } from './features/incidents/IncidentManagement';
 import { ConfigurationLayout } from './features/config/ConfigurationLayout';
 import { UsersRolesSection } from './features/config/sections/UsersRolesSection';
 import { AlarmPrioritySection } from './features/config/sections/AlarmPrioritySection';
-import { MapManagementSection } from './features/config/sections/MapManagementSection';
 import { ConnectorsSection } from './features/config/sections/ConnectorsSection';
 import { RuleAlarmConfigSection } from './features/config/sections/RuleAlarmConfigSection';
 import { LoginPage } from './features/auth/LoginPage';
@@ -102,7 +101,7 @@ const configPriorityRoute = createRoute({
 const configMapRoute = createRoute({
   getParentRoute: () => configRoute,
   path: 'map',
-  component: () => <MapManagementSection />
+  component: MapV2Page
 });
 
 const configConnectorsRoute = createRoute({

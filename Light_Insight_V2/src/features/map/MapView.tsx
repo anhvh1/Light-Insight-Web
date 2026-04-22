@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
-import { 
-  ChevronRight, 
-  ChevronUp, 
-  ChevronDown, 
+import {
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Map as MapIcon,
   Search,
   Activity,
@@ -22,7 +22,6 @@ import { useCameraStatus } from './useCameraStatus';
 import { ImageMapCanvas } from './components/ImageMapCanvas';
 import { GeoMapCanvas } from './components/GeoMapCanvas';
 import { buildMapTree, type MapTreeNode, toPositionRequest } from './utils';
-import * as Geometry from './utils';
 
 // --- HELPER FUNCTIONS ---
 
@@ -53,7 +52,7 @@ function findMapById(nodes: MapTreeNode[], id: string): APIMapTreeNode | null {
 function filterMapTree(nodes: MapTreeNode[], query: string): MapTreeNode[] {
   if (!query) return nodes;
   const lowerQuery = query.toLowerCase();
-  
+
   return nodes.map(node => {
     const isMatch = node.map.name.toLowerCase().includes(lowerQuery);
     if (node.children && node.children.length > 0) {
@@ -74,8 +73,8 @@ function MapViewInternal() {
   const [activeMap, setActiveMap] = useState<APIMapTreeNode | null>(null);
   const [showLegend, setShowLegend] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  const { summary: cameraSummary, statusMap: cameraStatusMap, connectionState: cameraConnectionState } = useCameraStatus(selectedMapId);
+
+  const { summary: cameraSummary, statusMap: cameraStatusMap } = useCameraStatus(selectedMapId);
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -101,33 +100,13 @@ function MapViewInternal() {
     enabled: !!selectedMapId
   });
   const mapDetail = mapDetailResponse?.Data;
-  
+
   const markers = useMemo(() => {
     if (!mapDetail?.cameras || !Array.isArray(mapDetail.cameras)) return [];
     return mapDetail.cameras
       .filter(c => c != null)
       .map(c => toPositionRequest(c));
   }, [mapDetail]);
-
-  const geoFovFeatures = useMemo(() => {
-    if (!activeMap || activeMap.type !== 'Geo') return [];
-    return markers
-      .filter((m) => m.latitude != null && m.longitude != null && m.latitude !== 0)
-      .map((m) => {
-        const angle = m.angleDegrees || 0;
-        const fov = m.fovDegrees || 140;
-        const rangeValue = m.range || 25;
-        const iconScale = m.iconScale || 1;
-        const safeRange = Math.max(1, rangeValue) * iconScale; 
-        const left = Geometry.destinationPoint(m.latitude ?? 0, m.longitude ?? 0, angle - fov / 2, safeRange);
-        const right = Geometry.destinationPoint(m.latitude ?? 0, m.longitude ?? 0, angle + fov / 2, safeRange);
-        return {
-          type: 'Feature',
-          properties: { cameraId: m.cameraId, CameraName: m.CameraName },
-          geometry: { type: 'Polygon', coordinates: [[[m.longitude ?? 0, m.latitude ?? 0], [left.longitude, left.latitude], [right.longitude, right.latitude], [m.longitude ?? 0, m.latitude ?? 0]]] }
-        };
-      });
-  }, [activeMap, markers]);
 
   const { data: historicalAlarmsResponse } = useQuery({
     queryKey: ['map-historical-alarms', selectedMapId],
@@ -238,7 +217,7 @@ function MapViewInternal() {
     mapAlarms.forEach(alarm => {
       if (!scheduledAlarmsRef.current.has(alarm.id)) {
         scheduledAlarmsRef.current.add(alarm.id);
-        setTimeout(() => setDismissedAlarmIds(prev => new Set(prev).add(alarm.id)), 5000);
+        setTimeout(() => setDismissedAlarmIds(prev => new Set(prev).add(alarm.id)), 15000);
       }
     });
   }, [mapAlarms]);
@@ -254,8 +233,26 @@ function MapViewInternal() {
   useEffect(() => {
     const handleMove = (e: MouseEvent) => {
       if (isDragging && toolbarRef.current) {
-        const dx = e.clientX - dragStartRef.current.mouseX; const dy = e.clientY - dragStartRef.current.mouseY;
-        setToolbarPos({ x: Math.max(8, dragStartRef.current.startX - dx), y: Math.max(8, dragStartRef.current.startY + dy) });
+        const dx = e.clientX - dragStartRef.current.mouseX;
+        const dy = e.clientY - dragStartRef.current.mouseY;
+
+        const parent = toolbarRef.current.parentElement;
+        if (!parent) return;
+        const parentRect = parent.getBoundingClientRect();
+        const toolbarRect = toolbarRef.current.getBoundingClientRect();
+
+        // Calculate next position
+        let nextX = dragStartRef.current.startX - dx;
+        let nextY = dragStartRef.current.startY + dy;
+
+        // Constrain to parent bounds with 8px padding
+        const maxX = parentRect.width - toolbarRect.width - 8;
+        const maxY = parentRect.height - toolbarRect.height - 8;
+
+        nextX = Math.max(8, Math.min(maxX, nextX));
+        nextY = Math.max(8, Math.min(maxY, nextY));
+
+        setToolbarPos({ x: nextX, y: nextY });
       }
     };
     const handleUp = () => setIsDragging(false);
@@ -321,48 +318,69 @@ function MapViewInternal() {
           <button onClick={() => setShowLegend(!showLegend)} className={cn("w-9 h-9 flex items-center justify-center rounded-xl border transition-all", showLegend ? "bg-psim-orange border-psim-orange text-white shadow-[0_0_15px_rgba(255,107,0,0.3)]" : "border-white/10 bg-white/5 text-t3 hover:text-white")} title="Bật/Tắt chú thích"><Activity size={18} /></button>
         </div>
 
-        {!activeMap ? (
-           <div className="flex-1 relative bg-[#05070a] flex items-center justify-center opacity-20 grayscale pointer-events-none">
+        <div className="relative flex-1 flex overflow-hidden">
+          {!activeMap ? (
+            <div className="w-full h-full bg-[#05070a] flex items-center justify-center opacity-20 grayscale pointer-events-none">
               <div className="flex items-center justify-center flex-col gap-4"><MapIcon size={64} className="text-white" /><span className="text-[12px] font-black uppercase tracking-[0.3em] text-white">Vui lòng chọn bản đồ hệ thống</span></div>
-           </div>
-        ) : activeMap.type === 'Geo' ? (
-          <GeoMapCanvas 
-            key={activeMap.id}
-            activeMap={activeMap}
-            geoStyleUrl={mapOptions?.Data?.geoStyleUrl}
-            markers={markers}
-            geoFovFeatures={geoFovFeatures}
-            alarmsBySource={alarmsBySource}
-            cameraStatusMap={cameraStatusMap}
-            onMarkerClick={(a) => setDismissedAlarmIds(prev => new Set(prev).add(a.id))}
-            showLegend={showLegend}
-          />
-        ) : (
-          <ImageMapCanvas 
-            key={activeMap.id}
-            activeMapUrl={activeMap.mapImagePath || ''}
-            activeMapName={activeMap.name}
-            markers={markers}
-            alarmsBySource={alarmsBySource}
-            cameraStatusMap={cameraStatusMap}
-            onMarkerClick={(a) => setDismissedAlarmIds(prev => new Set(prev).add(a.id))}
-            showLegend={showLegend}
-          />
-        )}
-
-        <div ref={toolbarRef} style={{ right: `${toolbarPos.x}px`, top: `${toolbarPos.y}px` }} className={cn("absolute z-50 flex flex-col bg-[#0a0f1d]/95 backdrop-blur-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden", isExpanded ? "rounded-2xl min-w-[280px]" : "rounded-xl w-12")}>
-          <div className={cn("flex items-center border-white/5 bg-white/[0.03]", isExpanded ? "justify-between px-4 py-3 border-b" : "flex-col py-2 gap-2")}>
-            <div onMouseDown={handleDragStart} className="flex items-center gap-2 cursor-move">{isExpanded && <span className="text-[11px] font-black text-white uppercase tracking-widest">Hệ thống bản đồ</span>}</div>
-            <button onClick={() => setIsExpanded(!isExpanded)} className="text-psim-orange">{isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
-          </div>
-          {isExpanded && (
-            <div className="p-2 flex flex-col gap-2 max-h-[500px]">
-              <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-t3" size={12} /><input className="w-full bg-black/40 border border-white/5 rounded-xl h-9 pl-9 text-[11px] text-white outline-none" placeholder="Tìm kiếm vị trí..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
-              <div className="overflow-y-auto custom-scrollbar flex flex-col gap-1 pr-1">
-                {isLoadingTree ? <RefreshCcw className="animate-spin mx-auto opacity-40" /> : filteredMapTree.map(node => (<TreeItem key={node.map.id} node={node} level={0} selectedId={selectedMapId} onSelect={(n) => { setSelectedMapId(n.id); setActiveMap(n); localStorage.setItem('lastSelectedMapId', n.id); }} />))}
-              </div>
             </div>
+          ) : activeMap.type === 'Geo' ? (
+            <GeoMapCanvas
+              key={activeMap.id}
+              activeMap={activeMap}
+              geoStyleUrl={mapOptions?.Data?.geoStyleUrl}
+              markers={markers}
+              alarmsBySource={alarmsBySource}
+              cameraStatusMap={cameraStatusMap}
+              onMarkerClick={(a) => setDismissedAlarmIds(prev => new Set(prev).add(a.id))}
+              showLegend={showLegend}
+            />
+          ) : (
+            <ImageMapCanvas
+              key={activeMap.id}
+              activeMapUrl={activeMap.mapImagePath || ''}
+              activeMapName={activeMap.name}
+              markers={markers}
+              alarmsBySource={alarmsBySource}
+              cameraStatusMap={cameraStatusMap}
+              onMarkerClick={(a) => setDismissedAlarmIds(prev => new Set(prev).add(a.id))}
+              showLegend={showLegend}
+            />
           )}
+
+          <div ref={toolbarRef} style={{ right: `${toolbarPos.x}px`, top: `${toolbarPos.y}px` }} className={cn("absolute z-50 flex flex-col bg-[#0a0f1d]/95 backdrop-blur-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden", isExpanded ? "rounded-2xl min-w-[280px]" : "rounded-xl w-12")}>
+            <div className={cn("flex items-center border-white/5 bg-white/[0.03]", isExpanded ? "justify-between px-4 py-3 border-b" : "flex-col py-4 gap-4")}>
+              <div onMouseDown={handleDragStart} className="flex items-center justify-center cursor-move min-w-[24px] min-h-[24px]">
+                {isExpanded ? (
+                  <span className="text-[14px] font-semibold text-white/90 tracking-tight">Hệ thống bản đồ</span>
+                ) : (
+                  <MapIcon size={20} className="text-white opacity-80" />
+                )}
+              </div>
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="text-psim-orange hover:scale-110 transition-transform"
+                title={isExpanded ? "Thu gọn" : "Mở rộng"}
+              >
+                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+            </div>
+            {isExpanded && (
+              <div className="p-2 flex flex-col gap-2 max-h-[500px]">
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" size={12} />
+                  <input
+                    className="w-full bg-white/5 border border-white/10 rounded-xl h-9 pl-9.5 text-[12px] text-white/90 placeholder:text-[12px] placeholder:text-white/30 outline-none focus:border-psim-orange/30 transition-all font-normal"
+                    placeholder="Tìm kiếm vị trí..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <div className="overflow-y-auto custom-scrollbar flex flex-col gap-1 pr-1">
+                  {isLoadingTree ? <RefreshCcw className="animate-spin mx-auto opacity-40" /> : filteredMapTree.map(node => (<TreeItem key={node.map.id} node={node} level={0} selectedId={selectedMapId} onSelect={(n) => { setSelectedMapId(n.id); setActiveMap(n); localStorage.setItem('lastSelectedMapId', n.id); }} />))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="w-[320px] border-l border-white/5 bg-[#0a0f1d]/60 flex flex-col overflow-hidden backdrop-blur-lg">
@@ -393,7 +411,7 @@ function TreeItem({ node, level, selectedId, onSelect }: { node: MapTreeNode, le
       <div onClick={() => onSelect(node.map)} style={{ paddingLeft: `${level * 16 + 8}px` }} className={cn("flex items-center justify-between py-2.5 px-3 rounded-xl cursor-pointer transition-all", isSelected ? "bg-psim-orange/10 text-psim-orange" : "hover:bg-white/[0.04] text-t2 hover:text-white")}>
         <div className="flex items-center gap-2.5 overflow-hidden">
           {node.children.length > 0 ? (<button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isOpen); }} className="w-4 h-4 flex items-center justify-center">{isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</button>) : (<div className="w-4" />)}
-          <span className="text-[12px] font-bold truncate">{node.map.name}</span>
+          <span className="text-[12px] font-medium truncate">{node.map.name}</span>
         </div>
         {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-psim-orange shadow-[0_0_8px_rgba(255,107,0,0.8)]" />}
       </div>
