@@ -27,7 +27,7 @@ namespace LightInsightService.Sockets.Milestone.Health
         
         private static readonly ConcurrentDictionary<string, MilestoneLiveState> _globalStates = new ConcurrentDictionary<string, MilestoneLiveState>();
         private readonly ConcurrentDictionary<string, Task> _activeConnections = new ConcurrentDictionary<string, Task>();
-        private readonly ConcurrentDictionary<string, (string Name, string Category)> _eventDefinitions = new ConcurrentDictionary<string, (string, string)>();
+        private readonly ConcurrentDictionary<string, (string Name, string Category, string GeneratorType)> _eventDefinitions = new ConcurrentDictionary<string, (string, string, string)>();
         
         // Latency tracking
         private readonly ConcurrentDictionary<string, Stopwatch> _latencyStopwatches = new ConcurrentDictionary<string, Stopwatch>();
@@ -73,7 +73,6 @@ namespace LightInsightService.Sockets.Milestone.Health
 
                             if (!_activeConnections.ContainsKey(cid) || _activeConnections[cid].IsCompleted)
                             {
-                                _logger.LogInformation($"[DEBUG] Starting connection task for {vms.Name} ({cid})");
                                 _activeConnections[cid] = Task.Run(() => MaintainWebSocketConnection(vms, stoppingToken), stoppingToken);
                             }
                             
@@ -120,7 +119,49 @@ namespace LightInsightService.Sockets.Milestone.Health
                     await SendAsync(ws, new { command = "startSession", commandId = 101, sessionId = "", eventId = "" }, config.Name, linkedHandshake.Token);
                     await ReceiveAsync(ws, config.Name, linkedHandshake.Token);
                     
-                    await SendAsync(ws, new { command = "addSubscription", commandId = 102, filters = new[] { new { modifier = "include", resourceTypes = new[] { "*" }, sourceIds = new[] { "*" }, eventTypes = new[] { "*" } } } }, config.Name, linkedHandshake.Token);
+                    // Refined Three-Tiered Filter based on actual eventTypes.json metadata
+                    var healthKeywords = new[] { "communication", "stopped", "error", "lost", "broken", "terminated", "failed", "normal", "started", "available", "configuration", "full", "unavailable" };
+                    
+                    var healthGuids = _eventDefinitions
+                        .Where(kvp => {
+                            string gt = kvp.Value.GeneratorType;
+                            string group = kvp.Value.Category;
+                            string name = kvp.Value.Name.ToLower();
+
+                            // Tier 1: Core Infrastructure Types (Always Keep)
+                            if (gt == "System" || gt == "Server" || gt == "Recorder" || gt == "Hardware" || gt == "DriverHardware" || gt == "SystemDashboard") 
+                                return true;
+
+                            // Tier 3: Known Noise Groups (Always Discard)
+                            if (group.Contains("Analytics") || gt == "MIPDevice" || gt == "MIP")
+                                return false;
+
+                            // Tier 2: Device/DriverDevice - Keep only health-related status
+                            if (gt == "Device" || gt == "DriverDevice")
+                            {
+                                return healthKeywords.Any(k => name.Contains(k));
+                            }
+
+                            return false;
+                        })
+                        .Select(kvp => kvp.Key)
+                        .ToList();
+
+                    // "Safe Hybrid" Filter: Wildcard for resources, specific Health GUIDs for events
+                    object subscriptionFilter;
+                    if (healthGuids.Count > 0) {
+                        subscriptionFilter = new { 
+                            modifier = "include", 
+                            resourceTypes = new[] { "*" }, 
+                            eventTypes = healthGuids 
+                        };
+                        _logger.LogInformation($"[SUBSCRIPTION] {config.Name} is tracking {healthGuids.Count} Health/Status event types.");
+                    } else {
+                        subscriptionFilter = new { modifier = "include", resourceTypes = new[] { "*" }, sourceIds = new[] { "*" }, eventTypes = new[] { "*" } };
+                        _logger.LogWarning($"[SUBSCRIPTION] {config.Name} is using WILDCARD (metadata not ready).");
+                    }
+
+                    await SendAsync(ws, new { command = "addSubscription", commandId = 102, filters = new[] { subscriptionFilter } }, config.Name, linkedHandshake.Token);
                     await ReceiveAsync(ws, config.Name, linkedHandshake.Token);
 
                     _globalStates[cid].Status = "ONLINE";
@@ -147,7 +188,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                     {
                         var msg = await ReceiveAsync(ws, config.Name, ct);
                         if (string.IsNullOrEmpty(msg)) break;
-                        await ProcessWsMessage(msg, cid);
+                        await ProcessWsMessage(msg, cid, config);
                     }
                 }
                 catch (Exception ex)
@@ -160,16 +201,16 @@ namespace LightInsightService.Sockets.Milestone.Health
             }
         }
 
-        private async Task ProcessWsMessage(string json, string cid)
+        private async Task ProcessWsMessage(string json, string cid, ConnectorListModel vmsConfig)
         {
             try {
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
 
-                // A. Handle Responses (Calculates Latency)
+                // A. Handle Responses (Calculates Latency & Processes States)
                 if (root.TryGetProperty("commandId", out var cmdIdProp)) {
                     int cmdId = cmdIdProp.GetInt32();
-                    if (cmdId == 1) { // Heartbeat response
+                    if (cmdId == 1) { // Heartbeat/getState response
                         if (_latencyStopwatches.TryRemove(cid, out var sw)) {
                             sw.Stop();
                             var elapsed = sw.ElapsedMilliseconds;
@@ -179,20 +220,37 @@ namespace LightInsightService.Sockets.Milestone.Health
                             else if (elapsed > 500) _globalStates[cid].Status = "SLOW";
                             else _globalStates[cid].Status = "ONLINE";
                             
+                            // 1. Capture and store states for each resource source
+                            if (root.TryGetProperty("states", out var statesArray)) {
+                                foreach (var state in statesArray.EnumerateArray()) {
+                                    string source = state.GetProperty("source").GetString();
+                                    string typeGuid = state.GetProperty("type").GetString();
+                                    _globalStates[cid].ResourceStates[source] = typeGuid;
+
+                                    // Debug log for Recording Servers to check Milestone-reported state
+                                    if (source.StartsWith("recordingServers/")) {
+                                        string stateName = _eventDefinitions.TryGetValue(typeGuid, out var def) ? def.Name : typeGuid;
+                                        _logger.LogInformation($"[STATE_SYNC] {source} = {stateName}");
+                                    }
+                                }
+                            }
+
                             await PushUpdate(cid);
-                            _logger.LogInformation($"[LATENCY] {_globalStates[cid].Name}: {elapsed}ms");
                         }
                     }
                     return;
                 }
 
-                // B. Handle Events (Audit Log)
+                // B. Handle Events (Audit Log & Live State Updates)
                 if (root.TryGetProperty("type", out var typeProp) && typeProp.GetString() == "event") {
                     if (root.TryGetProperty("events", out var eventsArray)) {
                         foreach (var evt in eventsArray.EnumerateArray()) {
                             string eventTypeId = evt.GetProperty("type").GetString();
                             string source = evt.GetProperty("source").GetString();
                             
+                            // Update live state in dictionary
+                            _globalStates[cid].ResourceStates[source] = eventTypeId;
+
                             string eventName = _eventDefinitions.ContainsKey(eventTypeId) ? _eventDefinitions[eventTypeId].Name : eventTypeId;
                             string category = _eventDefinitions.ContainsKey(eventTypeId) ? _eventDefinitions[eventTypeId].Category : "Unknown";
                             
@@ -211,6 +269,28 @@ namespace LightInsightService.Sockets.Milestone.Health
                     }
                 }
             } catch { }
+        }
+
+        private string MapStateGuidToStatus(string guid)
+        {
+            if (_eventDefinitions.TryGetValue(guid, out var def))
+            {
+                string name = def.Name.ToLower();
+                // Semantic check for broken connection / error states
+                if (name.Contains("stopped") || name.Contains("error") || name.Contains("critical") || 
+                    name.Contains("lost") || name.Contains("broken") || name.Contains("terminated"))
+                {
+                    return "MAT KET NOI";
+                }
+                
+                // Semantic check for healthy states
+                if (name.Contains("started") || name.Contains("normal") || 
+                    name.Contains("available") || name.Contains("connected") || name.Contains("established"))
+                {
+                    return "ONLINE";
+                }
+            }
+            return "ONLINE"; // Default fallback if name doesn't imply an error
         }
 
         private async Task PushUpdate(string cid)
@@ -246,16 +326,52 @@ namespace LightInsightService.Sockets.Milestone.Health
                         bool enabled = s.TryGetProperty("enabled", out var en) ? en.GetBoolean() : true;
 
                         // Add the Recording Server as a "Parent" item
+                        string rsSource = $"recordingServers/{id}";
+                        string rsStatus = "ONLINE"; // Default
+                        if (_globalStates[cid].ResourceStates.TryGetValue(rsSource, out var rsGuid)) {
+                            rsStatus = _eventDefinitions.TryGetValue(rsGuid, out var def) ? def.Name : "ONLINE";
+                        }
+
                         newInfra.Add(new InfrastructureHealth { 
-                            Name = $"Recording server: {name}", 
+                            Name = "VMS Service", 
                             Type = "server", 
-                            Status = enabled ? "ONLINE" : "OFFLINE", 
-                            // Description = $"Host: {hostname}",
+                            Status = rsStatus, 
                             ConnectorId = cid,
-                            MachineName = hostname // This is our key for Agent Metrics
+                            MachineName = hostname 
                         });
 
-                        // Fetch Storages for THIS specific Recording Server
+                        // 1. Fetch Hardware for this Recording Server
+                        try {
+                            var hReq = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/recordingServers/{id}/hardware");
+                            hReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                            var hRes = await _httpClient.SendAsync(hReq);
+                            if (hRes.IsSuccessStatusCode) {
+                                var hJson = await hRes.Content.ReadAsStringAsync();
+                                using var hDoc = JsonDocument.Parse(hJson);
+                                if (hDoc.RootElement.TryGetProperty("array", out var hardwareList)) {
+                                    foreach (var hw in hardwareList.EnumerateArray()) {
+                                        string hId = hw.GetProperty("id").GetString();
+                                        string hName = hw.GetProperty("name").GetString();
+                                        string hSource = $"hardware/{hId}";
+                                        string hStatus = "ONLINE";
+
+                                        if (_globalStates[cid].ResourceStates.TryGetValue(hSource, out var hGuid)) {
+                                            hStatus = _eventDefinitions.TryGetValue(hGuid, out var def) ? def.Name : "ONLINE";
+                                        }
+
+                                        newInfra.Add(new InfrastructureHealth { 
+                                            Name = hName, 
+                                            Type = "hardware", 
+                                            Status = hStatus, 
+                                            ConnectorId = cid,
+                                            MachineName = hostname
+                                        });
+                                    }
+                                }
+                            }
+                        } catch { }
+
+                        // 2. Fetch Storages for THIS specific Recording Server
                         try {
                             var sReq = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/recordingServers/{id}/storages");
                             sReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -269,12 +385,43 @@ namespace LightInsightService.Sockets.Milestone.Health
                                         string diskPath = d.TryGetProperty("diskPath", out var p) ? p.GetString() : "Unknown path";
 
                                         newInfra.Add(new InfrastructureHealth { 
-                                            Name = $"Storage: {storageName}", 
+                                            Name = "Storage:" + storageName, 
                                             Type = "storage", 
                                             Status = "ONLINE", 
                                             Description = $"Disk path: {diskPath}",
                                             ConnectorId = cid,
-                                            MachineName = hostname // Link storage to the same physical machine
+                                            MachineName = hostname 
+                                        });
+                                    }
+                                }
+                            }
+                        } catch { }
+
+                        // 3. Fetch Cameras for this Recording Server
+                        try {
+                            var cReq = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/recordingServers/{id}/cameras");
+                            cReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                            var cRes = await _httpClient.SendAsync(cReq);
+                            if (cRes.IsSuccessStatusCode) {
+                                var cJson = await cRes.Content.ReadAsStringAsync();
+                                using var cDoc = JsonDocument.Parse(cJson);
+                                if (cDoc.RootElement.TryGetProperty("array", out var cameraList)) {
+                                    foreach (var cam in cameraList.EnumerateArray()) {
+                                        string camId = cam.GetProperty("id").GetString();
+                                        string camName = cam.GetProperty("name").GetString();
+                                        string camSource = $"cameras/{camId}";
+                                        string camStatus = "ONLINE";
+
+                                        if (_globalStates[cid].ResourceStates.TryGetValue(camSource, out var camGuid)) {
+                                            camStatus = _eventDefinitions.TryGetValue(camGuid, out var def) ? def.Name : "ONLINE";
+                                        }
+
+                                        newInfra.Add(new InfrastructureHealth { 
+                                            Name = camName, 
+                                            Type = "camera", 
+                                            Status = camStatus, 
+                                            ConnectorId = cid,
+                                            MachineName = hostname
                                         });
                                     }
                                 }
@@ -300,7 +447,12 @@ namespace LightInsightService.Sockets.Milestone.Health
                 using var doc = JsonDocument.Parse(json);
                 if (doc.RootElement.TryGetProperty("array", out var array)) {
                     foreach (var item in array.EnumerateArray()) {
-                        _eventDefinitions[item.GetProperty("id").GetString()] = (item.GetProperty("name").GetString(), item.TryGetProperty("category", out var c) ? c.GetString() : "Unknown");
+                        string id = item.GetProperty("id").GetString();
+                        string displayName = item.GetProperty("displayName").GetString();
+                        string genType = item.TryGetProperty("generatorType", out var gt) ? gt.GetString() : "Unknown";
+                        string category = item.TryGetProperty("generatorGroupName", out var c) ? c.GetString() : "General";
+                        
+                        _eventDefinitions[id] = (displayName, category, genType);
                     }
                 }
             } catch { }

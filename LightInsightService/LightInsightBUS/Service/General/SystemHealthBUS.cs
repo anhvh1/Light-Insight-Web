@@ -83,8 +83,9 @@ namespace LightInsightBUS.Service.General
         {
             if (item.Type != "server" && item.Type != "storage") return;
 
-            // Use MachineName if available, otherwise fallback to Name
-            string lookupKey = item.MachineName ?? item.Name;
+            // Robust matching: Split by '.' to handle FQDN (win-8brd.light.local) vs NetBIOS (win-8brd)
+            string rawKey = item.MachineName ?? item.Name;
+            string lookupKey = rawKey.Split('.')[0].ToUpper();
 
             if (_cache.TryGetValue($"AGENT_METRIC_{lookupKey}", out MilestoneServerMetric metrics))
             {
@@ -92,12 +93,12 @@ namespace LightInsightBUS.Service.General
                 item.RamUsage = metrics.RamUsage;
                 item.TotalRamGb = metrics.TotalRamGb;
                 item.FreeRamGb = metrics.FreeRamGb;
-                
+
                 if (item.Type == "server")
                 {
                     item.Description = $"CPU {metrics.CpuUsage}% · RAM {metrics.RamUsage}% · Disks: {metrics.Disks.Count}";
                 }
-                
+
                 // Map disks
                 item.Disks = metrics.Disks.Select(d => new InfrastructureDisk {
                     DriveName = d.DriveName,
