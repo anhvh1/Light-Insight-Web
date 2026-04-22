@@ -1,24 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { StatusPill, TypeBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 import { incidentApi } from '@/lib/incident-api';
-import type { IncidentApiItem } from '@/types';
+import { sopApi } from '@/lib/sop-api';
+import type { AlarmType, IncidentApiItem, SopDetail } from '@/types';
 import {
   AlertCircle,
-  CalendarClock,
   ChevronLeft,
   ChevronRight,
+  ClipboardCheck,
   Link2,
   RefreshCcw,
   Search,
   ShieldAlert,
-  UserRound,
 } from 'lucide-react';
 
 type IncidentTab = 'all' | 'NEW' | 'IN PROGRESS' | 'ON HOLD' | 'CLOSED';
 
 const PAGE_SIZE = 30;
+
+type StepProgressState = Record<string, boolean>;
 
 function normalizeStatus(status?: string | null) {
   return (status || '').trim().toUpperCase();
@@ -29,6 +31,24 @@ function formatDateTime(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString('vi-VN');
+}
+
+function getStepProgressKey(incidentId?: string | null) {
+  return `incident-sop-progress:${incidentId || 'unknown'}`;
+}
+
+function getStepKey(step: { id?: string; step_order: number }) {
+  return step.id || `step-${step.step_order}`;
+}
+
+function mapIncidentTypeToBadge(type?: string | null): AlarmType {
+  const key = (type || '').toLowerCase();
+  if (key.includes('lpr')) return 'lpr';
+  if (key.includes('access') || key.includes('acs')) return 'acs';
+  if (key.includes('fire')) return 'fire';
+  if (key.includes('bms')) return 'bms';
+  if (key.includes('intrusion') || key.includes('ai') || key.includes('vmd')) return 'ai';
+  return 'tech';
 }
 
 function getStatusBadge(status: string) {
@@ -69,6 +89,7 @@ function getStatusBadge(status: string) {
 }
 
 export function IncidentManagement() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<IncidentTab>('all');
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
@@ -76,6 +97,8 @@ export function IncidentManagement() {
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(
     null
   );
+  const [stepProgress, setStepProgress] = useState<StepProgressState>({});
+  const [selectedSopId, setSelectedSopId] = useState('');
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedKeyword(keyword.trim()), 350);
@@ -122,6 +145,47 @@ export function IncidentManagement() {
     return incidents.find((x) => x.id === selectedIncidentId) ?? null;
   }, [detailQuery.data, incidents, selectedIncidentId]);
 
+  const sopDetailQuery = useQuery({
+    queryKey: ['incident-sop-detail', selectedIncident?.sop_id],
+    queryFn: () => sopApi.getById(selectedIncident?.sop_id as string),
+    enabled: !!selectedIncident?.sop_id,
+  });
+
+  const sopListQuery = useQuery({
+    queryKey: ['incident-sop-list'],
+    queryFn: () => sopApi.getPaged({ Page: 1, PageSize: 200 }),
+    enabled: !!selectedIncident && !selectedIncident.sop_id,
+  });
+
+  const assignSopMutation = useMutation({
+    mutationFn: (sopId: string) =>
+      incidentApi.update({
+        Id: selectedIncident?.id || '',
+        SourceId: selectedIncident?.source_id || '',
+        Type: selectedIncident?.type || '',
+        Priority: selectedIncident?.priority || null,
+        Status: selectedIncident?.status || null,
+        UserId: selectedIncident?.user_id || null,
+        SopId: sopId,
+      }),
+    onSuccess: () => {
+      if (!selectedIncident?.id) return;
+      void queryClient.invalidateQueries({
+        queryKey: ['incident-detail', selectedIncident.id],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['incident-list'],
+      });
+      setSelectedSopId('');
+    },
+  });
+
+  const sopDetail = (sopDetailQuery.data?.Data || null) as SopDetail | null;
+  const sopSteps = useMemo(
+    () => [...(sopDetail?.steps ?? [])].sort((a, b) => a.step_order - b.step_order),
+    [sopDetail?.steps]
+  );
+
   const tabs: Array<{ value: IncidentTab; label: string }> = [
     { value: 'all', label: 'Tất cả' },
     { value: 'NEW', label: 'New' },
@@ -130,10 +194,84 @@ export function IncidentManagement() {
     { value: 'CLOSED', label: 'Closed' },
   ];
 
+  useEffect(() => {
+    if (!selectedIncident?.id) {
+      setStepProgress({});
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(getStepProgressKey(selectedIncident.id));
+      setStepProgress(raw ? (JSON.parse(raw) as StepProgressState) : {});
+    } catch {
+      setStepProgress({});
+    }
+  }, [selectedIncident?.id]);
+
+  useEffect(() => {
+    if (!selectedIncident?.id) return;
+    localStorage.setItem(
+      getStepProgressKey(selectedIncident.id),
+      JSON.stringify(stepProgress)
+    );
+  }, [selectedIncident?.id, stepProgress]);
+
+  useEffect(() => {
+    if (!selectedIncident || selectedIncident.sop_id) {
+      setSelectedSopId('');
+      return;
+    }
+    const firstSopId = sopListQuery.data?.Data?.[0]?.Id || '';
+    setSelectedSopId(firstSopId);
+  }, [selectedIncident, sopListQuery.data]);
+
+  const doneStepsCount = useMemo(
+    () => sopSteps.filter((step) => !!stepProgress[getStepKey(step)]).length,
+    [sopSteps, stepProgress]
+  );
+
+  const correlationItems = useMemo(() => {
+    if (!sopDetail) return [];
+    const rows: Array<{ id: string; name: string; sub: string; time: string; icon: string }> =
+      [];
+    const seen = new Set<string>();
+
+    for (const trigger of sopDetail.triggers ?? []) {
+      const id = (trigger.vms_camera_id || '').trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      rows.push({
+        id,
+        name: id,
+        sub: `Trigger · ${trigger.event_name || 'Event'}`,
+        time: formatDateTime(selectedIncident?.created_at),
+        icon: '🚨',
+      });
+    }
+    for (const step of sopSteps) {
+      const id = (step.target_device_id || '').trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      rows.push({
+        id,
+        name: id,
+        sub: `Step ${step.step_order} · ${step.step_name}`,
+        time: formatDateTime(selectedIncident?.updated_at),
+        icon: '📷',
+      });
+    }
+    return rows;
+  }, [selectedIncident?.created_at, selectedIncident?.updated_at, sopDetail, sopSteps]);
+
+  const toggleStep = (stepKey: string) =>
+    setStepProgress((prev) => ({
+      ...prev,
+      [stepKey]: !prev[stepKey],
+    }));
+
   const renderIncidentDetail = () => (
-    <div className="bg-bg0 overflow-y-auto p-5 flex flex-col gap-5 min-w-[400px] border-l border-border-dim scrollbar-thin scrollbar-thumb-bg4">
+    <div className="bg-bg0 overflow-y-auto p-5 flex flex-col gap-5 h-full min-w-[400px] border-l border-border-dim scrollbar-thin scrollbar-thumb-bg4">
       {!selectedIncident && !detailQuery.isFetching ? (
-        <div className="flex-1 flex flex-col items-center justify-center opacity-20 gap-4 mt-20">
+        <div className="flex flex-col items-center justify-center opacity-20 gap-4 py-24">
           <ShieldAlert size={64} strokeWidth={1} />
           <div className="text-center">
             <div className="text-[11px] uppercase font-bold tracking-[0.3em]">
@@ -147,7 +285,7 @@ export function IncidentManagement() {
       ) : (
         <>
           {/* Header */}
-          <div className="flex items-start justify-between gap-4">
+          <div className="shrink-0 flex items-start justify-between gap-4">
             <div className="flex flex-col gap-1">
               <div className="text-[10px] font-mono text-psim-accent font-bold uppercase tracking-[0.2em]">
                 #INC-{(selectedIncident?.id ?? 'missing-id').slice(0, 8)}
@@ -163,7 +301,7 @@ export function IncidentManagement() {
           </div>
 
           {/* Meta Grid */}
-          <div className="grid grid-cols-2 gap-px bg-border-dim border border-border-dim rounded overflow-hidden shadow-sm">
+          <div className="shrink-0 grid grid-cols-2 gap-px bg-border-dim border border-border-dim rounded shadow-sm">
             {[
               {
                 label: 'Source ID',
@@ -210,60 +348,132 @@ export function IncidentManagement() {
             ))}
           </div>
 
-          {/* Status & context */}
-          <div className="flex flex-col gap-2.5">
-            <div className="text-[10px] font-bold text-purple uppercase tracking-widest flex items-center gap-2">
-              <Link2 size={14} /> Trạng thái xử lý
+          {correlationItems.length > 0 && (
+            <div className="shrink-0 bg-bg2 rounded-md p-3 border border-[rgba(155,109,255,0.2)]">
+              <div className="text-[10px] font-mono text-purple uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Link2 size={13} /> Correlation - {correlationItems.length} nguồn liên quan
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {correlationItems.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-md flex items-center justify-center text-[13px] shrink-0 bg-[rgba(155,109,255,0.15)] text-purple">
+                      {item.icon}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[11px] font-medium" title={item.name}>
+                        {item.name}
+                      </div>
+                      <div className="truncate text-[10px] text-t-2 font-mono" title={item.sub}>
+                        {item.sub}
+                      </div>
+                    </div>
+                    <div className="shrink-0 font-mono text-[10px] text-t-2">{item.time}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-3 p-2 bg-bg2 border border-border-dim rounded-md hover:border-psim-accent/30 transition-colors">
-                <div className="w-8 h-8 rounded bg-psim-accent/15 flex items-center justify-center shrink-0 border border-psim-accent/20 text-psim-accent text-[13px]">
-                  <CalendarClock size={15} />
+          )}
+
+          {selectedIncident?.sop_id ? (
+            <div className="shrink-0 bg-bg2/50 border border-border-dim rounded-lg p-3.5 flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-border-dim pb-2.5">
+                <div className="text-[11px] font-bold text-t-0 uppercase flex items-center gap-2">
+                  <ClipboardCheck size={14} className="text-psim-accent" />
+                  SOP - {sopDetail?.name || 'Đang tải...'}
                 </div>
-                <div className="flex-1 overflow-hidden">
-                  <div className="text-[11px] font-bold text-t-0 truncate">
-                    Incident đang ở trạng thái: {selectedIncident?.status || '--'}
-                  </div>
-                  <div className="text-[9px] font-mono text-t-2">
-                    Cập nhật lần cuối {formatDateTime(selectedIncident?.updated_at)}
-                  </div>
-                </div>
-                {getStatusBadge(selectedIncident?.status || '')}
+                <span className="text-[10px] font-mono text-psim-accent font-bold bg-psim-accent/10 px-2 py-0.5 rounded-full">
+                  {doneStepsCount} / {sopSteps.length || 0}
+                </span>
               </div>
 
-              <div className="flex items-center gap-3 p-2 bg-bg2 border border-border-dim rounded-md hover:border-psim-accent/30 transition-colors">
-                <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center shrink-0 border border-white/15 text-t-1 text-[13px]">
-                  <UserRound size={15} />
+              {!sopDetailQuery.isLoading && sopSteps.length === 0 ? (
+                <div className="text-[11px] text-t-2">SOP này chưa có step.</div>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {sopSteps.map((step) => {
+                    const stepKey = getStepKey(step);
+                    const checked = !!stepProgress[stepKey];
+                    return (
+                      <label
+                        key={stepKey}
+                        className="flex items-center gap-2 p-1.5 rounded hover:bg-bg2 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          className="accent-[#00d9a0]"
+                          checked={checked}
+                          onChange={() => toggleStep(stepKey)}
+                        />
+                        <span
+                          className={cn(
+                            'text-[12px] font-medium',
+                            checked ? 'line-through text-t-2' : 'text-t-0'
+                          )}
+                        >
+                          {step.step_name || `Step ${step.step_order}`}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
-                <div className="flex-1 overflow-hidden">
-                  <div className="text-[11px] font-bold text-t-0 truncate">
-                    Người xử lý: {selectedIncident?.user_id || 'Chưa gán'}
-                  </div>
-                  <div className="text-[9px] font-mono text-t-2">
-                    Nguồn: {selectedIncident?.source_id || '--'}
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
+          ) : (
+            <div className="shrink-0 bg-bg2/50 border border-border-dim rounded-lg p-3.5 flex flex-col gap-3">
+              <div className="text-[11px] font-bold text-t-0 uppercase">
+                Chọn SOP cho incident này
+              </div>
+              <select
+                value={selectedSopId}
+                onChange={(e) => setSelectedSopId(e.target.value)}
+                className="w-full bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
+              >
+                <option value="" className="bg-[#161b2e]">
+                  Chưa được gán SOP
+                </option>
+                {(sopListQuery.data?.Data ?? []).map((item) => (
+                  <option
+                    key={item.Id}
+                    value={item.Id}
+                    className="bg-[#161b2e]"
+                  >
+                    {item.Name} ({item.Id.slice(0, 8)})
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={!selectedSopId || assignSopMutation.isPending}
+                onClick={() => {
+                  if (!selectedSopId) return;
+                  assignSopMutation.mutate(selectedSopId);
+                }}
+                className="px-3 py-1.5 bg-psim-accent text-bg0 rounded-md text-[11px] font-bold uppercase tracking-wider disabled:opacity-50"
+              >
+                {assignSopMutation.isPending ? 'Đang gán...' : 'Gán SOP'}
+              </button>
+              {assignSopMutation.isError && (
+                <div className="text-[11px] text-psim-red">Không thể gán SOP.</div>
+              )}
+            </div>
+          )}
+
+          <div className="shrink-0 grid grid-cols-2 gap-1.5 pb-4">
+            <button className="px-3.5 py-2 rounded-md text-[12px] font-medium bg-psim-accent text-bg0 hover:opacity-90 transition-colors">
+              Giao việc Guard
+            </button>
+            <button className="px-3.5 py-2 rounded-md text-[12px] font-medium bg-bg3 text-t1 border border-border-dim hover:bg-bg4 transition-colors">
+              Xem Camera Live
+            </button>
+            <button className="px-3.5 py-2 rounded-md text-[12px] font-medium bg-[rgba(255,204,0,0.15)] text-psim-yellow border border-[rgba(255,204,0,0.3)] hover:bg-[rgba(255,204,0,0.25)] transition-colors">
+              Escalate
+            </button>
+            <button className="px-3.5 py-2 rounded-md text-[12px] font-medium bg-bg3 text-t1 border border-border-dim hover:bg-bg4 transition-colors">
+              Xuất bằng chứng
+            </button>
           </div>
 
-          {/* SOP */}
-          <div className="bg-bg2/50 border border-border-dim rounded-lg p-3.5 flex flex-col gap-3">
-            <div className="flex items-center justify-between border-b border-border-dim pb-2.5">
-              <div className="text-[11px] font-bold text-t-0 uppercase flex items-center gap-2">
-                <Link2 size={15} className="text-psim-accent" /> SOP liên kết
-              </div>
-              <span className="text-[10px] font-mono text-psim-accent font-bold bg-psim-accent/10 px-2 py-0.5 rounded-full">
-                {selectedIncident?.sop_id ? 'Đã gán' : 'Chưa gán'}
-              </span>
-            </div>
-            <div className="text-[12px] text-t-1 break-all">
-              {selectedIncident?.sop_id || 'Incident này chưa liên kết SOP.'}
-            </div>
-          </div>
-
-          {/* Timeline */}
-          <div className="flex flex-col gap-3 pb-6">
+          <div className="shrink-0 flex flex-col gap-3 pb-6">
             <h3 className="text-[10px] font-mono text-t-2 uppercase tracking-widest font-bold px-1">
               Audit Timeline
             </h3>
@@ -297,7 +507,12 @@ export function IncidentManagement() {
                       tl.on ? 'bg-psim-accent shadow-[0_0_8px_var(--accent)]' : 'bg-bg4'
                     )}
                   />
-                  <div className={cn('text-[12px] font-bold leading-none', tl.on ? 'text-t-0' : 'text-t2')}>
+                  <div
+                    className={cn(
+                      'text-[12px] font-bold leading-none',
+                      tl.on ? 'text-t-0' : 'text-t2'
+                    )}
+                  >
                     {tl.t}
                   </div>
                   <div className="text-[9px] font-mono text-t-2 uppercase">
@@ -345,6 +560,7 @@ export function IncidentManagement() {
           onClick={() => {
             void listQuery.refetch();
             if (selectedIncidentId) void detailQuery.refetch();
+            if (selectedIncident?.sop_id) void sopDetailQuery.refetch();
           }}
           className="ml-auto px-3 py-1.5 bg-bg2 border border-border-dim text-t-1 rounded-md text-[11px] font-bold uppercase tracking-wider hover:bg-bg3 transition-colors flex items-center gap-1.5"
         >
@@ -457,7 +673,10 @@ export function IncidentManagement() {
                           <StatusPill priority={inc.priority} />
                         </td>
                         <td className="py-2.5 px-3 align-middle text-[12px]">
-                          <TypeBadge type={inc.type || '--'} label={inc.type || '--'} />
+                          <TypeBadge
+                            type={mapIncidentTypeToBadge(inc.type)}
+                            label={inc.type || '--'}
+                          />
                         </td>
                         <td className="py-2.5 px-3 align-middle text-[11px] text-t-2 max-w-[220px] truncate">
                           {inc.source_id || '--'}

@@ -5,6 +5,16 @@ import type {
   IncidentPagingParams,
 } from '@/types';
 
+export interface IncidentUpdatePayload {
+  Id: string;
+  SourceId: string;
+  Type: string;
+  Priority?: string | null;
+  Status?: string | null;
+  UserId?: string | null;
+  SopId?: string | null;
+}
+
 function getStringValue(
   source: Record<string, unknown>,
   keys: string[]
@@ -93,5 +103,18 @@ export const incidentApi = {
       ...payload,
       Data: normalizedItem,
     };
+  },
+
+  update: async (payload: IncidentUpdatePayload) => {
+    const res = await apiClient.put<ApiResponse<null>>('/Incident/Update', payload);
+    return (
+      res.data || {
+        Status: -1,
+        Message: 'Update failed',
+        MessageDetail: null,
+        Data: null,
+        TotalRow: 0,
+      }
+    );
   },
 };
