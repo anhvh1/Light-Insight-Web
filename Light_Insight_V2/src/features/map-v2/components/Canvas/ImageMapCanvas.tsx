@@ -114,8 +114,8 @@ export function ImageMapCanvas({
     background: 'var(--bg0)',
     overflow: 'hidden',
     height: isFullscreen ? 'calc(100vh - 160px)' : '100%',
-    minHeight: 360,
-    width: '100%'
+    width: '100%',
+    minHeight: 360
   };
 
   if (isFullscreen) {
@@ -159,68 +159,74 @@ export function ImageMapCanvas({
         )}
         {mapHasImage && (
           <>
-            <Box style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-              <Box
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  width: imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0 ? viewportWidth : imageNaturalSize.width,
-                  height: imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0 ? viewportHeight : imageNaturalSize.height,
-                  transform: imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0 ? 'none' : `translate(${imageView.translateX}px, ${imageView.translateY}px) scale(${imageView.scale})`,
-                  transformOrigin: 'top left'
-                }}
-              >
-                <img
-                  src={resolvedImageUrl ?? ''}
-                  alt={activeMap?.name ?? t('pages.maps.panel.mapAlt')}
-                  onLoad={(event) => {
-                    const img = event.currentTarget;
-                    if (img.naturalWidth && img.naturalHeight) {
-                      setImageNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
-                    }
-                  }}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    display: 'block',
-                    objectFit: 'fill'
-                  }}
-                  draggable={false}
-                />
-                <svg
-                  width="100%"
-                  height="100%"
-                  style={{ position: 'absolute', inset: 0 }}
-                >
-                  {imageFovShapes.map((shape) => (
-                    <polygon
-                      key={shape.cameraId}
-                      points={shape.points}
-                      fill="rgba(0, 194, 255, 0.15)"
-                      stroke="var(--accent)"
-                      strokeWidth="1"
-                    />
-                  ))}
-                </svg>
-              </Box>
-            </Box>
+            {/* The actual image container that pans and zooms */}
             <Box
               style={{
                 position: 'absolute',
                 left: 0,
                 top: 0,
-                width: imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0 ? viewportWidth : imageNaturalSize.width,
-                height: imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0 ? viewportHeight : imageNaturalSize.height,
-                transform: imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0 ? 'none' : `translate(${imageView.translateX}px, ${imageView.translateY}px) scale(${imageView.scale})`,
-                transformOrigin: 'top left'
+                width: imageNaturalSize.width,
+                height: imageNaturalSize.height,
+                transform: `translate(${imageView.translateX}px, ${imageView.translateY}px) scale(${imageView.scale})`,
+                transformOrigin: 'top left',
+                border: '1px solid var(--accent)', // Border hugs the image
+                boxShadow: '0 0 20px rgba(0,0,0,0.3)',
+                pointerEvents: 'none'
+              }}
+            >
+              <img
+                src={resolvedImageUrl ?? ''}
+                alt={activeMap?.name ?? t('pages.maps.panel.mapAlt')}
+                onLoad={(event) => {
+                  const img = event.currentTarget;
+                  if (img.naturalWidth && img.naturalHeight) {
+                    setImageNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'block',
+                  objectFit: 'fill'
+                }}
+                draggable={false}
+              />
+              
+              {/* SVG Layer for FOVs */}
+              <svg
+                width="100%"
+                height="100%"
+                style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+              >
+                {imageFovShapes.map((shape) => (
+                  <polygon
+                    key={shape.cameraId}
+                    points={shape.points}
+                    fill="rgba(0, 194, 255, 0.15)"
+                    stroke="var(--accent)"
+                    strokeWidth="1"
+                  />
+                ))}
+              </svg>
+            </Box>
+
+            {/* Cameras Layer - Separate Box to avoid pointerEvents: none on icons */}
+            <Box
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                width: imageNaturalSize.width,
+                height: imageNaturalSize.height,
+                transform: `translate(${imageView.translateX}px, ${imageView.translateY}px) scale(${imageView.scale})`,
+                transformOrigin: 'top left',
+                pointerEvents: 'none'
               }}
             >
               {positions.map((position) => {
                 if (position.x == null || position.y == null) return null;
-                const isStretched = imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0;
-                const currentW = isStretched ? viewportWidth : imageNaturalSize.width;
-                const currentH = isStretched ? viewportHeight : imageNaturalSize.height;
+                const currentW = imageNaturalSize.width;
+                const currentH = imageNaturalSize.height;
                 
                 const left = position.x * currentW;
                 const top = position.y * currentH;
@@ -252,7 +258,8 @@ export function ImageMapCanvas({
                             border: '2px solid var(--bg0)',
                             transform: 'translate(-50%, -50%)',
                             cursor: 'pointer',
-                            boxShadow: '0 0 10px var(--orange)'
+                            boxShadow: '0 0 10px var(--orange)',
+                            pointerEvents: 'auto'
                           }}
                         />
                         <Box
@@ -269,7 +276,8 @@ export function ImageMapCanvas({
                             border: '2px solid var(--bg0)',
                             transform: 'translate(-50%, -50%)',
                             cursor: 'pointer',
-                            boxShadow: '0 0 10px var(--orange)'
+                            boxShadow: '0 0 10px var(--orange)',
+                            pointerEvents: 'auto'
                           }}
                         />
                       </>
@@ -282,7 +290,8 @@ export function ImageMapCanvas({
                         left,
                         top,
                         transform: 'translate(-50%, -50%)',
-                        cursor: 'grab'
+                        cursor: 'grab',
+                        pointerEvents: 'auto'
                       }}
                     >
                       {isSelected && (
@@ -296,7 +305,8 @@ export function ImageMapCanvas({
                             top: -ROTATE_HANDLE_OFFSET - HANDLE_SIZE - 8,
                             right: -ROTATE_HANDLE_OFFSET,
                             zIndex: 2,
-                            backgroundColor: 'var(--red)'
+                            backgroundColor: 'var(--red)',
+                            pointerEvents: 'auto'
                           }}
                           onClick={(e) => {
                             e.preventDefault();
@@ -334,7 +344,8 @@ export function ImageMapCanvas({
                                 background: 'var(--accent)',
                                 border: '2px solid var(--bg0)',
                                 cursor: 'grab',
-                                boxShadow: '0 0 8px var(--accent)'
+                                boxShadow: '0 0 8px var(--accent)',
+                                pointerEvents: 'auto'
                               }}
                             />
                             {[0, 1, 2, 3].map((h) => {
@@ -354,7 +365,8 @@ export function ImageMapCanvas({
                                     borderRadius: 2,
                                     left: isLeft ? -HANDLE_SIZE / 2 : iconSize - HANDLE_SIZE / 2,
                                     top: isTop ? -HANDLE_SIZE / 2 : iconSize - HANDLE_SIZE / 2,
-                                    cursor: 'nwse-resize'
+                                    cursor: 'nwse-resize',
+                                    pointerEvents: 'auto'
                                   }}
                                 />
                               );

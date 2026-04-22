@@ -12,7 +12,6 @@ import {
   IconDownload,
   IconMapPin,
   IconPlus,
-  IconRefresh,
   IconTrash,
   IconUpload
 } from '@tabler/icons-react';
@@ -400,18 +399,28 @@ export function MapLayoutManagerPanel() {
   useEffect(() => { geoFovFeaturesRef.current = geoFovFeatures; }, [geoFovFeatures]);
 
   const resetImageView = useCallback(() => {
+    if (!imageNaturalSize.width || !viewportWidth || !viewportHeight) return;
+
+    const scaleX = viewportWidth / imageNaturalSize.width;
+    const scaleY = viewportHeight / imageNaturalSize.height;
+    const fitScale = Math.min(scaleX, scaleY);
+
     setImageView({ 
-      scale: 1, 
-      translateX: 0, 
-      translateY: 0 
+      scale: fitScale, 
+      translateX: (viewportWidth - imageNaturalSize.width * fitScale) / 2, 
+      translateY: (viewportHeight - imageNaturalSize.height * fitScale) / 2 
     });
-  }, []);
+  }, [imageNaturalSize, viewportWidth, viewportHeight]);
 
   useEffect(() => {
     if (!activeMap || activeMap.type !== 'Image' || !imageNaturalSize.width || !viewportWidth || !viewportHeight) return;
-    if (lastImageMapIdRef.current !== activeMap.id || isFullscreen) resetImageView();
-    lastImageMapIdRef.current = activeMap.id;
-  }, [activeMap, imageNaturalSize.width, viewportWidth, viewportHeight, isFullscreen, resetImageView]);
+    
+    // Only reset if it's a new map or explicitly requested (like entering fullscreen)
+    if (lastImageMapIdRef.current !== activeMap.id) {
+      resetImageView();
+      lastImageMapIdRef.current = activeMap.id;
+    }
+  }, [activeMap, imageNaturalSize.width, viewportWidth, viewportHeight, resetImageView]);
 
   const DEFAULT_GEO_COORDS: [number, number] = [106.6113, 10.7254];
 
@@ -717,9 +726,13 @@ export function MapLayoutManagerPanel() {
               </Group>
             </Group>
           </Box>
-          <Box p="md" style={{ flex: 1, minHeight: 0 }}>
+          <Box 
+            ref={imageViewportSizeRef}
+            p="md" 
+            style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}
+          >
             {!activeMap ? (
-              <Box h="100%" style={{ minHeight: 360, borderRadius: 16, border: '1px dashed var(--border-dim)', background: 'rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Box h="100%" style={{ minHeight: 360, borderRadius: 16, border: '1px dashed var(--border-dim)', background: 'rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
                 <Stack gap={4} align="center"><IconMapPin size={32} style={{ color: 'var(--t2)' }} /><Text size="sm" style={{ color: 'var(--t2)' }}>{t('pages.maps.empty')}</Text></Stack>
               </Box>
             ) : activeMap.type === 'Geo' ? (
@@ -807,7 +820,7 @@ export function MapLayoutManagerPanel() {
             ) : (
               <ImageMapCanvas
                 activeMap={activeMap} resolvedImageUrl={(activeMap.imageUrl || activeMap.mapImagePath) ? buildApiUrl(activeMap.imageUrl || activeMap.mapImagePath!) : null} isFullscreen={isFullscreen} setIsFullscreen={setIsFullscreen}
-                imageNaturalSize={imageNaturalSize} setImageNaturalSize={setImageNaturalSize} imageView={imageView} setImageViewportNode={(node) => { if (imageViewportSizeRef) imageViewportSizeRef(node); imageViewportRef.current = node; }}
+                imageNaturalSize={imageNaturalSize} setImageNaturalSize={setImageNaturalSize} imageView={imageView} setImageViewportNode={(node) => { imageViewportRef.current = node; }}
                 positions={positions} selectedCameraId={selectedCameraId}
                 onDrop={(e) => { 
                   e.preventDefault(); 
@@ -835,7 +848,7 @@ export function MapLayoutManagerPanel() {
                 startScaleDrag={(e, id) => { e.preventDefault(); e.stopPropagation(); setSelectedCameraId(id); const p = positionsByCamera.get(id); const rect = imageViewportRef.current!.getBoundingClientRect(); const mx = (e.clientX - rect.left - imageView.translateX) / imageView.scale; const my = (e.clientY - rect.top - imageView.translateY) / imageView.scale; const dist = Math.hypot(mx - (p?.x ?? 0) * imageNaturalSize.width, my - (p?.y ?? 0) * imageNaturalSize.height); dragStateRef.current = { kind: 'scale', cameraId: id, startScale: p?.iconScale ?? 1, startDistance: dist }; }}
                 startFovDrag={(e, id, side) => { e.preventDefault(); e.stopPropagation(); setSelectedCameraId(id); dragStateRef.current = { kind: 'fov', cameraId: id, side }; }}
                 removePosition={removePosition} zoomImage={(f, x, y) => { setImageView((prev) => { const ns = clamp(prev.scale * f, 0.2, 6); const dx = (x - prev.translateX) / prev.scale; const dy = (y - prev.translateY) / prev.scale; return { scale: ns, translateX: x - dx * ns, translateY: y - dy * ns }; }); }}
-                resetImageView={resetImageView} viewportWidth={viewportWidth} viewportHeight={viewportHeight} resolveCameraLabel={resolveCameraLabel} t={t}
+                resetImageView={resetImageView} viewportWidth={viewportWidth - 32} viewportHeight={viewportHeight - 32} resolveCameraLabel={resolveCameraLabel} t={t}
               />
             )}
           </Box>
