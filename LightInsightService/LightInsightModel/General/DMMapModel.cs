@@ -43,15 +43,15 @@ namespace LightInsightModel.General
 
         [Column("geocenterlatitude")]
         [JsonPropertyName("geoCenterLatitude")]
-        public double GeoCenterLatitude { get; set; }
+        public double? GeoCenterLatitude { get; set; }
 
         [Column("geocenterlongitude")]
         [JsonPropertyName("geoCenterLongitude")]
-        public double GeoCenterLongitude { get; set; }
+        public double? GeoCenterLongitude { get; set; }
 
         [Column("geozoom")]
         [JsonPropertyName("geoZoom")]
-        public double GeoZoom { get; set; }
+        public double? GeoZoom { get; set; }
 
         [Column("created_at")]
         [JsonPropertyName("createdAt")]

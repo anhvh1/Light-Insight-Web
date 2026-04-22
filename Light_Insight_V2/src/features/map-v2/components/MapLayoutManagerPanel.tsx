@@ -2,7 +2,6 @@ import {
   Badge,
   Box,
   Button,
-  FileInput,
   Group,
   Paper,
   Stack,
@@ -10,16 +9,19 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
+  IconDownload,
   IconMapPin,
   IconPlus,
+  IconRefresh,
+  IconTrash,
   IconUpload
 } from '@tabler/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildApiUrl, getApiBaseUrl } from '../api/client';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { buildApiUrl } from '../api/client';
+import { downloadSampleImage } from '../api/ingestor';
 import type {
-  CameraResponse,
   MapCameraPositionRequest,
   MapLayoutResponse,
   MapLayoutType,
@@ -34,6 +36,7 @@ import { MapSidebar } from './Sidebar/MapSidebar';
 import { MapModals } from './Modals/MapModals';
 import { ImageMapCanvas } from './Canvas/ImageMapCanvas';
 import { GeoMapCanvas } from './Canvas/GeoMapCanvas';
+import { ImageUploadWizard } from './Modals/ImageUploadWizard';
 
 const {
   DEFAULT_ANGLE_DEGREES,
@@ -69,39 +72,204 @@ type GeoDragState =
   | { kind: 'rotate'; cameraId: string; }
   | { kind: 'scale'; cameraId: string; startScale: number; startDistance: number; };
 
-export function MapLayoutManagerPanel({ cameras }: { cameras: CameraResponse[] }) {
+export function MapLayoutManagerPanel() {
   const queryClient = useQueryClient();
   const { t } = useI18n();
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
+  const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
   
+  const [responseOpened, responseHandlers] = useDisclosure(false);
+  const [responseStatus, setResponseStatus] = useState<'success' | 'error'>('success');
+  const [responseText, setResponseText] = useState('');
+
+  const [createOpened, createHandlers] = useDisclosure(false);
+  const [editOpened, editHandlers] = useDisclosure(false);
+  const [deleteOpened, deleteHandlers] = useDisclosure(false);
+  const [uploadWizardOpened, uploadWizardHandlers] = useDisclosure(false);
+
+  const [newMapName, setNewMapName] = useState('');
+  const [newMapCode, setNewMapCode] = useState('');
+  const [newMapType, setNewMapType] = useState<MapLayoutType>('Image');
+  const [newMapParentId, setNewMapParentId] = useState<string | null>(null);
+  const [editMap, setEditMap] = useState<MapLayoutResponse | null>(null);
+  const [editMapName, setEditMapName] = useState('');
+  const [editMapCode, setEditMapCode] = useState('');
+  const [editMapType, setEditMapType] = useState<MapLayoutType>('Image');
+  const [editMapParentId, setEditMapParentId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MapLayoutResponse | null>(null);
+
+  const showResponse = useCallback((status: 'success' | 'error', text: string) => {
+    setResponseStatus(status);
+    setResponseText(text);
+    responseHandlers.open();
+  }, [responseHandlers]);
+
   const {
     mapsQuery,
+    connectorsQuery,
+    devicesQuery,
     mapOptionsQuery,
     mapDetailQuery,
     createMapMutation,
     updateMapMutation,
     deleteMapMutation,
     uploadImageMutation,
+    deleteImageMutation,
     savePositionsMutation,
     saveGeoViewMutation
-  } = useMapOperations(selectedMapId);
+  } = useMapOperations(selectedMapId, selectedConnectorId);
+
+  const handleCloseCreate = () => {
+    setNewMapName('');
+    setNewMapCode('');
+    setNewMapType('Image');
+    setNewMapParentId(null);
+    createHandlers.close();
+  };
+
+  const handleCloseEdit = () => {
+    setEditMap(null);
+    setEditMapName('');
+    setEditMapCode('');
+    setEditMapType('Image');
+    setEditMapParentId(null);
+    editHandlers.close();
+  };
+
+  const [_isPending, startTransition] = useTransition();
+
+  const handleDownloadSample = () => {
+    startTransition(async () => {
+      try {
+        const blob = await downloadSampleImage();
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = 'light-insight-sample-map.png';
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(objectUrl);
+        }, 100);
+        showResponse('success', 'Đã tải ảnh mẫu thành công.');
+      } catch (error: any) {
+        showResponse('error', t('pages.maps.notifications.sampleDownloadFailed.title') || 'Lỗi khi tải ảnh mẫu.');
+      }
+    });
+  };
+
+  // Mutation effects
+  useEffect(() => {
+    if (createMapMutation.isSuccess && createMapMutation.data) {
+      const res = createMapMutation.data;
+      createMapMutation.reset();
+      if (res.Status === 1) {
+        const newId = res.Data.id;
+        setSelectedMapId(newId);
+        handleCloseCreate();
+        showResponse('success', res.Message || t('pages.maps.notifications.create.message'));
+      } else {
+        showResponse('error', res.Message || t('pages.maps.notifications.createFailed.title'));
+      }
+    }
+    if (createMapMutation.isError) {
+      createMapMutation.reset();
+      showResponse('error', t('pages.maps.notifications.createFailed.title'));
+    }
+  }, [createMapMutation, showResponse, t]);
+
+  useEffect(() => {
+    if (updateMapMutation.isSuccess && updateMapMutation.data) {
+      const res = updateMapMutation.data;
+      updateMapMutation.reset();
+      if (res.Status === 1) {
+        const updatedName = res.Data?.name || editMap?.name || '';
+        handleCloseEdit();
+        showResponse('success', res.Message || t('pages.maps.notifications.update.message', { name: updatedName }));
+      } else {
+        showResponse('error', res.Message || t('pages.maps.notifications.updateFailed.title'));
+      }
+    }
+    if (updateMapMutation.isError) {
+      updateMapMutation.reset();
+      showResponse('error', t('pages.maps.notifications.updateFailed.title'));
+    }
+  }, [updateMapMutation, editMap, showResponse, t]);
+
+  useEffect(() => {
+    if (deleteMapMutation.isSuccess && deleteMapMutation.data) {
+      const res = deleteMapMutation.data;
+      deleteMapMutation.reset();
+      if (res.Status === 1) {
+        setSelectedMapId(null);
+        deleteHandlers.close();
+        showResponse('success', res.Message || t('pages.maps.notifications.delete.message'));
+      } else {
+        showResponse('error', res.Message || t('pages.maps.notifications.deleteFailed.title'));
+      }
+    }
+    if (deleteMapMutation.isError) {
+      deleteMapMutation.reset();
+      showResponse('error', t('pages.maps.notifications.deleteFailed.title'));
+    }
+  }, [deleteMapMutation, deleteHandlers, showResponse, t]);
+
+  useEffect(() => {
+    if (savePositionsMutation.isSuccess && savePositionsMutation.data) {
+      const res = savePositionsMutation.data;
+      savePositionsMutation.reset();
+      if (res.Status === 1) {
+        setPositionsDirty(false);
+        showResponse('success', res.Message || t('pages.maps.notifications.positionsSaved.message'));
+      } else {
+        showResponse('error', res.Message || t('pages.maps.notifications.positionsFailed.title'));
+      }
+    }
+    if (savePositionsMutation.isError) {
+      savePositionsMutation.reset();
+      showResponse('error', t('pages.maps.notifications.positionsFailed.title'));
+    }
+  }, [savePositionsMutation, showResponse, t]);
+
+  useEffect(() => {
+    if (uploadImageMutation.isSuccess && uploadImageMutation.data) {
+      const res = uploadImageMutation.data;
+      uploadImageMutation.reset();
+      if (res.Status === 1) {
+        uploadWizardHandlers.close();
+        showResponse('success', res.Message || t('pages.maps.notifications.imageUploaded.message', { name: res.Data.name }));
+      } else {
+        showResponse('error', res.Message || t('pages.maps.notifications.uploadFailed.title'));
+      }
+    }
+    if (uploadImageMutation.isError) {
+      uploadImageMutation.reset();
+      showResponse('error', t('pages.maps.notifications.uploadFailed.title'));
+    }
+  }, [uploadImageMutation, showResponse, t]);
+
+  useEffect(() => {
+    if (deleteImageMutation.isSuccess && deleteImageMutation.data) {
+      const res = deleteImageMutation.data;
+      deleteImageMutation.reset();
+      if (res.Status === 1) {
+        showResponse('success', res.Message || 'Xóa ảnh thành công.');
+      } else {
+        showResponse('error', res.Message || 'Xóa ảnh thất bại.');
+      }
+    }
+    if (deleteImageMutation.isError) {
+      deleteImageMutation.reset();
+      showResponse('error', 'Lỗi hệ thống khi xóa ảnh.');
+    }
+  }, [deleteImageMutation, showResponse]);
 
   const [positions, setPositions] = useState<MapCameraPositionRequest[]>([]);
   const [positionsDirty, setPositionsDirty] = useState(false);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
-  const [createOpened, createHandlers] = useDisclosure(false);
-  const [editOpened, editHandlers] = useDisclosure(false);
-  const [deleteOpened, deleteHandlers] = useDisclosure(false);
-  
-  const [newMapName, setNewMapName] = useState('');
-  const [newMapType, setNewMapType] = useState<MapLayoutType>('Image');
-  const [newMapParentId, setNewMapParentId] = useState<string | null>(null);
-  const [editMap, setEditMap] = useState<MapLayoutResponse | null>(null);
-  const [editMapName, setEditMapName] = useState('');
-  const [editMapType, setEditMapType] = useState<MapLayoutType>('Image');
-  const [editMapParentId, setEditMapParentId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<MapLayoutResponse | null>(null);
-  
+
   const [mapSearch, setMapSearch] = useState('');
   const [search, setSearch] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -114,6 +282,7 @@ export function MapLayoutManagerPanel({ cameras }: { cameras: CameraResponse[] }
   const [geoZoom, setGeoZoom] = useState<number | null>(null);
   const saveGeoViewTimeoutRef = useRef<number | null>(null);
   const lastSavedGeoViewRef = useRef<MapViewRequest | null>(null);
+  const lastAppliedGeoMapIdRef = useRef<string | null>(null);
   const geoDragStateRef = useRef<GeoDragState | null>(null);
   const lastPositionsMapIdRef = useRef<string | null>(null);
   const geoFovFeaturesRef = useRef<any[]>([]);
@@ -146,21 +315,12 @@ export function MapLayoutManagerPanel({ cameras }: { cameras: CameraResponse[] }
 
   const activeMap = mapDetailQuery.data?.map;
 
-  useEffect(() => {
-    if (createMapMutation.isSuccess && createMapMutation.data) {
-        setSelectedMapId(createMapMutation.data.id);
-        setNewMapName('');
-        setNewMapType('Image');
-        setNewMapParentId(null);
-        createHandlers.close();
-    }
-  }, [createMapMutation.isSuccess, createMapMutation.data, createHandlers]);
-const geoStyleUrl = useMemo(() => {
-  const rawUrl = mapOptionsQuery.data?.geoStyleUrl?.trim();
-  if (!rawUrl) return undefined;
-  // Để đường dẫn là tương đối để proxy của Vite tự điều hướng
-  return rawUrl.startsWith('http') ? rawUrl : rawUrl;
-}, [mapOptionsQuery.data?.geoStyleUrl]);
+  const geoStyleUrl = useMemo(() => {
+    const rawUrl = mapOptionsQuery.data?.geoStyleUrl?.trim();
+    if (!rawUrl) return undefined;
+    // Để đường dẫn là tương đối để proxy của Vite tự điều hướng
+    return rawUrl.startsWith('http') ? rawUrl : rawUrl;
+  }, [mapOptionsQuery.data?.geoStyleUrl]);
 
   const filteredMaps = useMemo(() => {
     const term = mapSearch.trim().toLowerCase();
@@ -173,13 +333,31 @@ const geoStyleUrl = useMemo(() => {
   const editParentOptions = useMemo(() => flattenMapTree(mapTree, 0, editMap?.id), [mapTree, editMap]);
   const positionsByCamera = useMemo(() => new Map((positions || []).map((p) => [p.cameraId, p])), [positions]);
 
-  const filteredCameras = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    const cameraList = Array.isArray(cameras) ? cameras : [];
-    return term ? cameraList.filter((c) => (c.code || '').toLowerCase().includes(term) || c.ipAddress.toLowerCase().includes(term)) : cameraList;
-  }, [cameras, search]);
+  const cameraById = useMemo(() => {
+    const map = new Map<string, { CameraName?: string | null; label?: string | null; IP?: string | null }>();
+    
+    // 1. Add metadata from current positions (already on map)
+    (positions || []).forEach(p => {
+      if (p.cameraId) {
+        map.set(p.cameraId, { 
+          CameraName: p.CameraName, 
+          label: p.label, 
+          IP: p.IP 
+        });
+      }
+    });
 
-  const cameraById = useMemo(() => new Map((cameras || []).map((c) => [c.cameraId, c])), [cameras]);
+    // 2. Add/Override with data from devices query (connector selection)
+    (devicesQuery.data || []).forEach(c => {
+      map.set(c.cameraId, { 
+        CameraName: c.name || c.CameraName, 
+        label: c.code || c.label, 
+        IP: c.IP || c.ipAddress 
+      });
+    });
+
+    return map;
+  }, [devicesQuery.data, positions]);
 
   const resolveMapTypeLabel = (type?: MapLayoutType | null) => 
     type === 'Geo' ? t('pages.maps.types.geo') : type === 'Image' ? t('pages.maps.types.image') : (type ?? '-');
@@ -187,9 +365,14 @@ const geoStyleUrl = useMemo(() => {
   const resolveCameraLabel = (cameraId: string) => {
     const camera = cameraById.get(cameraId);
     if (!camera) return cameraId;
-    const code = camera.code?.trim();
-    const ip = camera.ipAddress?.trim();
-    return code && ip ? `${code} - ${ip}` : (code || ip || cameraId);
+    
+    const name = camera.CameraName?.trim();
+    const code = camera.label?.trim();
+    const ip = camera.IP?.trim();
+    
+    if (name) return name;
+    if (code && ip) return `${code} - ${ip}`;
+    return code || ip || cameraId;
   };
 
   const geoFovFeatures = useMemo(() => {
@@ -201,7 +384,9 @@ const geoStyleUrl = useMemo(() => {
         const fov = typeof p.fovDegrees === 'number' ? clampFov(p.fovDegrees) : DEFAULT_FOV_DEGREES;
         const rangeValue = typeof p.range === 'number' ? p.range : DEFAULT_RANGE_GEO;
         const iconScale = p.iconScale ?? DEFAULT_ICON_SCALE;
-        const viewScale = getGeoMarkerScale(geoZoom ?? activeMap?.geoZoom ?? 11);
+        // Sử dụng geoZoom hiện tại, hoặc giá trị đã lưu, hoặc mặc định 11
+        const currentZoom = geoZoom ?? activeMap?.geoZoom ?? 11;
+        const viewScale = getGeoMarkerScale(currentZoom);
         const safeRange = Math.max(1, rangeValue) * iconScale / viewScale;
         const left = Geometry.destinationPoint(p.latitude ?? 0, p.longitude ?? 0, angle - fov / 2, safeRange);
         const right = Geometry.destinationPoint(p.latitude ?? 0, p.longitude ?? 0, angle + fov / 2, safeRange);
@@ -214,34 +399,101 @@ const geoStyleUrl = useMemo(() => {
 
   useEffect(() => { geoFovFeaturesRef.current = geoFovFeatures; }, [geoFovFeatures]);
 
-  const resetImageView = () => {
-    if (!imageNaturalSize.width || !imageNaturalSize.height || !viewportWidth || !viewportHeight) return;
-    const scale = Math.min(viewportWidth / imageNaturalSize.width, viewportHeight / imageNaturalSize.height);
-    setImageView({ scale, translateX: (viewportWidth - imageNaturalSize.width * scale) / 2, translateY: (viewportHeight - imageNaturalSize.height * scale) / 2 });
-  };
+  const resetImageView = useCallback(() => {
+    setImageView({ 
+      scale: 1, 
+      translateX: 0, 
+      translateY: 0 
+    });
+  }, []);
 
   useEffect(() => {
-    if (!activeMap || activeMap.type !== 'Image' || !imageNaturalSize.width || !viewportWidth) return;
+    if (!activeMap || activeMap.type !== 'Image' || !imageNaturalSize.width || !viewportWidth || !viewportHeight) return;
     if (lastImageMapIdRef.current !== activeMap.id || isFullscreen) resetImageView();
     lastImageMapIdRef.current = activeMap.id;
-  }, [activeMap, imageNaturalSize.width, viewportWidth, isFullscreen]);
+  }, [activeMap, imageNaturalSize.width, viewportWidth, viewportHeight, isFullscreen, resetImageView]);
+
+  const DEFAULT_GEO_COORDS: [number, number] = [106.6113, 10.7254];
 
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || activeMap?.type !== 'Geo' || !activeMap?.id) return;
+    
+    // Kiểm tra xem bản đồ đã được khởi tạo vị trí cho Map ID này chưa
+    if (lastAppliedGeoMapIdRef.current === activeMap.id) return;
+
+    const storedLat = activeMap.geoCenterLatitude;
+    const storedLng = activeMap.geoCenterLongitude;
+    const storedZoom = activeMap.geoZoom;
+
+    // Tọa độ được coi là hợp lệ nếu khác null và khác 0
+    const hasSavedCenter = storedLat != null && storedLng != null && storedLat !== 0 && storedLng !== 0;
+    const savedCenter: [number, number] | null = hasSavedCenter ? [storedLng, storedLat] : null;
+
+    // Tìm camera đầu tiên có tọa độ hợp lệ (khác null và khác 0)
+    const firstCameraWithCoords = positions.find(
+      (p) => p.latitude != null && p.longitude != null && p.latitude !== 0 && p.longitude !== 0
+    );
+
+    const fallbackCenter: [number, number] = firstCameraWithCoords
+      ? [firstCameraWithCoords.longitude ?? DEFAULT_GEO_COORDS[0], firstCameraWithCoords.latitude ?? DEFAULT_GEO_COORDS[1]]
+      : DEFAULT_GEO_COORDS;
+
+    const finalCenter = savedCenter ?? fallbackCenter;
+    const finalZoom = storedZoom || (hasSavedCenter ? storedZoom : (firstCameraWithCoords ? 17 : 11)) || 11;
+
+    map.jumpTo({
+      center: finalCenter,
+      zoom: finalZoom
+    });
+
+    setGeoZoom(map.getZoom());
+    lastSavedGeoViewRef.current = {
+      geoCenterLatitude: map.getCenter().lat,
+      geoCenterLongitude: map.getCenter().lng,
+      geoZoom: map.getZoom()
+    };
+    lastAppliedGeoMapIdRef.current = activeMap.id;
+  }, [activeMap, positions]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || activeMap?.type !== 'Geo' || !activeMap?.id) return;
+
     const handleMoveEnd = () => {
       const center = map.getCenter();
-      const payload: MapViewRequest = { geoCenterLatitude: center.lat, geoCenterLongitude: center.lng, geoZoom: map.getZoom() };
+      const zoom = map.getZoom();
+      
+      // Safety check: NEVER save 0,0 as center
+      if (Math.abs(center.lat) < 0.0001 && Math.abs(center.lng) < 0.0001) {
+        console.warn('Prevented saving 0,0 coordinate to backend');
+        return;
+      }
+
+      const payload: MapViewRequest = { 
+        geoCenterLatitude: center.lat, 
+        geoCenterLongitude: center.lng, 
+        geoZoom: zoom 
+      };
+
       const last = lastSavedGeoViewRef.current;
-      if (last && Math.abs(last.geoCenterLatitude - payload.geoCenterLatitude) < 1e-6 && Math.abs(last.geoCenterLongitude - payload.geoCenterLongitude) < 1e-6) return;
+      if (last && 
+          Math.abs(last.geoCenterLatitude - payload.geoCenterLatitude) < 1e-6 && 
+          Math.abs(last.geoCenterLongitude - payload.geoCenterLongitude) < 1e-6 &&
+          Math.abs(last.geoZoom - payload.geoZoom) < 1e-2) return;
+
       if (saveGeoViewTimeoutRef.current) window.clearTimeout(saveGeoViewTimeoutRef.current);
       saveGeoViewTimeoutRef.current = window.setTimeout(() => {
         saveGeoViewMutation.mutate({ id: activeMap.id, payload });
         lastSavedGeoViewRef.current = payload;
-      }, 500);
+      }, 1000);
     };
+
     map.on('moveend', handleMoveEnd);
-    return () => { map.off('moveend', handleMoveEnd); if (saveGeoViewTimeoutRef.current) window.clearTimeout(saveGeoViewTimeoutRef.current); };
+    return () => { 
+      map.off('moveend', handleMoveEnd); 
+      if (saveGeoViewTimeoutRef.current) window.clearTimeout(saveGeoViewTimeoutRef.current); 
+    };
   }, [activeMap?.id, activeMap?.type, saveGeoViewMutation]);
 
   useEffect(() => {
@@ -410,24 +662,57 @@ const geoStyleUrl = useMemo(() => {
         <MapSidebar
           mapTree={mapTree} selectedMapId={selectedMapId} onSelectMap={setSelectedMapId} onRefreshMaps={() => queryClient.invalidateQueries({ queryKey: ['maps'] })}
           mapSearch={mapSearch} onMapSearchChange={setMapSearch} resolveMapTypeLabel={resolveMapTypeLabel}
-          onEditMap={(m) => { setEditMap(m); setEditMapName(m.name); setEditMapType(m.type); setEditMapParentId(m.parentId ?? null); editHandlers.open(); }}
+          onEditMap={(m) => { setEditMap(m); setEditMapName(m.name); setEditMapCode(m.code || ''); setEditMapType(m.type); setEditMapParentId(m.parentId ?? null); editHandlers.open(); }}
           onDeleteMap={(m) => { setDeleteTarget(m); deleteHandlers.open(); }}
-          cameras={filteredCameras} cameraSearch={search} onCameraSearchChange={setSearch} selectedCameraId={selectedCameraId} onSelectCamera={setSelectedCameraId}
+          connectors={connectorsQuery.data || []}
+          selectedConnectorId={selectedConnectorId}
+          onSelectConnector={setSelectedConnectorId}
+          isDevicesLoading={devicesQuery.isLoading}
+          cameras={devicesQuery.data || []} cameraSearch={search} onCameraSearchChange={setSearch} selectedCameraId={selectedCameraId} onSelectCamera={setSelectedCameraId}
           isMapActive={Boolean(activeMap)} positionsByCamera={positionsByCamera} t={t}
         />
 
         <Paper radius="lg" withBorder style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg1)', borderColor: 'var(--border-dim)', overflow: 'hidden' }}>
           <Box p="md" style={{ borderBottom: '1px solid var(--border-dim)', backgroundColor: 'rgba(0, 0, 0, 0.12)' }}>
             <Group justify="space-between" align="center">
-              <Stack gap={0}>
-                <Text size="xs" fw={500} style={{ color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{activeMap?.type === 'Geo' ? t('pages.maps.panel.geoHint') : t('pages.maps.panel.imageHint')}</Text>
-                <Group gap="sm">
-                  <Text size="lg" fw={700} style={{ color: 'var(--t0)' }}>{activeMap?.name ?? t('pages.maps.panel.noMapSelected')}</Text>
-                  {activeMap && <Badge variant="outline" size="sm" styles={{ root: { borderColor: 'var(--accent)', color: 'var(--accent)', backgroundColor: 'rgba(0, 194, 255, 0.05)', fontWeight: 700 } }}>{resolveMapTypeLabel(activeMap.type)}</Badge>}
-                </Group>
-              </Stack>
-              <Group gap="sm">
-                {activeMap?.type === 'Image' && <FileInput placeholder={t('pages.maps.panel.uploadImage')} accept="image/png,image/jpeg" leftSection={<IconUpload size={14} style={{ color: 'var(--accent)' }} />} size="xs" styles={{ input: { backgroundColor: 'var(--bg3)', borderColor: 'var(--border-dim)', color: 'var(--t0)', width: '180px' } }} onChange={(file: File | null) => file && uploadImageMutation.mutate(file)} />}
+              <div className="flex items-center gap-2">
+                <Text size="lg" fw={700} style={{ color: 'var(--t0)' }}>{activeMap?.name ?? t('pages.maps.panel.noMapSelected')}</Text>
+                {activeMap && <Badge variant="outline" size="sm" styles={{ root: { borderColor: 'var(--accent)', color: 'var(--accent)', backgroundColor: 'rgba(0, 194, 255, 0.05)', fontWeight: 700 } }}>{resolveMapTypeLabel(activeMap.type)}</Badge>}
+              </div>
+              <Group gap="xs">
+                {activeMap?.type === 'Image' && (
+                  <>
+                    <Button 
+                      variant="subtle" 
+                      size="xs" 
+                      onClick={handleDownloadSample}
+                      styles={{ root: { color: 'var(--orange)', fontWeight: 700, backgroundColor: 'rgba(255, 140, 0, 0.05)', '&:hover': { backgroundColor: 'rgba(255, 140, 0, 0.1)' } } }}
+                      leftSection={<IconDownload size={14} />}
+                    >
+                      Ảnh mẫu
+                    </Button>
+                    <Button 
+                      variant="subtle" 
+                      size="xs" 
+                      onClick={uploadWizardHandlers.open}
+                      styles={{ root: { color: 'var(--accent)', fontWeight: 700, backgroundColor: 'rgba(0, 194, 255, 0.05)', '&:hover': { backgroundColor: 'rgba(0, 194, 255, 0.1)' } } }}
+                      leftSection={<IconUpload size={14} />}
+                    >
+                      Tải ảnh
+                    </Button>
+                    <Button 
+                      variant="subtle" 
+                      color="red" 
+                      size="xs"
+                      disabled={!activeMap.mapImagePath && !activeMap.imageUrl}
+                      onClick={() => deleteImageMutation.mutate()}
+                      loading={deleteImageMutation.isPending}
+                      leftSection={<IconTrash size={14} />}
+                    >
+                      Xóa ảnh
+                    </Button>
+                  </>
+                )}
                 <Button variant="filled" size="xs" disabled={!selectedMapId || !positionsDirty || savePositionsMutation.isPending} loading={savePositionsMutation.isPending} onClick={() => savePositionsMutation.mutate(positions)} style={{ backgroundColor: (selectedMapId && positionsDirty) ? 'var(--accent)' : 'var(--bg3)', color: (selectedMapId && positionsDirty) ? 'var(--bg0)' : 'var(--t2)', fontWeight: 700 }}>{t('pages.maps.actions.savePositions')}</Button>
               </Group>
             </Group>
@@ -441,7 +726,25 @@ const geoStyleUrl = useMemo(() => {
               <GeoMapCanvas
                 activeMap={activeMap} geoStyleUrl={geoStyleUrl} isFullscreen={isFullscreen} setIsFullscreen={setIsFullscreen} positions={positions}
                 selectedCameraId={selectedCameraId} setSelectedCameraId={setSelectedCameraId} geoZoom={geoZoom} setGeoZoom={setGeoZoom}
-                onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('camera-id'); const map = mapInstanceRef.current; if (id && map) { const rect = e.currentTarget.getBoundingClientRect(); const p = map.unproject([e.clientX - rect.left, e.clientY - rect.top]); updatePosition(id, { latitude: p.lat, longitude: p.lng }); } }}
+                onDrop={(e) => { 
+                  e.preventDefault(); 
+                  const id = e.dataTransfer.getData('camera-id'); 
+                  const map = mapInstanceRef.current; 
+                  if (id && map) { 
+                    const rect = e.currentTarget.getBoundingClientRect(); 
+                    const p = map.unproject([e.clientX - rect.left, e.clientY - rect.top]); 
+                    const camData = devicesQuery.data?.find(c => c.cameraId === id);
+                    updatePosition(id, { 
+                      latitude: p.lat, 
+                      longitude: p.lng,
+                      CameraName: camData?.name || camData?.CameraName,
+                      IP: camData?.IP || camData?.ipAddress || camData?.ip,
+                      Connectorid: camData?.Connectorid || camData?.connectorId,
+                      Type: camData?.type,
+                      VmsId: connectorsQuery.data?.find(c => c.Id === (camData?.Connectorid || camData?.connectorId))?.VmsID
+                    }); 
+                  } 
+                }}
                 startGeoCameraDrag={startGeoCameraDrag} startGeoRotateDrag={startGeoRotateDrag} startGeoFovDrag={startGeoFovDrag} startGeoScaleDrag={startGeoScaleDrag}
                 mapContainerRef={mapContainerRef} mapInstanceRef={mapInstanceRef} mapMarkersRef={mapMarkersRef} geoFovFeatures={geoFovFeatures}
                 resolveCameraLabel={resolveCameraLabel} createCameraMarkerElement={() => {
@@ -472,7 +775,7 @@ const geoStyleUrl = useMemo(() => {
                     const shs = Array.from(el.querySelectorAll('[data-role="scale-handle"]')) as HTMLElement[];
                     const vs = params.viewScale; const size = Math.round(32 * vs * params.scale);
                     const hSize = Math.round(10 * vs); const rOff = Math.round(18 * vs);
-                    const lOff = params.selected ? size + rOff + hSize + Math.round(8 * vs) : size + Math.round(6 * vs);
+                    const lOff = params.selected ? (size/2 + rOff + hSize + Math.round(4 * vs)) : (size/2 + Math.round(4 * vs));
                     if (iw) { iw.style.width = iw.style.height = `${size}px`; iw.style.border = params.selected ? '1px dashed var(--accent)' : 'none'; iw.style.borderRadius = '8px'; iw.onpointerdown = (e) => startGeoCameraDrag(e, params.cameraId); }
                     if (i) i.style.transform = `rotate(${normalizeAngle(params.angle - 90)}deg)`;
                     if (l) { l.textContent = params.label; l.style.top = `-${lOff}px`; l.style.fontSize = `${Math.round(11 * Geometry.clamp(vs, 0.7, 1.2))}px`; }
@@ -503,10 +806,28 @@ const geoStyleUrl = useMemo(() => {
               />
             ) : (
               <ImageMapCanvas
-                activeMap={activeMap} resolvedImageUrl={activeMap.imageUrl ? buildApiUrl(activeMap.imageUrl) : null} isFullscreen={isFullscreen} setIsFullscreen={setIsFullscreen}
-                imageNaturalSize={imageNaturalSize} setImageNaturalSize={setImageNaturalSize} imageView={imageView} setImageViewportNode={(node) => { imageViewportRef.current = node; if (imageViewportSizeRef) imageViewportSizeRef.current = node; }}
+                activeMap={activeMap} resolvedImageUrl={(activeMap.imageUrl || activeMap.mapImagePath) ? buildApiUrl(activeMap.imageUrl || activeMap.mapImagePath!) : null} isFullscreen={isFullscreen} setIsFullscreen={setIsFullscreen}
+                imageNaturalSize={imageNaturalSize} setImageNaturalSize={setImageNaturalSize} imageView={imageView} setImageViewportNode={(node) => { if (imageViewportSizeRef) imageViewportSizeRef(node); imageViewportRef.current = node; }}
                 positions={positions} selectedCameraId={selectedCameraId}
-                onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('camera-id'); if (id && imageNaturalSize.width) { const rect = imageViewportRef.current!.getBoundingClientRect(); const mx = (e.clientX - rect.left - imageView.translateX) / imageView.scale; const my = (e.clientY - rect.top - imageView.translateY) / imageView.scale; updatePosition(id, { x: clamp01(mx / imageNaturalSize.width), y: clamp01(my / imageNaturalSize.height) }); } }}
+                onDrop={(e) => { 
+                  e.preventDefault(); 
+                  const id = e.dataTransfer.getData('camera-id'); 
+                  if (id && imageNaturalSize.width) { 
+                    const rect = imageViewportRef.current!.getBoundingClientRect(); 
+                    const mx = (e.clientX - rect.left - imageView.translateX) / imageView.scale; 
+                    const my = (e.clientY - rect.top - imageView.translateY) / imageView.scale; 
+                    const camData = devicesQuery.data?.find(c => c.cameraId === id);
+                    updatePosition(id, { 
+                      x: clamp01(mx / imageNaturalSize.width), 
+                      y: clamp01(my / imageNaturalSize.height),
+                      CameraName: camData?.name || camData?.CameraName,
+                      IP: camData?.IP || camData?.ipAddress || camData?.ip,
+                      Connectorid: camData?.Connectorid || camData?.connectorId,
+                      Type: camData?.type,
+                      VmsId: connectorsQuery.data?.find(c => c.Id === (camData?.Connectorid || camData?.connectorId))?.VmsID
+                    }); 
+                  } 
+                }}
                 onPointerDown={(e) => { if (e.button !== 0 || (e.target as HTMLElement).closest('[data-no-pan="true"]')) return; setSelectedCameraId(null); dragStateRef.current = { kind: 'pan', startX: e.clientX, startY: e.clientY, originX: imageView.translateX, originY: imageView.translateY }; }}
                 onWheel={(e) => { if (!imageNaturalSize.width) return; e.preventDefault(); const rect = imageViewportRef.current!.getBoundingClientRect(); const factor = e.deltaY < 0 ? 1.1 : 0.9; const ax = e.clientX - rect.left; const ay = e.clientY - rect.top; setImageView((prev) => { const nextScale = clamp(prev.scale * factor, 0.2, 6); const dx = (ax - prev.translateX) / prev.scale; const dy = (ay - prev.translateY) / prev.scale; return { scale: nextScale, translateX: ax - dx * nextScale, translateY: ay - dy * nextScale }; }); }}
                 startCameraDrag={(e, id) => { if (e.button !== 0) return; e.preventDefault(); e.stopPropagation(); setSelectedCameraId(id); const rect = imageViewportRef.current!.getBoundingClientRect(); const mx = (e.clientX - rect.left - imageView.translateX) / imageView.scale; const my = (e.clientY - rect.top - imageView.translateY) / imageView.scale; const p = positionsByCamera.get(id); dragStateRef.current = { kind: 'camera', cameraId: id, offsetX: mx - (p?.x ?? 0) * imageNaturalSize.width, offsetY: my - (p?.y ?? 0) * imageNaturalSize.height }; }}
@@ -522,11 +843,31 @@ const geoStyleUrl = useMemo(() => {
       </Group>
 
       <MapModals
-        createOpened={createOpened} onCreateClose={createHandlers.close} newMapName={newMapName} onNewMapNameChange={setNewMapName} newMapType={newMapType} onNewMapTypeChange={setNewMapType} newMapParentId={newMapParentId} onNewMapParentIdChange={setNewMapParentId} parentOptions={parentOptions}
-        onCreateSubmit={() => createMapMutation.mutate({ name: newMapName.trim(), type: newMapType, parentId: newMapParentId ?? undefined })} isCreateLoading={createMapMutation.isPending}
-        editOpened={editOpened} onEditClose={editHandlers.close} editMapName={editMapName} onEditMapNameChange={setEditMapName} editMapType={editMapType} onEditMapTypeChange={setEditMapType} editMapParentId={editMapParentId} onEditMapParentIdChange={setEditMapParentId} editParentOptions={editParentOptions}
-        onEditSubmit={() => { if (editMap) updateMapMutation.mutate({ id: editMap.id, payload: { name: editMapName.trim(), type: editMapType, parentId: editMapParentId ?? undefined } }); }} isEditLoading={updateMapMutation.isPending} hasEditMap={Boolean(editMap)}
-        deleteOpened={deleteOpened} onDeleteClose={deleteHandlers.close} deleteTargetName={deleteTarget?.name ?? ''} onDeleteConfirm={() => deleteTarget && deleteMapMutation.mutate(deleteTarget.id)} isDeleteLoading={deleteMapMutation.isPending} t={t}
+        createOpened={createOpened} onCreateClose={handleCloseCreate} 
+        newMapName={newMapName} onNewMapNameChange={setNewMapName} 
+        newMapCode={newMapCode} onNewMapCodeChange={setNewMapCode}
+        newMapType={newMapType} onNewMapTypeChange={setNewMapType} 
+        newMapParentId={newMapParentId} onNewMapParentIdChange={setNewMapParentId} 
+        parentOptions={parentOptions}
+        onCreateSubmit={() => createMapMutation.mutate({ name: newMapName.trim(), code: newMapCode.trim(), type: newMapType, parentId: newMapParentId ?? undefined })} isCreateLoading={createMapMutation.isPending}
+        editOpened={editOpened} onEditClose={handleCloseEdit} 
+        editMapName={editMapName} onEditMapNameChange={setEditMapName} 
+        editMapCode={editMapCode} onEditMapCodeChange={setEditMapCode}
+        editMapType={editMapType} onEditMapTypeChange={setEditMapType} 
+        editMapParentId={editMapParentId} onEditMapParentIdChange={setEditMapParentId} 
+        editParentOptions={editParentOptions}
+        onEditSubmit={() => { if (editMap) updateMapMutation.mutate({ id: editMap.id, payload: { name: editMapName.trim(), code: editMapCode.trim(), type: editMapType, parentId: editMapParentId ?? undefined } }); }} isEditLoading={updateMapMutation.isPending} hasEditMap={Boolean(editMap)}
+        deleteOpened={deleteOpened} onDeleteClose={deleteHandlers.close} deleteTargetName={deleteTarget?.name ?? ''} onDeleteConfirm={() => deleteTarget && deleteMapMutation.mutate(deleteTarget.id)} isDeleteLoading={deleteMapMutation.isPending} 
+        responseOpened={responseOpened} onResponseClose={responseHandlers.close} responseStatus={responseStatus} responseText={responseText}
+        t={t}
+      />
+
+      <ImageUploadWizard
+        opened={uploadWizardOpened}
+        onClose={uploadWizardHandlers.close}
+        onConfirm={(file) => uploadImageMutation.mutate(file)}
+        isUploading={uploadImageMutation.isPending}
+        t={t}
       />
     </Stack>
   );
@@ -534,12 +875,27 @@ const geoStyleUrl = useMemo(() => {
 
 function useElementSize() {
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    const obs = new ResizeObserver((entries) => { if (entries[0]) setSize({ width: entries[0].contentRect.width, height: entries[0].contentRect.height }); });
-    obs.observe(ref.current);
-    return () => obs.disconnect();
+  const observerRef = useRef<ResizeObserver | null>(null);
+  
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+
+    if (node) {
+      const obs = new ResizeObserver((entries) => {
+        if (entries[0]) {
+          setSize({
+            width: entries[0].contentRect.width,
+            height: entries[0].contentRect.height
+          });
+        }
+      });
+      obs.observe(node);
+      observerRef.current = obs;
+    }
   }, []);
+
   return { ref, ...size };
 }

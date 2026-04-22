@@ -4,33 +4,33 @@
  */
 export const mapV2ProxyRules = {
   '/api': {
-    target: 'http://localhost:5263',
+    target: 'https://localhost:7276',
     changeOrigin: true,
     secure: false,
   },
   '/mapstyles': {
-    target: 'http://localhost:5263',
+    target: 'https://localhost:7276',
     changeOrigin: true,
     secure: false,
   },
   '/maptiles': {
-    target: 'http://localhost:5263',
+    target: 'https://localhost:7276',
     changeOrigin: true,
     secure: false,
   },
   '/hubs': {
-    target: 'http://localhost:5263',
+    target: 'https://localhost:7276',
     ws: true,
     changeOrigin: true,
     secure: false,
   },
   '/health': {
-    target: 'http://localhost:5263',
+    target: 'https://localhost:7276',
     changeOrigin: true,
     secure: false,
   },
   '/metrics': {
-    target: 'http://localhost:5263',
+    target: 'https://localhost:7276',
     changeOrigin: true,
     secure: false,
   }

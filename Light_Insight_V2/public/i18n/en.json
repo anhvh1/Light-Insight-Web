@@ -547,6 +547,8 @@
                                                "searchCameraPlaceholder":  "Search by code or IP",
                                                "unnamedCamera":  "Unnamed camera",
                                                "cameraIp":  "IP: {ip}",
+                                               "selectSystem": "Please select a system",
+                                               "noDevicesFound": "No devices found",
                                                "badges":  {
                                                               "placed":  "Placed"
                                                           }
@@ -563,8 +565,10 @@
                                        },
                                "empty":  "Select or create a map to start placing cameras.",
                                "fields":  {
-                                              "name":  "Name",
-                                              "type":  "Type",
+                                              "name":  "Map Name",
+                                              "code":  "Map Code",
+                                              "type":  "Map Type",
+
                                               "parent":  "Parent map"
                                           },
                                "placeholders":  {
@@ -585,9 +589,13 @@
                                                            "title":  "Edit map"
                                                        },
                                               "delete":  {
-                                                             "title":  "Delete map",
-                                                             "message":  "Delete map {name}? This will remove camera placements for this map."
-                                                         }
+                                                             "title":  "Confirm delete map",
+                                                             "message":  "Are you sure you want to delete map {name}? This will remove it from the hierarchy."
+                                                         },
+                                              "response":  {
+                                                               "title":  "Notification",
+                                                               "confirm":  "Confirm (OK)"
+                                                           }
                                           },
                                "notifications":  {
                                                      "create":  {

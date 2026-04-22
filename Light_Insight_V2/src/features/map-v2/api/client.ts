@@ -6,6 +6,9 @@ export function getApiBaseUrl() {
 }
 
 export function buildApiUrl(path: string) {
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
   return normalizedBaseUrl ? `${normalizedBaseUrl}${path}` : path;
 }
 
@@ -48,9 +51,6 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     if (contentType.includes('application/json')) {
       const json = await response.json();
       console.log(`[API Response]: ${url}`, json);
-      if (json && typeof json === 'object' && 'Data' in json) {
-        return json.Data as T;
-      }
       return json as T;
     }
 

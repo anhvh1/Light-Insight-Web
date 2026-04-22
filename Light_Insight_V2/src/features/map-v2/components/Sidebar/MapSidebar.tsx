@@ -1,6 +1,6 @@
 import { ActionIcon, Group, Paper, ScrollArea, Stack, Tabs, Text, TextInput } from '@mantine/core';
 import { IconFilter, IconMap, IconRefresh, IconVideo } from '@tabler/icons-react';
-import type { CameraResponse, MapLayoutResponse, MapLayoutType } from '../../api/types';
+import type { CameraResponse, ConnectorResponse, MapLayoutResponse, MapLayoutType } from '../../api/types';
 import type { MapTreeNode } from '../../utils/map-tree';
 import { MapTree } from './MapTree';
 import { DeviceList } from './DeviceList';
@@ -16,6 +16,11 @@ interface MapSidebarProps {
   onDeleteMap: (map: MapLayoutResponse) => void;
   resolveMapTypeLabel: (type?: MapLayoutType | null) => string;
   
+  connectors: ConnectorResponse[];
+  selectedConnectorId: string | null;
+  onSelectConnector: (id: string | null) => void;
+  isDevicesLoading: boolean;
+
   cameras: CameraResponse[];
   cameraSearch: string;
   onCameraSearchChange: (value: string) => void;
@@ -37,6 +42,10 @@ export function MapSidebar({
   onEditMap,
   onDeleteMap,
   resolveMapTypeLabel,
+  connectors,
+  selectedConnectorId,
+  onSelectConnector,
+  isDevicesLoading,
   cameras,
   cameraSearch,
   onCameraSearchChange,
@@ -140,6 +149,10 @@ export function MapSidebar({
 
         <Tabs.Panel value="devices">
           <DeviceList
+            connectors={connectors}
+            selectedConnectorId={selectedConnectorId}
+            onSelectConnector={onSelectConnector}
+            isLoading={isDevicesLoading}
             cameras={cameras}
             search={cameraSearch}
             onSearchChange={onCameraSearchChange}

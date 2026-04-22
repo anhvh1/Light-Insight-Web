@@ -183,6 +183,16 @@ app.UseCors(MyAllowSpecificOrigins);
 app.UseStaticFiles();
 
 // Thêm cấu hình phục vụ thư mục Upload
+string uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "Upload");
+if (!Directory.Exists(uploadPath))
+{
+    Directory.CreateDirectory(uploadPath);
+}
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadPath),
+    RequestPath = "/Upload"
+});
 
 
 app.UseAuthentication();

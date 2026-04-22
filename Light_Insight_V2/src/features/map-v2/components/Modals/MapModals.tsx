@@ -1,4 +1,5 @@
-import { Button, Group, Modal, Select, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Center, Group, Modal, Select, Stack, Text, TextInput } from '@mantine/core';
+import { IconTrash, IconAlertCircle, IconCircleCheck } from '@tabler/icons-react';
 import type { MapLayoutType } from '../../api/types';
 
 interface MapModalsProps {
@@ -7,6 +8,8 @@ interface MapModalsProps {
   onCreateClose: () => void;
   newMapName: string;
   onNewMapNameChange: (value: string) => void;
+  newMapCode: string;
+  onNewMapCodeChange: (value: string) => void;
   newMapType: MapLayoutType;
   onNewMapTypeChange: (value: MapLayoutType) => void;
   newMapParentId: string | null;
@@ -20,6 +23,8 @@ interface MapModalsProps {
   onEditClose: () => void;
   editMapName: string;
   onEditMapNameChange: (value: string) => void;
+  editMapCode: string;
+  onEditMapCodeChange: (value: string) => void;
   editMapType: MapLayoutType;
   onEditMapTypeChange: (value: MapLayoutType) => void;
   editMapParentId: string | null;
@@ -36,6 +41,12 @@ interface MapModalsProps {
   onDeleteConfirm: () => void;
   isDeleteLoading: boolean;
 
+  // Response Modal
+  responseOpened: boolean;
+  onResponseClose: () => void;
+  responseStatus: 'success' | 'error';
+  responseText: string;
+
   t: (key: string, params?: any) => string;
 }
 
@@ -44,6 +55,8 @@ export function MapModals({
   onCreateClose,
   newMapName,
   onNewMapNameChange,
+  newMapCode,
+  onNewMapCodeChange,
   newMapType,
   onNewMapTypeChange,
   newMapParentId,
@@ -56,6 +69,8 @@ export function MapModals({
   onEditClose,
   editMapName,
   onEditMapNameChange,
+  editMapCode,
+  onEditMapCodeChange,
   editMapType,
   onEditMapTypeChange,
   editMapParentId,
@@ -71,32 +86,57 @@ export function MapModals({
   onDeleteConfirm,
   isDeleteLoading,
 
+  responseOpened,
+  onResponseClose,
+  responseStatus,
+  responseText,
+
   t
 }: MapModalsProps) {
   const modalStyles = {
-    content: { backgroundColor: 'var(--bg1)', border: '1px solid var(--border-dim)' },
-    header: { backgroundColor: 'var(--bg1)', color: 'var(--t0)' }
+    content: { backgroundColor: '#161b2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' },
+    header: { backgroundColor: '#161b2e', color: 'var(--t0)', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '16px 20px' },
+    title: { fontWeight: 800, fontSize: '14px', textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
+    close: { color: 'var(--t2)', '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--t0)' } }
   };
 
   const inputStyles = { 
-    input: { backgroundColor: 'var(--bg3)', borderColor: 'var(--border-dim)', color: 'var(--t0)' } 
+    label: { color: 'var(--t2)', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, marginBottom: '6px', letterSpacing: '0.03em' },
+    input: { backgroundColor: 'rgba(0,0,0,0.2)', borderColor: 'rgba(255,255,255,0.1)', color: 'var(--t0)', fontSize: '13px', borderRadius: '8px', height: '42px', '&:focus': { borderColor: 'var(--accent)' } },
+    dropdown: { backgroundColor: '#161b2e', borderColor: 'rgba(255,255,255,0.1)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' },
+    option: { 
+      fontSize: '13px', 
+      color: 'var(--t1)',
+      '&[data-selected]': { backgroundColor: 'var(--accent)', color: 'var(--bg0)' },
+      '&[data-hovered]': { backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'var(--t0)' }
+    }
   };
 
   return (
     <>
+      {/* Create Modal */}
       <Modal
         opened={createOpened}
         onClose={onCreateClose}
         title={t('pages.maps.modals.create.title')}
         size="md"
+        centered
         styles={modalStyles}
       >
-        <Stack gap="md">
+        <Stack gap="xl" py="sm">
           <TextInput
             label={t('pages.maps.fields.name')}
             placeholder={t('pages.maps.placeholders.mapName')}
             value={newMapName}
             onChange={(event) => onNewMapNameChange(event.currentTarget.value)}
+            styles={inputStyles}
+            autoFocus
+          />
+          <TextInput
+            label={t('pages.maps.fields.code')}
+            placeholder="Mã bản đồ"
+            value={newMapCode}
+            onChange={(event) => onNewMapCodeChange(event.currentTarget.value)}
             styles={inputStyles}
           />
           <Select
@@ -115,16 +155,17 @@ export function MapModals({
             data={parentOptions}
             value={newMapParentId}
             onChange={onNewMapParentIdChange}
-            clearable
             styles={inputStyles}
           />
           <Group justify="flex-end" mt="md">
+            <Button variant="subtle" color="gray" onClick={onCreateClose} styles={{ root: { color: 'var(--t2)', fontWeight: 700 } }}>
+              {t('common.actions.cancel')}
+            </Button>
             <Button
-              variant="filled"
               onClick={onCreateSubmit}
-              disabled={newMapName.trim().length === 0}
+              disabled={newMapName.trim().length === 0 || newMapCode.trim().length === 0}
               loading={isCreateLoading}
-              style={{ backgroundColor: 'var(--accent)', color: 'var(--bg0)', fontWeight: 700 }}
+              styles={{ root: { backgroundColor: 'var(--accent)', color: 'var(--bg0)', padding: '0 24px', height: '42px', borderRadius: '8px', fontWeight: 800, textTransform: 'uppercase' } }}
             >
               {t('common.actions.create')}
             </Button>
@@ -132,18 +173,26 @@ export function MapModals({
         </Stack>
       </Modal>
 
+      {/* Edit Modal */}
       <Modal
         opened={editOpened}
         onClose={onEditClose}
         title={t('pages.maps.modals.edit.title')}
         size="md"
+        centered
         styles={modalStyles}
       >
-        <Stack gap="md">
+        <Stack gap="xl" py="sm">
           <TextInput
             label={t('pages.maps.fields.name')}
             value={editMapName}
             onChange={(event) => onEditMapNameChange(event.currentTarget.value)}
+            styles={inputStyles}
+          />
+          <TextInput
+            label={t('pages.maps.fields.code')}
+            value={editMapCode}
+            onChange={(event) => onEditMapCodeChange(event.currentTarget.value)}
             styles={inputStyles}
           />
           <Select
@@ -162,16 +211,17 @@ export function MapModals({
             data={editParentOptions}
             value={editMapParentId}
             onChange={onEditMapParentIdChange}
-            clearable
             styles={inputStyles}
           />
           <Group justify="flex-end" mt="md">
+            <Button variant="subtle" color="gray" onClick={onEditClose} styles={{ root: { color: 'var(--t2)', fontWeight: 700 } }}>
+              {t('common.actions.cancel')}
+            </Button>
             <Button
-              variant="filled"
               onClick={onEditSubmit}
               disabled={!hasEditMap || editMapName.trim().length === 0}
               loading={isEditLoading}
-              style={{ backgroundColor: 'var(--accent)', color: 'var(--bg0)', fontWeight: 700 }}
+              styles={{ root: { backgroundColor: 'var(--accent)', color: 'var(--bg0)', padding: '0 24px', height: '42px', borderRadius: '8px', fontWeight: 800, textTransform: 'uppercase' } }}
             >
               {t('common.actions.save')}
             </Button>
@@ -179,32 +229,110 @@ export function MapModals({
         </Stack>
       </Modal>
 
+      {/* Delete Confirmation Modal */}
       <Modal
         opened={deleteOpened}
         onClose={onDeleteClose}
-        title={t('pages.maps.modals.delete.title')}
-        size="md"
-        styles={modalStyles}
+        withCloseButton={false}
+        size="sm"
+        centered
+        styles={{
+          content: { ...modalStyles.content, padding: '24px' }
+        }}
       >
-        <Stack gap="md">
-          <Text size="sm" style={{ color: 'var(--t0)' }}>
-            {t('pages.maps.modals.delete.message', { name: deleteTargetName })}
-          </Text>
-          <Group justify="flex-end" mt="md">
-            <Button variant="subtle" color="gray" onClick={onDeleteClose}>
+        <Stack align="center" gap="lg">
+          <Center w={64} h={64} style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: '100%', border: '2px solid rgba(239, 68, 68, 0.2)' }}>
+            <IconTrash size={32} color="var(--red)" style={{ animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }} />
+          </Center>
+          
+          <Stack gap={4} align="center">
+            <Text fw={800} size="lg" style={{ color: 'var(--t0)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {t('pages.maps.modals.delete.title')}
+            </Text>
+            <Text size="sm" style={{ color: 'var(--t2)', textAlign: 'center' }}>
+              {t('pages.maps.modals.delete.message', { name: deleteTargetName })}
+            </Text>
+          </Stack>
+
+          <Group grow w="100%" gap="md">
+            <Button variant="subtle" onClick={onDeleteClose} styles={{ root: { color: 'var(--t2)', fontWeight: 700, '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' } } }}>
               {t('common.actions.cancel')}
             </Button>
             <Button
-              color="red"
               onClick={onDeleteConfirm}
               loading={isDeleteLoading}
-              style={{ backgroundColor: 'var(--red)', color: 'var(--t0)', fontWeight: 700 }}
+              styles={{ root: { backgroundColor: 'var(--red)', color: 'var(--t0)', fontWeight: 800, textTransform: 'uppercase', borderRadius: '8px', height: '42px' } }}
             >
               {t('common.actions.delete')}
             </Button>
           </Group>
         </Stack>
       </Modal>
+
+      {/* Response Modal (Success/Error) */}
+      <Modal
+        opened={responseOpened}
+        onClose={onResponseClose}
+        withCloseButton={false}
+        size="sm"
+        centered
+        styles={{
+          content: { ...modalStyles.content, padding: '32px' }
+        }}
+      >
+        <Stack align="center" gap="xl">
+          <Center w={80} h={80} style={{ 
+            backgroundColor: responseStatus === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
+            borderRadius: '100%',
+            border: `2px solid ${responseStatus === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
+          }}>
+            {responseStatus === 'success' ? (
+              <IconCircleCheck size={48} color="var(--green)" />
+            ) : (
+              <IconAlertCircle size={48} color="var(--red)" />
+            )}
+          </Center>
+
+          <Stack gap={8} align="center">
+            <Text fw={900} size="xl" style={{ 
+              color: responseStatus === 'success' ? 'var(--green)' : 'var(--red)', 
+              textTransform: 'uppercase', 
+              letterSpacing: '0.1em' 
+            }}>
+              {responseStatus === 'success' ? 'THÀNH CÔNG' : 'THẤT BẠI'}
+            </Text>
+            <Text size="sm" fw={600} style={{ color: 'var(--t1)', textAlign: 'center', lineHeight: 1.5 }}>
+              {responseText}
+            </Text>
+          </Stack>
+
+          <Button 
+            onClick={onResponseClose} 
+            fullWidth 
+            styles={{ 
+              root: { 
+                backgroundColor: 'rgba(255,255,255,0.05)', 
+                color: 'var(--t0)', 
+                fontWeight: 800, 
+                textTransform: 'uppercase', 
+                borderRadius: '8px', 
+                height: '48px',
+                border: '1px solid rgba(255,255,255,0.1)',
+                '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' }
+              } 
+            }}
+          >
+            {t('pages.maps.modals.response.confirm')}
+          </Button>
+        </Stack>
+      </Modal>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: .7; transform: scale(1.05); }
+        }
+      `}} />
     </>
   );
 }

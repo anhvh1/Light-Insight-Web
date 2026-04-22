@@ -33,9 +33,9 @@ namespace LightInsightDAL.Repositories.General
                         ParentId = reader.IsDBNull(3) ? null : reader.GetGuid(3),
                         MapImagePath = reader.IsDBNull(4) ? null : reader.GetString(4),
                         Type = reader.IsDBNull(5) ? null : reader.GetString(5),
-                        GeoCenterLatitude = reader.IsDBNull(6) ? 0 : reader.GetDouble(6),
-                        GeoCenterLongitude = reader.IsDBNull(7) ? 0 : reader.GetDouble(7),
-                        GeoZoom = reader.IsDBNull(8) ? 0 : reader.GetDouble(8),
+                        GeoCenterLatitude = reader.IsDBNull(6) ? null : reader.GetDouble(6),
+                        GeoCenterLongitude = reader.IsDBNull(7) ? null : reader.GetDouble(7),
+                        GeoZoom = reader.IsDBNull(8) ? null : reader.GetDouble(8),
                         CreatedAt = reader.GetDateTime(9)
                     });
                 }
@@ -72,9 +72,9 @@ namespace LightInsightDAL.Repositories.General
                         ParentId = reader.IsDBNull(3) ? null : reader.GetGuid(3),
                         MapImagePath = reader.IsDBNull(4) ? null : reader.GetString(4),
                         Type = reader.IsDBNull(5) ? null : reader.GetString(5),
-                        GeoCenterLatitude = reader.IsDBNull(6) ? 0 : reader.GetDouble(6),
-                        GeoCenterLongitude = reader.IsDBNull(7) ? 0 : reader.GetDouble(7),
-                        GeoZoom = reader.IsDBNull(8) ? 0 : reader.GetDouble(8),
+                        GeoCenterLatitude = reader.IsDBNull(6) ? null : reader.GetDouble(6),
+                        GeoCenterLongitude = reader.IsDBNull(7) ? null : reader.GetDouble(7),
+                        GeoZoom = reader.IsDBNull(8) ? null : reader.GetDouble(8),
                         CreatedAt = reader.GetDateTime(9)
                     };
                 }
@@ -100,7 +100,7 @@ namespace LightInsightDAL.Repositories.General
                 await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
                 await conn.OpenAsync();
 
-                var sql = "SELECT public.fn_dm_map_add(@p_name, @p_code, @p_parent_id, @p_map_image_path, @p_type, @p_lat, @p_lng, @p_zoom)";
+                var sql = @"SELECT public.fn_dm_map_add(@p_name,@p_code,@p_type,@p_lat,@p_lng,@p_zoom,@p_parent_id,@p_map_image_path)";
 
                 await using var cmd = new NpgsqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("p_name", model.Name);
@@ -108,9 +108,9 @@ namespace LightInsightDAL.Repositories.General
                 cmd.Parameters.AddWithValue("p_parent_id", (object)model.ParentId ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("p_map_image_path", (object)model.MapImagePath ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("p_type", (object)model.Type ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("p_lat", model.GeoCenterLatitude);
-                cmd.Parameters.AddWithValue("p_lng", model.GeoCenterLongitude);
-                cmd.Parameters.AddWithValue("p_zoom", model.GeoZoom);
+                cmd.Parameters.AddWithValue("p_lat", (object)model.GeoCenterLatitude ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("p_lng", (object)model.GeoCenterLongitude ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("p_zoom", (object)model.GeoZoom ?? DBNull.Value);
 
                 var result = await cmd.ExecuteScalarAsync();
                 return result is Guid guid ? guid : null;
@@ -129,18 +129,18 @@ namespace LightInsightDAL.Repositories.General
                 await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
                 await conn.OpenAsync();
 
-                var sql = "SELECT public.fn_dm_map_update(@p_id, @p_name, @p_code, @p_parent_id, @p_map_image_path, @p_type, @p_lat, @p_lng, @p_zoom)";
+                var sql = "SELECT public.fn_dm_map_update(@p_id, @p_name, @p_code, @p_type, @p_parent_id, @p_map_image_path)"; //, @p_lat, @p_lng, @p_zoom
 
                 await using var cmd = new NpgsqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("p_id", model.Id);
                 cmd.Parameters.AddWithValue("p_name", model.Name);
                 cmd.Parameters.AddWithValue("p_code", model.Code);
+                cmd.Parameters.AddWithValue("p_type", (object)model.Type ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("p_parent_id", (object)model.ParentId ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("p_map_image_path", (object)model.MapImagePath ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("p_type", (object)model.Type ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("p_lat", model.GeoCenterLatitude);
-                cmd.Parameters.AddWithValue("p_lng", model.GeoCenterLongitude);
-                cmd.Parameters.AddWithValue("p_zoom", model.GeoZoom);
+                //cmd.Parameters.AddWithValue("p_lat", (object)model.GeoCenterLatitude ?? DBNull.Value);
+                //cmd.Parameters.AddWithValue("p_lng", (object)model.GeoCenterLongitude ?? DBNull.Value);
+                //cmd.Parameters.AddWithValue("p_zoom", (object)model.GeoZoom ?? DBNull.Value);
 
                 var result = await cmd.ExecuteScalarAsync();
                 return result is bool && (bool)result;

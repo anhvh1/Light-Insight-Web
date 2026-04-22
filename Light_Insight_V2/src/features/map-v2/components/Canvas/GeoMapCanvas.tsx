@@ -70,9 +70,12 @@ export function GeoMapCanvas({
   t
 }: GeoMapCanvasProps) {
   const lastMapIdRef = useRef<string | null>(null);
+  const geoFovFeaturesRef = useRef(geoFovFeatures);
 
-  // Logic map initialization and marker management is kept here
-  // for better encapsulation but uses refs passed from parent for sync
+  // Luôn cập nhật ref khi prop thay đổi
+  useEffect(() => {
+    geoFovFeaturesRef.current = geoFovFeatures;
+  }, [geoFovFeatures]);
   
   useEffect(() => {
     const isChangingMap = mapInstanceRef.current && activeMap?.id !== lastMapIdRef.current;
@@ -90,10 +93,23 @@ export function GeoMapCanvas({
     if (mapInstanceRef.current) return;
 
     lastMapIdRef.current = activeMap?.id || null;
-    const savedCenter = activeMap?.geoCenterLatitude != null && activeMap?.geoCenterLongitude != null
-        ? ([activeMap.geoCenterLongitude, activeMap.geoCenterLatitude] as [number, number]) : null;
-    const initial = positions.find((p) => p.latitude != null && p.longitude != null);
-    const center: [number, number] = savedCenter ?? (initial ? [initial.longitude ?? 0, initial.latitude ?? 0] : [106.7, 10.8]);
+    const DEFAULT_COORDS: [number, number] = [106.6113, 10.7254];
+
+    const storedLat = activeMap?.geoCenterLatitude;
+    const storedLng = activeMap?.geoCenterLongitude;
+    const hasSavedCenter = storedLat != null && storedLng != null && storedLat !== 0 && storedLng !== 0;
+    const savedCenter: [number, number] | null = hasSavedCenter ? [storedLng!, storedLat!] : null;
+
+    const firstCameraWithCoords = positions.find(
+      (p) => p.latitude != null && p.longitude != null && p.latitude !== 0 && p.longitude !== 0
+    );
+
+    const fallbackCenter: [number, number] = firstCameraWithCoords
+      ? [firstCameraWithCoords.longitude ?? DEFAULT_COORDS[0], firstCameraWithCoords.latitude ?? DEFAULT_COORDS[1]]
+      : DEFAULT_COORDS;
+
+    const center = savedCenter ?? fallbackCenter;
+    const zoom = activeMap?.geoZoom || (hasSavedCenter ? activeMap?.geoZoom : (firstCameraWithCoords ? 17 : 11)) || 11;
 
     const container = mapContainerRef.current;
     if (!container) return;
@@ -102,36 +118,42 @@ export function GeoMapCanvas({
       container: container,
       style: geoStyleUrl,
       center: center,
-      zoom: activeMap?.geoZoom ?? (initial ? 17 : 11)
+      zoom: zoom
     });
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
-    map.on('load', () => {
-      setGeoZoom(map.getZoom());
-      if (!map.getSource('camerfov')) {
-        map.addSource('camerfov', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+
+    const updateFovData = () => {
+      if (!map.isStyleLoaded()) return;
+      const source = map.getSource('camerfov') as maplibregl.GeoJSONSource | undefined;
+      const features = geoFovFeaturesRef.current;
+      
+      if (!source) {
+        map.addSource('camerfov', { type: 'geojson', data: { type: 'FeatureCollection', features } });
         map.addLayer({ 
           id: 'camerfov-fill', 
           type: 'fill', 
           source: 'camerfov', 
-          paint: { 
-            'fill-color': '#00c2ff', 
-            'fill-opacity': 0.15 
-          } 
+          paint: { 'fill-color': '#00c2ff', 'fill-opacity': 0.15 } 
         });
         map.addLayer({ 
           id: 'camerfov-outline', 
           type: 'line', 
           source: 'camerfov', 
-          paint: { 
-            'line-color': '#00c2ff', 
-            'line-width': 1,
-            'line-opacity': 0.5
-          } 
+          paint: { 'line-color': '#00c2ff', 'line-width': 1, 'line-opacity': 0.5 } 
         });
+      } else {
+        source.setData({ type: 'FeatureCollection', features });
       }
-      const source = map.getSource('camerfov') as maplibregl.GeoJSONSource;
-      if (source) source.setData({ type: 'FeatureCollection', features: geoFovFeatures });
+    };
+
+    map.on('load', () => {
+      setGeoZoom(map.getZoom());
+      updateFovData();
+    });
+
+    map.on('styledata', () => {
+      updateFovData();
     });
 
     map.on('click', (e) => {
@@ -203,6 +225,12 @@ export function GeoMapCanvas({
         marker.remove();
         markerMap.delete(id);
       }
+    }
+
+    // Sau khi cập nhật Marker, hãy thử cập nhật FOV ngay
+    const source = map.getSource('camerfov') as maplibregl.GeoJSONSource | undefined;
+    if (source && map.isStyleLoaded()) {
+      source.setData({ type: 'FeatureCollection', features: geoFovFeaturesRef.current });
     }
   }, [activeMap?.type, geoZoom, positions, selectedCameraId]);
 

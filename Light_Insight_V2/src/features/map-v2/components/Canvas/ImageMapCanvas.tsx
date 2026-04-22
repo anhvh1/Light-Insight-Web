@@ -165,9 +165,9 @@ export function ImageMapCanvas({
                   position: 'absolute',
                   left: 0,
                   top: 0,
-                  width: imageNaturalSize.width,
-                  height: imageNaturalSize.height,
-                  transform: `translate(${imageView.translateX}px, ${imageView.translateY}px) scale(${imageView.scale})`,
+                  width: imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0 ? viewportWidth : imageNaturalSize.width,
+                  height: imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0 ? viewportHeight : imageNaturalSize.height,
+                  transform: imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0 ? 'none' : `translate(${imageView.translateX}px, ${imageView.translateY}px) scale(${imageView.scale})`,
                   transformOrigin: 'top left'
                 }}
               >
@@ -181,15 +181,16 @@ export function ImageMapCanvas({
                     }
                   }}
                   style={{
-                    width: imageNaturalSize.width || 'auto',
-                    height: imageNaturalSize.height || 'auto',
-                    display: 'block'
+                    width: '100%',
+                    height: '100%',
+                    display: 'block',
+                    objectFit: 'fill'
                   }}
                   draggable={false}
                 />
                 <svg
-                  width={imageNaturalSize.width}
-                  height={imageNaturalSize.height}
+                  width="100%"
+                  height="100%"
                   style={{ position: 'absolute', inset: 0 }}
                 >
                   {imageFovShapes.map((shape) => (
@@ -209,16 +210,20 @@ export function ImageMapCanvas({
                 position: 'absolute',
                 left: 0,
                 top: 0,
-                width: imageNaturalSize.width,
-                height: imageNaturalSize.height,
-                transform: `translate(${imageView.translateX}px, ${imageView.translateY}px) scale(${imageView.scale})`,
+                width: imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0 ? viewportWidth : imageNaturalSize.width,
+                height: imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0 ? viewportHeight : imageNaturalSize.height,
+                transform: imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0 ? 'none' : `translate(${imageView.translateX}px, ${imageView.translateY}px) scale(${imageView.scale})`,
                 transformOrigin: 'top left'
               }}
             >
               {positions.map((position) => {
                 if (position.x == null || position.y == null) return null;
-                const left = position.x * imageNaturalSize.width;
-                const top = position.y * imageNaturalSize.height;
+                const isStretched = imageView.scale === 1 && imageView.translateX === 0 && imageView.translateY === 0;
+                const currentW = isStretched ? viewportWidth : imageNaturalSize.width;
+                const currentH = isStretched ? viewportHeight : imageNaturalSize.height;
+                
+                const left = position.x * currentW;
+                const top = position.y * currentH;
                 const angle = position.angleDegrees ?? DEFAULT_ANGLE_DEGREES;
                 const scale = position.iconScale ?? DEFAULT_ICON_SCALE;
                 const fov = typeof position.fovDegrees === 'number' ? clampFov(position.fovDegrees) : DEFAULT_FOV_DEGREES;
@@ -226,7 +231,7 @@ export function ImageMapCanvas({
                 const label = resolveCameraLabel(position.cameraId);
                 const isSelected = selectedCameraId === position.cameraId;
                 const rangeValue = typeof position.range === 'number' ? position.range : DEFAULT_RANGE_IMAGE;
-                const rangePixels = clamp01(rangeValue) * Math.min(imageNaturalSize.width, imageNaturalSize.height) * scale;
+                const rangePixels = clamp01(rangeValue) * Math.min(currentW, currentH) * scale;
                 const edges = getImageSectorEdges(left, top, angle, rangePixels, fov);
                 const labelOffset = isSelected ? iconSize + ROTATE_HANDLE_OFFSET + HANDLE_SIZE + 8 : iconSize + 6;
 

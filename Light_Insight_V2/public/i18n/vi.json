@@ -547,6 +547,8 @@
                                                "searchCameraPlaceholder":  "Tìm theo mã hoặc IP",
                                                "unnamedCamera":  "Camera chưa đặt tên",
                                                "cameraIp":  "IP: {ip}",
+                                               "selectSystem": "Vui lòng chọn hệ thống",
+                                               "noDevicesFound": "Không tìm thấy thiết bị",
                                                "badges":  {
                                                               "placed":  "Đã đặt"
                                                           }
@@ -563,8 +565,10 @@
                                        },
                                "empty":  "Chọn hoặc tạo bản đồ để bắt đầu đặt camera.",
                                "fields":  {
-                                              "name":  "Tên",
-                                              "type":  "Loại",
+                                              "name":  "Tên bản đồ",
+                                              "code":  "Mã bản đồ",
+                                              "type":  "Loại bản đồ",
+
                                               "parent":  "Bản đồ cha"
                                           },
                                "placeholders":  {
@@ -585,9 +589,13 @@
                                                            "title":  "Sửa bản đồ"
                                                        },
                                               "delete":  {
-                                                             "title":  "Xóa bản đồ",
-                                                             "message":  "Xóa bản đồ {name}? Điều này sẽ xóa vị trí camera trên bản đồ."
-                                                         }
+                                                             "title":  "Xác nhận xóa bản đồ",
+                                                             "message":  "Bạn có chắc chắn muốn xóa bản đồ {name}? Hành động này sẽ gỡ bỏ bản đồ khỏi hệ thống phân cấp."
+                                                         },
+                                              "response":  {
+                                                               "title":  "Thông báo",
+                                                               "confirm":  "Xác nhận (OK)"
+                                                           }
                                           },
                                "notifications":  {
                                                      "create":  {

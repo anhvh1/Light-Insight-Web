@@ -47,15 +47,29 @@ export const flattenMapTree = (
   return options;
 };
 
-export const toPositionRequest = (position: MapCameraPositionRequest) => ({
-  cameraId: position.cameraId,
-  label: position.label,
-  x: position.x,
-  y: position.y,
-  angleDegrees: position.angleDegrees,
-  fovDegrees: position.fovDegrees,
-  range: position.range,
-  iconScale: position.iconScale,
-  latitude: position.latitude,
-  longitude: position.longitude
-});
+export const toPositionRequest = (position: any): MapCameraPositionRequest => {
+  // Ưu tiên lấy tên camera từ mọi trường có thể có
+  const name = position.CameraName || position.cameraName || position.name || position.Name || '';
+  const code = position.label || position.code || position.Code || '';
+  const ip = position.IP || position.ipAddress || position.Ip || position.ipadress || position.IpAddress || position.ip || position.Ipaddress || position.ipaddress || position.IPAddress || '';
+  const id = position.cameraId || position.CameraId || position.Id || '';
+
+  return {
+    cameraId: id,
+    label: code || name || id, // label dùng cho mã
+    CameraName: name,
+    IP: ip,
+    x: position.x ?? position.PosX ?? position.posX ?? 0,
+    y: position.y ?? position.PosY ?? position.posY ?? 0,
+    angleDegrees: position.angleDegrees ?? position.AngleDegrees ?? position.Rotation ?? position.rotation ?? 0,
+    fovDegrees: position.fovDegrees ?? position.FovDegrees ?? position.fovWidth ?? position.FovWidth ?? 140,
+    range: position.range ?? position.Range ?? position.fovLength ?? position.FovLength ?? 100,
+    iconScale: position.iconScale ?? position.IconScale ?? 1,
+    latitude: position.latitude ?? position.Latitude ?? 0,
+    longitude: position.longitude ?? position.Longitude ?? 0,
+    VmsId: position.VmsId ?? position.vmsId ?? position.Vmsid ?? 0,
+    Type: position.Type ?? position.type ?? 0,
+    Connectorid: position.Connectorid || position.connectorId || position.ConnectorId || position.ConnectorID || position.connectorid || null,
+    Icon: position.Icon || position.icon || 'Cctv'
+  };
+};

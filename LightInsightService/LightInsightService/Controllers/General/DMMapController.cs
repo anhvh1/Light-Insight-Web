@@ -29,7 +29,8 @@ namespace LightInsightService.Controllers.General
         [HttpGet("GetById/{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            var result = await _dmMapBUS.GetMapByIdAsync(id);
+            var baseUrl = $"{Request.Scheme}://{Request.Host}";
+            var result = await _dmMapBUS.GetMapByIdAsync(id, baseUrl);
             return Ok(result);
         }
 

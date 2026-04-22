@@ -19,21 +19,20 @@ namespace LightInsightModel.General
     {
         [Required]
         public string CameraId { get; set; }
-
-        [Required]
         public string CameraName { get; set; }
-
-        [Required]
-        public double PosX { get; set; }
-
-        [Required]
-        public double PosY { get; set; }
-
+        public double? PosX { get; set; } = null;
+        public double? PosY { get; set; } = null;
         public string? Icon { get; set; }
         public int VmsId { get; set; }
         public double Rotation { get; set; }
         public int Type { get; set; }
         public Guid Connectorid { get; set; }
         public string IP { get; set; }
+        public double? Latitude { get; set; } = null;
+        public double? Longitude { get; set; } = null;
+        public double? IconScale { get; set; } = null;
+        public double? Range { get; set; } = null;
+        public double? AngleDegrees { get; set; } = null;
+        public double? FovDegrees { get; set; } = null;
     }
 }

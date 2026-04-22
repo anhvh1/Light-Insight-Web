@@ -17,11 +17,14 @@ namespace LightInsightBUS.Service.General
         private readonly DMMapDAL _dmMapDAL;
         private readonly IMemoryCache _cache;
         private readonly GetAnalyticsEvents _getAnalyticsEvents;
-        public DMMapBUS(IMemoryCache cache)
+        private readonly Microsoft.AspNetCore.Hosting.IWebHostEnvironment _env;
+
+        public DMMapBUS(IMemoryCache cache, Microsoft.AspNetCore.Hosting.IWebHostEnvironment env)
         {
             _dmMapDAL = new DMMapDAL();
             _getAnalyticsEvents = new GetAnalyticsEvents(cache);
             _cache = cache;
+            _env = env;
         }
 
         public async Task<BaseResultModel> SaveMarkersAsync(DMMapSaveMarkersModel model)
@@ -55,9 +58,15 @@ namespace LightInsightBUS.Service.General
                     icon = m.Icon,
                     vms_id = m.VmsId,
                     rotation = m.Rotation,
-                    type = m.Type, // Add this new property
+                    type = m.Type,
                     connectorid = m.Connectorid,
-                    ip = m.IP
+                    ip = m.IP,
+                    latitude = m.Latitude,
+                    longitude = m.Longitude,
+                    iconscale = m.IconScale,
+                    range = m.Range,
+                    angledegrees = m.AngleDegrees,
+                    fovdegrees = m.FovDegrees
                 }).ToList();
 
                 var jsonString = JsonSerializer.Serialize(dbMarkers);
@@ -115,8 +124,8 @@ namespace LightInsightBUS.Service.General
                     Code = item.Code,
                     ParentId = item.ParentId,
                     Type = item.Type,
-                    GeoCenterLatitude=item.GeoCenterLatitude,
-                    GeoCenterLongitude =item.GeoCenterLongitude,
+                    GeoCenterLatitude = item.GeoCenterLatitude,
+                    GeoCenterLongitude = item.GeoCenterLongitude,
                     GeoZoom = item.GeoZoom,
                     MapImagePath = string.IsNullOrEmpty(item.MapImagePath) ? null : (baseUrl + item.MapImagePath),
                     CreatedAt = item.CreatedAt
@@ -212,7 +221,7 @@ namespace LightInsightBUS.Service.General
             return result;
         }
 
-        public async Task<BaseResultModel> GetMapByIdAsync(Guid id)
+        public async Task<BaseResultModel> GetMapByIdAsync(Guid id, string baseUrl = null)
         {
             var result = new BaseResultModel();
             try
@@ -220,6 +229,11 @@ namespace LightInsightBUS.Service.General
                 var map = await _dmMapDAL.GetMapByIdAsync(id);
                 if (map != null)
                 {
+                    if (!string.IsNullOrEmpty(map.MapImagePath))
+                    {
+                        map.MapImagePath = baseUrl + map.MapImagePath;
+                    }
+
                     var cameras = map.Markers;
                     map.Markers = null; // Để tránh lặp lại dữ liệu trong JSON trả về
 
@@ -277,43 +291,58 @@ namespace LightInsightBUS.Service.General
             return result;
         }
 
-        public async Task<BaseResultModel> UploadMapImageAsync(Guid id, System.IO.Stream fileStream, string fileName, string baseUrl = null)
+        public async Task<BaseResultModel> UploadMapImageAsync(Guid id, Stream fileStream, string fileName, string baseUrl = null)
         {
             var result = new BaseResultModel();
+
             try
             {
-                // 1. Tạo thư mục nếu chưa tồn tại
-                string uploadDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Upload", "Map");
-                if (!System.IO.Directory.Exists(uploadDir))
+                // 📌 Lấy path chuẩn (root project)
+                string rootPath = Directory.GetCurrentDirectory();
+                string uploadDir = Path.Combine(rootPath, "Upload", "Map");
+
+                // 📌 Tạo folder nếu chưa có
+                if (!Directory.Exists(uploadDir))
                 {
-                    System.IO.Directory.CreateDirectory(uploadDir);
+                    Directory.CreateDirectory(uploadDir);
                 }
 
-                // 2. Tạo tên file duy nhất để tránh trùng
-                string extension = System.IO.Path.GetExtension(fileName);
+                // 📌 Tạo tên file unique
+                string extension = Path.GetExtension(fileName);
                 string uniqueFileName = $"{Guid.NewGuid()}{extension}";
-                string filePath = System.IO.Path.Combine(uploadDir, uniqueFileName);
+                string filePath = Path.Combine(uploadDir, uniqueFileName);
 
-                // 3. Lưu file xuống server
-                using (var stream = new System.IO.FileStream(filePath, System.IO.FileMode.Create))
+                // 📌 Lưu file xuống disk
+                using (var stream = new FileStream(filePath, FileMode.Create))
                 {
                     await fileStream.CopyToAsync(stream);
                 }
 
-                // 4. Lưu đường dẫn vào CSDL (Đường dẫn tương đối để FE dễ truy cập)
+                // 📌 Path lưu DB
                 string dbPath = $"/Upload/Map/{uniqueFileName}";
+
+                // 📌 Update DB
                 var success = await _dmMapDAL.UpdateMapImageAsync(id, dbPath);
 
                 if (success)
                 {
                     result.Status = 1;
-                    result.Message = "Tải ảnh lên và cập nhật thành công.";
-                    result.Data = baseUrl + dbPath;
+                    result.Message = "Upload thành công";
+
+                    // 📌 Trả URL đầy đủ cho FE
+                    if (!string.IsNullOrEmpty(baseUrl))
+                    {
+                        result.Data = $"{baseUrl}{dbPath}";
+                    }
+                    else
+                    {
+                        result.Data = dbPath;
+                    }
                 }
                 else
                 {
                     result.Status = 0;
-                    result.Message = "Tải ảnh thành công nhưng cập nhật CSDL thất bại.";
+                    result.Message = "Upload thành công nhưng update DB thất bại";
                 }
             }
             catch (Exception ex)
@@ -321,6 +350,7 @@ namespace LightInsightBUS.Service.General
                 result.Status = -1;
                 result.Message = ex.Message;
             }
+
             return result;
         }
 
@@ -348,8 +378,6 @@ namespace LightInsightBUS.Service.General
             var result = new BaseResultModel();
             try
             {
-                // The 'id' parameter seems to be related to the VMS, which is handled inside GetAnalyticsEvents.
-                // We will call the new unified method.
                 var allDevices = await _getAnalyticsEvents.GetAllDevicesAsync(key);
 
                 result.Status = 1;
@@ -369,7 +397,6 @@ namespace LightInsightBUS.Service.General
             var result = new BaseResultModel();
             try
             {
-                // 1. Lấy thông tin bản đồ từ CSDL
                 var allMaps = await _dmMapDAL.GetAllMapsAsync();
                 var map = allMaps.FirstOrDefault(m => m.Id == id);
 
@@ -387,14 +414,11 @@ namespace LightInsightBUS.Service.General
                     return result;
                 }
 
-                // 2. Xóa file vật lý
                 try
                 {
-                    // Đường dẫn trong DB là /Upload/Map/abc.jpg
-                    // Cần chuyển thành đường dẫn vật lý đầy đủ
-                    var webRootPath = AppDomain.CurrentDomain.BaseDirectory;
-                    var relativePath = map.MapImagePath.TrimStart('/'); // Bỏ dấu / ở đầu
-                    var filePath = System.IO.Path.Combine(webRootPath, relativePath);
+                    // Sử dụng WebRootPath
+                    var relativePath = map.MapImagePath.TrimStart('/');
+                    var filePath = System.IO.Path.Combine(_env.WebRootPath, relativePath);
 
                     if (System.IO.File.Exists(filePath))
                     {
@@ -403,12 +427,9 @@ namespace LightInsightBUS.Service.General
                 }
                 catch (Exception ex)
                 {
-                    // Có thể log lỗi xóa file ở đây, nhưng vẫn tiếp tục để cập nhật CSDL
                     Console.WriteLine($"Lỗi khi xóa file ảnh vật lý: {ex.Message}");
                 }
 
-
-                // 3. Cập nhật CSDL, set đường dẫn ảnh về null
                 var success = await _dmMapDAL.UpdateMapImageAsync(id, null);
 
                 if (success)
