@@ -56,3 +56,12 @@ Desktop.ini
 .env
 .env.*
 !.env.example
+
+Milestone_System_Components_Architecture.png
+SystemArchitectureGuide_2023-06.pdf
+XProtectStorageArchitectureAndRecommendations_2023-09.pdf
+mipsdk-samples-protocol-main
+eventTypes.json
+milestone-2025-r2-upgrade-final.md
+event_summary.txt
+websocket_response.json
