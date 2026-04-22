@@ -420,8 +420,9 @@ export function MapManagementSection() {
           const device = prev.find(d => d.id === rotatingDeviceId && d.mapId === selectedMapId);
           if (!device) return prev;
           
-          const deviceScreenX = rect.left + mapOffset.x + (device.x / 100) * rect.width * zoomScale;
-          const deviceScreenY = rect.top + mapOffset.y + (device.y / 100) * rect.height * zoomScale;
+          const currentMapOffset = mapOffset ?? { x: 0, y: 0 };
+          const deviceScreenX = rect.left + currentMapOffset.x + (device.x / 100) * rect.width * zoomScale;
+          const deviceScreenY = rect.top + currentMapOffset.y + (device.y / 100) * rect.height * zoomScale;
           const angle = Math.atan2(e.clientY - deviceScreenY, e.clientX - deviceScreenX) * (180 / Math.PI);
           
           return prev.map(d => 
@@ -439,8 +440,9 @@ export function MapManagementSection() {
           const device = prev.find(d => d.id === scalingDeviceId && d.mapId === selectedMapId);
           if (!device) return prev;
 
-          const deviceScreenX = rect.left + mapOffset.x + (device.x / 100) * rect.width * zoomScale;
-          const deviceScreenY = rect.top + mapOffset.y + (device.y / 100) * rect.height * zoomScale;
+          const currentMapOffset = mapOffset ?? { x: 0, y: 0 };
+          const deviceScreenX = rect.left + currentMapOffset.x + (device.x / 100) * rect.width * zoomScale;
+          const deviceScreenY = rect.top + currentMapOffset.y + (device.y / 100) * rect.height * zoomScale;
           
           const dx = e.clientX - deviceScreenX;
           const dy = e.clientY - deviceScreenY;
@@ -634,7 +636,7 @@ export function MapManagementSection() {
   const flattenMapTree = (nodes: MapTreeNode[], depth = 0): { id: string; name: string; depth: number }[] => {
     let result: { id: string; name: string; depth: number }[] = [];
     nodes.forEach(node => {
-      result.push({ id: node.Id, name: node.Name, depth });
+      result.push({ id: node.id, name: node.name, depth });
       if (node.Children && node.Children.length > 0) {
         result = [...result, ...flattenMapTree(node.Children, depth + 1)];
       }
@@ -645,7 +647,7 @@ export function MapManagementSection() {
 
   const findNodeById = (nodes: MapTreeNode[], id: string): MapTreeNode | null => {
     for (const node of nodes) {
-      if (node.Id === id) return node;
+      if (node.id === id) return node;
       if (node.Children) {
         const found = findNodeById(node.Children, id);
         if (found) return found;
@@ -738,17 +740,17 @@ export function MapManagementSection() {
                 onMapSelect={(id) => {
                   setSelectedMapId(id);
                   const node = findNodeById(mapTree, id);
-                  setMapImage(node?.MapImagePath || null);
+                  setMapImage(node?.mapImagePath || null);
                 }}
                 onRefresh={() => queryClient.invalidateQueries({ queryKey: ['map-tree'] })}
                 onEdit={(id) => {
                   const node = findNodeById(mapTree, id);
                   if (node) {
                     setEditingMapData({
-                      Id: node.Id,
-                      Name: node.Name,
-                      Code: node.Code,
-                      ParentId: node.ParentId
+                      Id: node.id,
+                      Name: node.name,
+                      Code: node.code,
+                      ParentId: node.parentId
                     });
                   }
                 }}

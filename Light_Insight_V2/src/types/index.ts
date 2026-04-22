@@ -92,14 +92,20 @@ export interface ApiResponse<T> {
   TotalRow: number;
 }
 
+export type MapLayoutType = 'Image' | 'Geo';
+
 export interface MapTreeNode {
-  Id: string;
-  Name: string;
-  Code: string;
-  ParentId: string | null;
+  id: string;
+  name: string;
+  code: string;
+  parentId: string | null;
   Children: MapTreeNode[];
-  MapImagePath: string | null;
-  CreatedAt: string;
+  mapImagePath: string | null;
+  type: MapLayoutType;
+  geoCenterLatitude?: number | null;
+  geoCenterLongitude?: number | null;
+  geoZoom?: number | null;
+  createdAt: string;
 }
 
 export interface MapOptions {

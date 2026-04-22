@@ -8,8 +8,8 @@ export const mapApi = {
   },
 
   getOptions: async () => {
-    const response = await apiClient.get<ApiResponse<MapOptions>>('/Maps/options');
-    return response.data || { Data: { geoStyleUrl: '', routingEnabled: false }, Status: 0, Message: '' };
+    const response = await apiClient.get<MapOptions>('/v1/maps/options');
+    return { Data: response.data, Status: 1, Message: '' };
   },
 
   createMap: async (data: { Name: string; Code: string; ParentId: string | null }) => {
@@ -61,6 +61,11 @@ export const mapApi = {
   getMarkers: async (mapId: string) => {
     const response = await apiClient.get<ApiResponse<any[]>>(`/DMMap/GetMarkers/${mapId}`);
     return response.data || { Data: [], Status: 0, Message: '' };
+  },
+
+  getById: async (id: string) => {
+    const response = await apiClient.get<ApiResponse<{ map: MapTreeNode; cameras: any[] }>>(`/DMMap/GetById/${id}`);
+    return response.data || { Data: null, Status: 0, Message: '' };
   },
 
   uploadImage: async (id: string, file: File) => {
