@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { StatusPill, TypeBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
+import { alarmApi } from '@/lib/alarm-api';
 import { incidentApi } from '@/lib/incident-api';
+import { priorityApi } from '@/lib/priority-api';
 import { sopApi } from '@/lib/sop-api';
 import type { AlarmType, IncidentApiItem, SopDetail } from '@/types';
 import {
@@ -21,6 +23,10 @@ type IncidentTab = 'all' | 'NEW' | 'IN PROGRESS' | 'ON HOLD' | 'CLOSED';
 const PAGE_SIZE = 30;
 
 type StepProgressState = Record<string, boolean>;
+interface ConnectorOption {
+  Id?: string;
+  id?: string;
+}
 
 function normalizeStatus(status?: string | null) {
   return (status || '').trim().toUpperCase();
@@ -154,11 +160,36 @@ export function IncidentManagement() {
   const sopListQuery = useQuery({
     queryKey: ['incident-sop-list'],
     queryFn: () => sopApi.getPaged({ Page: 1, PageSize: 200 }),
-    enabled: !!selectedIncident && !selectedIncident.sop_id,
+    enabled: !!selectedIncident,
   });
 
+  const connectorsQuery = useQuery({
+    queryKey: ['connectors-list'],
+    queryFn: priorityApi.getAllConnectors,
+  });
+
+  const defaultConnectorId = useMemo(() => {
+    const list = (connectorsQuery.data?.Data ?? []) as ConnectorOption[];
+    const first = list[0];
+    return first?.Id ?? first?.id ?? null;
+  }, [connectorsQuery.data]);
+
+  const cameraOptionsQuery = useQuery({
+    queryKey: ['incident-camera-dropdown', defaultConnectorId],
+    queryFn: () => alarmApi.getCameraOptions(defaultConnectorId as string),
+    enabled: !!defaultConnectorId,
+  });
+
+  const cameraNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const camera of cameraOptionsQuery.data ?? []) {
+      map.set(camera.id, camera.name);
+    }
+    return map;
+  }, [cameraOptionsQuery.data]);
+
   const assignSopMutation = useMutation({
-    mutationFn: (sopId: string) =>
+    mutationFn: (sopId: string | null) =>
       incidentApi.update({
         Id: selectedIncident?.id || '',
         SourceId: selectedIncident?.source_id || '',
@@ -176,7 +207,6 @@ export function IncidentManagement() {
       void queryClient.invalidateQueries({
         queryKey: ['incident-list'],
       });
-      setSelectedSopId('');
     },
   });
 
@@ -216,13 +246,8 @@ export function IncidentManagement() {
   }, [selectedIncident?.id, stepProgress]);
 
   useEffect(() => {
-    if (!selectedIncident || selectedIncident.sop_id) {
-      setSelectedSopId('');
-      return;
-    }
-    const firstSopId = sopListQuery.data?.Data?.[0]?.Id || '';
-    setSelectedSopId(firstSopId);
-  }, [selectedIncident, sopListQuery.data]);
+    setSelectedSopId(selectedIncident?.sop_id || '');
+  }, [selectedIncident?.id, selectedIncident?.sop_id]);
 
   const doneStepsCount = useMemo(
     () => sopSteps.filter((step) => !!stepProgress[getStepKey(step)]).length,
@@ -241,8 +266,8 @@ export function IncidentManagement() {
       seen.add(id);
       rows.push({
         id,
-        name: id,
-        sub: `Trigger · ${trigger.event_name || 'Event'}`,
+        name: cameraNameById.get(id) ?? id,
+        sub: trigger.event_name || '',
         time: formatDateTime(selectedIncident?.created_at),
         icon: '🚨',
       });
@@ -253,14 +278,14 @@ export function IncidentManagement() {
       seen.add(id);
       rows.push({
         id,
-        name: id,
-        sub: `Step ${step.step_order} · ${step.step_name}`,
+        name: cameraNameById.get(id) ?? id,
+        sub: step.action_code || '',
         time: formatDateTime(selectedIncident?.updated_at),
         icon: '📷',
       });
     }
     return rows;
-  }, [selectedIncident?.created_at, selectedIncident?.updated_at, sopDetail, sopSteps]);
+  }, [selectedIncident?.created_at, selectedIncident?.updated_at, sopDetail, sopSteps, cameraNameById]);
 
   const toggleStep = (stepKey: string) =>
     setStepProgress((prev) => ({
@@ -310,20 +335,9 @@ export function IncidentManagement() {
               },
               { label: 'Loại incident', val: selectedIncident?.type || '--' },
               {
-                label: 'Created at',
+                label: 'Thời gian',
                 val: formatDateTime(selectedIncident?.created_at),
                 mono: true,
-              },
-              {
-                label: 'Updated at',
-                val: formatDateTime(selectedIncident?.updated_at),
-                mono: true,
-              },
-              {
-                label: 'SOP ID',
-                val: selectedIncident?.sop_id || 'Không gán SOP',
-                mono: true,
-                color: selectedIncident?.sop_id ? 'text-psim-accent' : 'text-t-2',
               },
               {
                 label: 'User ID',
@@ -339,7 +353,7 @@ export function IncidentManagement() {
                   className={cn(
                     'text-[11px] font-bold leading-tight',
                     m.mono && 'font-mono',
-                    m.color || 'text-t-1'
+                    'text-t-1'
                   )}
                 >
                   {m.val}
@@ -363,9 +377,11 @@ export function IncidentManagement() {
                       <div className="truncate text-[11px] font-medium" title={item.name}>
                         {item.name}
                       </div>
-                      <div className="truncate text-[10px] text-t-2 font-mono" title={item.sub}>
-                        {item.sub}
-                      </div>
+                      {item.sub ? (
+                        <div className="truncate text-[10px] text-t-2 font-mono" title={item.sub}>
+                          {item.sub}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="shrink-0 font-mono text-[10px] text-t-2">{item.time}</div>
                   </div>
@@ -374,89 +390,90 @@ export function IncidentManagement() {
             </div>
           )}
 
-          {selectedIncident?.sop_id ? (
-            <div className="shrink-0 bg-bg2/50 border border-border-dim rounded-lg p-3.5 flex flex-col gap-3">
-              <div className="flex items-center justify-between border-b border-border-dim pb-2.5">
-                <div className="text-[11px] font-bold text-t-0 uppercase flex items-center gap-2">
-                  <ClipboardCheck size={14} className="text-psim-accent" />
-                  SOP - {sopDetail?.name || 'Đang tải...'}
-                </div>
-                <span className="text-[10px] font-mono text-psim-accent font-bold bg-psim-accent/10 px-2 py-0.5 rounded-full">
-                  {doneStepsCount} / {sopSteps.length || 0}
-                </span>
-              </div>
-
-              {!sopDetailQuery.isLoading && sopSteps.length === 0 ? (
-                <div className="text-[11px] text-t-2">SOP này chưa có step.</div>
-              ) : (
-                <div className="flex flex-col gap-1">
-                  {sopSteps.map((step) => {
-                    const stepKey = getStepKey(step);
-                    const checked = !!stepProgress[stepKey];
-                    return (
-                      <label
-                        key={stepKey}
-                        className="flex items-center gap-2 p-1.5 rounded hover:bg-bg2 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          className="accent-[#00d9a0]"
-                          checked={checked}
-                          onChange={() => toggleStep(stepKey)}
-                        />
-                        <span
-                          className={cn(
-                            'text-[12px] font-medium',
-                            checked ? 'line-through text-t-2' : 'text-t-0'
-                          )}
-                        >
-                          {step.step_name || `Step ${step.step_order}`}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="shrink-0 bg-bg2/50 border border-border-dim rounded-lg p-3.5 flex flex-col gap-3">
-              <div className="text-[11px] font-bold text-t-0 uppercase">
-                Chọn SOP cho incident này
-              </div>
+          <div className="shrink-0 bg-bg2/50 border border-border-dim rounded-lg p-3.5 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-[11px] text-white font-medium">
+                SOP:
+              </span>
               <select
                 value={selectedSopId}
                 onChange={(e) => setSelectedSopId(e.target.value)}
-                className="w-full bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
+                className="flex-1 min-w-0 bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
               >
                 <option value="" className="bg-[#161b2e]">
-                  Chưa được gán SOP
+                  Chưa gán SOP
                 </option>
                 {(sopListQuery.data?.Data ?? []).map((item) => (
-                  <option
-                    key={item.Id}
-                    value={item.Id}
-                    className="bg-[#161b2e]"
-                  >
-                    {item.Name} ({item.Id.slice(0, 8)})
+                  <option key={item.Id} value={item.Id} className="bg-[#161b2e]">
+                    {item.Name}
                   </option>
                 ))}
               </select>
               <button
                 type="button"
-                disabled={!selectedSopId || assignSopMutation.isPending}
+                disabled={
+                  selectedSopId === (selectedIncident?.sop_id || '') ||
+                  assignSopMutation.isPending
+                }
                 onClick={() => {
-                  if (!selectedSopId) return;
-                  assignSopMutation.mutate(selectedSopId);
+                  assignSopMutation.mutate(selectedSopId || null);
                 }}
-                className="px-3 py-1.5 bg-psim-accent text-bg0 rounded-md text-[11px] font-bold uppercase tracking-wider disabled:opacity-50"
+                className="shrink-0 h-8 px-3 bg-psim-accent text-bg0 rounded text-[11px] font-bold uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {assignSopMutation.isPending ? 'Đang gán...' : 'Gán SOP'}
+                {assignSopMutation.isPending ? 'Đang lưu...' : 'Lưu'}
               </button>
-              {assignSopMutation.isError && (
-                <div className="text-[11px] text-psim-red">Không thể gán SOP.</div>
-              )}
             </div>
-          )}
+
+            {assignSopMutation.isError && (
+              <div className="text-[11px] text-psim-red">Không thể lưu SOP.</div>
+            )}
+
+            {selectedIncident?.sop_id && (
+              <div className="border-t border-border-dim pt-2.5 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] font-mono text-t-2 uppercase tracking-wider flex items-center gap-1.5">
+                    <ClipboardCheck size={12} className="text-psim-accent" />
+                    Checklist
+                  </div>
+                  <span className="text-[10px] font-mono text-psim-accent font-bold bg-psim-accent/10 px-2 py-0.5 rounded-full">
+                    {doneStepsCount} / {sopSteps.length || 0}
+                  </span>
+                </div>
+
+                {!sopDetailQuery.isLoading && sopSteps.length === 0 ? (
+                  <div className="text-[11px] text-t-2">SOP này chưa có step.</div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {sopSteps.map((step) => {
+                      const stepKey = getStepKey(step);
+                      const checked = !!stepProgress[stepKey];
+                      return (
+                        <label
+                          key={stepKey}
+                          className="flex items-center gap-2 p-1.5 rounded hover:bg-bg2 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            className="accent-[#00d9a0]"
+                            checked={checked}
+                            onChange={() => toggleStep(stepKey)}
+                          />
+                          <span
+                            className={cn(
+                              'text-[12px] font-medium',
+                              checked ? 'line-through text-t-2' : 'text-t-0'
+                            )}
+                          >
+                            {step.step_name || `Step ${step.step_order}`}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="shrink-0 grid grid-cols-2 gap-1.5 pb-4">
             <button className="px-3.5 py-2 rounded-md text-[12px] font-medium bg-psim-accent text-bg0 hover:opacity-90 transition-colors">
