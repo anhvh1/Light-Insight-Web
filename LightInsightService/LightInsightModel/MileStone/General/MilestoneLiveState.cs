@@ -11,5 +11,6 @@ namespace LightInsightModel.MileStone.General
         public int TotalCameras { get; set; }
         public int OnlineCameras { get; set; }
         public List<InfrastructureHealth> Infrastructure { get; set; } = new List<InfrastructureHealth>();
+        public Dictionary<string, string> ResourceStates { get; set; } = new Dictionary<string, string>();
     }
 }
