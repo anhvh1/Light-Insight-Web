@@ -4,3 +4,10 @@ GET {{LightInsightAgent_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+@LightInsightAgent_HostAddress = http://localhost:5264
+
+GET {{LightInsightAgent_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
