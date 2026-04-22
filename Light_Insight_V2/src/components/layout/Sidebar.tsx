@@ -1,4 +1,4 @@
-import { 
+   import { 
   Bell, 
   Map as MapIcon, 
   MonitorPlay, 
@@ -6,7 +6,12 @@ import {
   BarChart3, 
   ClipboardList, 
   Plug2, 
-  Settings 
+  Settings,
+  Users,
+  Zap,
+  Sliders,
+  ShieldCheck,
+  BellRing
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
@@ -27,12 +32,31 @@ const navItems: NavItem[] = [
   { id: 'map', icon: MapIcon, tip: 'Situational Map', path: '/map' },
   { id: 'wall', icon: MonitorPlay, tip: 'Video Wall', path: '/wall' },
   { id: 'inc', icon: Siren, tip: 'Incident Mgmt', badge: 10, path: '/incident' },
-  // { type: 'sep' }, // seperator
   { id: 'ana', icon: BarChart3, tip: 'Analytics', path: '/analytics' },
   { id: 'shift', icon: ClipboardList, tip: 'Shift Handover', path: '/shift' },
-  // { type: 'sep' }, // seperator
   { id: 'health', icon: Plug2, tip: 'System Health', path: '/health' },
   { id: 'config', icon: Settings, tip: 'Config & Admin', path: '/config' },
+];
+
+const configSubItems = [
+  { 
+    group: 'Quản trị', 
+    items: [
+      { label: 'User & Roles', path: '/config/users-roles', icon: Users },
+      { label: 'Rule & Alarm Config', path: '/config/rules', icon: Zap },
+      { label: 'Alarm Priority V3', path: '/config/priority', icon: Sliders },
+      { label: 'SOP Builder', path: '/config/sop', icon: ClipboardList },
+      { label: 'Connectors', path: '/config/connectors', icon: Plug2 },
+      { label: 'Map Management', path: '/config/map', icon: MapIcon },
+    ]
+  },
+  { 
+    group: 'Hệ thống', 
+    items: [
+      { label: 'Escalation Rules', path: '/config/escalation', icon: ShieldCheck },
+      { label: 'Notifications', path: '/config/notif', icon: BellRing },
+    ]
+  }
 ];
 
 export function Sidebar() {
@@ -59,6 +83,7 @@ export function Sidebar() {
 
         const Icon = item.icon!;
         const badge = item.id === 'alarm' ? bellCount : item.badge;
+        const isConfig = item.id === 'config';
         
         return (
           <div 
@@ -93,12 +118,12 @@ export function Sidebar() {
                 </div>
               )}
 
-            {/* Badge */}
-            {badge ? (
-              <span className="absolute top-1.25 right-1.25 min-w-3.5 h-3.5 bg-psim-red rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.75 shadow-[0_0_5px_rgba(255,59,92,0.4)]">
-                {badge}
-              </span>
-            ) : null}
+              {/* Badge */}
+              {badge ? (
+                <span className="absolute top-1.25 right-1.25 min-w-3.5 h-3.5 bg-psim-red rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.75 shadow-[0_0_5px_rgba(255,59,92,0.4)]">
+                  {badge}
+                </span>
+              ) : null}
 
               {/* Active Indicator Bar */}
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.75 h-5.5 bg-psim-accent rounded-r-[3px] scale-x-0 group-has-[.active]:scale-x-100 transition-transform origin-left" />

@@ -252,6 +252,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                             _globalStates[cid].ResourceStates[source] = eventTypeId;
 
                             string eventName = _eventDefinitions.ContainsKey(eventTypeId) ? _eventDefinitions[eventTypeId].Name : eventTypeId;
+                            string category = _eventDefinitions.ContainsKey(eventTypeId) ? _eventDefinitions[eventTypeId].Category : "Unknown";
                             
                             if (source.Contains("cameras")) {
                                 if (IsErrorState(eventTypeId)) _globalStates[cid].OnlineCameras--;
