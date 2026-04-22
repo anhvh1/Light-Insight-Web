@@ -1,4 +1,5 @@
 import { apiClient } from './api-client';
+import type { CameraDropdownOption } from '@/types';
 
 export interface AlarmApiItem {
   alarmId?: string;
@@ -69,6 +70,10 @@ function extractAlarmRows(payload: unknown): AlarmApiItem[] {
 }
 
 function extractCameraNameList(payload: unknown): string[] {
+  return extractCameraOptions(payload).map((item) => item.name);
+}
+
+function extractCameraOptions(payload: unknown): CameraDropdownOption[] {
   const rows: unknown[] = [];
   if (Array.isArray(payload)) {
     rows.push(...payload);
@@ -84,10 +89,14 @@ function extractCameraNameList(payload: unknown): string[] {
   return rows
     .map((item) => {
       const o = item as Record<string, unknown>;
+      const id = o?.id ?? o?.Id ?? o?.cameraId ?? o?.CameraId;
       const n = o?.name ?? o?.Name ?? o?.sourceName;
-      return typeof n === 'string' ? n.trim() : '';
+      return {
+        id: typeof id === 'string' ? id.trim() : '',
+        name: typeof n === 'string' ? n.trim() : '',
+      };
     })
-    .filter((n) => n.length > 0);
+    .filter((item) => item.id.length > 0 && item.name.length > 0);
 }
 
 export const alarmApi = {
@@ -142,5 +151,12 @@ export const alarmApi = {
       params: { key },
     });
     return extractCameraNameList(response.data);
+  },
+
+  getCameraOptions: async (key: string): Promise<CameraDropdownOption[]> => {
+    const response = await apiClient.get('/Alarm/CameraDropdown', {
+      params: { key },
+    });
+    return extractCameraOptions(response.data);
   },
 };

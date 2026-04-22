@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -13,11 +13,13 @@ namespace LightInsightModel.MileStone.Camera
 
     public class MilestoneCameraData
     {
+        public string id { get; set; }
         public string name { get; set; }
     }
 
     public class CameraDropDown
     {
+        public string id { get; set; }
         public string name { get; set; }
     }
 }

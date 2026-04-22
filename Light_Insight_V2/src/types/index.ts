@@ -77,6 +77,11 @@ export interface AnalyticsEvent {
   Name: string;
 }
 
+export interface CameraDropdownOption {
+  id: string;
+  name: string;
+}
+
 export interface PriorityMapping {
   ID: number;
   PriorityID: number;
@@ -92,13 +97,33 @@ export interface ApiResponse<T> {
   TotalRow: number;
 }
 
+// --- INCIDENT API TYPES ---
+export interface IncidentApiItem {
+  id: string;
+  sop_id: string | null;
+  priority: string;
+  source_id: string;
+  status: string;
+  type: string;
+  user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IncidentPagingParams {
+  Keyword?: string;
+  Status?: string;
+  Page?: number;
+  PageSize?: number;
+}
+
 export type MapLayoutType = 'Image' | 'Geo';
 
 export interface MapTreeNode {
-  id: string;
-  name: string;
-  code: string;
-  parentId: string | null;
+  Id: string;
+  Name: string;
+  Code: string;
+  ParentId: string | null;
   Children: MapTreeNode[];
   mapImagePath: string | null;
   type: MapLayoutType;

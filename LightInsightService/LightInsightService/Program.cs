@@ -1,4 +1,4 @@
-﻿using System.Net.WebSockets;
+using System.Net.WebSockets;
 using LightInsightBUS.Interfaces;
 using LightInsightBUS.Interfaces.Login;
 using LightInsightBUS.Interfaces.MileStone.General;
@@ -61,6 +61,8 @@ builder.Services.AddScoped<IRegister, RegisterBUS>();
 builder.Services.AddScoped<ILogin, LoginBUS>();
 builder.Services.AddScoped<IConnectors, ConnectorsBUS>();
 builder.Services.AddScoped<IDMMap, DMMapBUS>();
+builder.Services.AddScoped<ISop, SopBUS>();
+builder.Services.AddScoped<IIncident, IncidentBUS>();
 builder.Services.AddScoped<ISystemHealth, SystemHealthBUS>();
 builder.Services.AddScoped<IAuditLog, AuditLogBUS>();
 builder.Services.AddScoped<IToken, TokenBUS>();
