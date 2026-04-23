@@ -23,7 +23,7 @@ import { SystemHealthPage } from './features/health/SystemHealthPage';
 import { SopBuilderSection } from './features/config/sections/SopBuilder';
 import { EscalationRulesSection } from './features/config/sections/EscalationRulesSection';
 import { NotificationsSection } from './features/config/sections/NotificationsSection';
-import MapV2Page from './features/map-v2/MapV2Page';
+import MapV2Page from './features/config/sections/mapManagementSection/MapV2Page';
 
 // 1. Root Route
 const rootRoute = createRootRoute({
