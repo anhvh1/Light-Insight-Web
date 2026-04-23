@@ -13,9 +13,11 @@ namespace LightInsightModel.General
 
         public string? Status { get; set; }
 
-        [Required]
-        [MaxLength(100)]
-        public string Type { get; set; } = string.Empty;
+        public Guid? VmsId { get; set; }
+
+        public DateTime? AlarmTime { get; set; }
+
+        public string? Description { get; set; }
 
         public Guid? UserId { get; set; }
 
@@ -35,7 +37,10 @@ namespace LightInsightModel.General
         public string Priority { get; set; } = string.Empty;
         public string SourceId { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
-        public string Type { get; set; } = string.Empty;
+        public Guid? VmsId { get; set; }
+        public string? VmsName { get; set; }
+        public DateTime? AlarmTime { get; set; }
+        public string? Description { get; set; }
         public Guid? UserId { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }

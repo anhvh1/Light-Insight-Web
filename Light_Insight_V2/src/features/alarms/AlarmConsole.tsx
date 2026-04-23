@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { StatusPill, TypeBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 import { priorityApi } from '@/lib/priority-api';
+import { incidentApi } from '@/lib/incident-api';
 import { useAlarmSignalR } from './useAlarmSignalR';
 import { AlarmSearchPanel } from './AlarmSearchPanel';
 import { alarmApi, type AlarmFilters } from '@/lib/alarm-api';
@@ -34,7 +36,34 @@ function getDefaultFilterValues(): AlarmFilters {
   };
 }
 
+function normalizeAlarmTimeForApi(alarmTimeRaw?: string): string | null {
+  if (!alarmTimeRaw) return null;
+  const raw = alarmTimeRaw.trim();
+  if (!raw) return null;
+
+  const dmyWithTime = raw.match(/^(\d{2})-(\d{2})-(\d{4})[ T](\d{2}):(\d{2}):(\d{2})$/);
+  if (dmyWithTime) {
+    const [, dd, mm, yyyy, hh, mi, ss] = dmyWithTime;
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}`;
+  }
+
+  const ymdWithOptionalSeconds = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (ymdWithOptionalSeconds) {
+    const [, yyyy, mm, dd, hh, mi, ss] = ymdWithOptionalSeconds;
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss ?? '00'}`;
+  }
+
+  const parsedMs = Date.parse(raw);
+  if (!Number.isNaN(parsedMs)) {
+    return new Date(parsedMs).toISOString().slice(0, 19);
+  }
+
+  return null;
+}
+
 export function AlarmConsole() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const {
     alarms,
     connected,
@@ -166,6 +195,78 @@ export function AlarmConsole() {
   const handleAcknowledge = () => {
     if (!selectedAlarmId) return;
     setSelectedAlarmId(null);
+  };
+  const createIncidentMutation = useMutation({
+    mutationFn: incidentApi.create,
+    onSuccess: (res) => {
+      if (res.Status === 1) {
+        const newId = typeof res.Data === 'string' ? res.Data : '';
+        sessionStorage.setItem(
+          'incident-flash',
+          JSON.stringify({
+            type: 'success',
+            text: 'Tạo incident thành công.',
+            selectId: newId || null,
+          })
+        );
+        void queryClient.invalidateQueries({ queryKey: ['incident-list'] });
+        navigate({ to: '/incident' });
+        return;
+      }
+
+      sessionStorage.setItem(
+        'incident-flash',
+        JSON.stringify({
+          type: 'error',
+          text: res.Message || 'Không thể tạo incident.',
+          selectId: null,
+        })
+      );
+      navigate({ to: '/incident' });
+    },
+    onError: (err: any) => {
+      sessionStorage.setItem(
+        'incident-flash',
+        JSON.stringify({
+          type: 'error',
+          text:
+            err?.response?.data?.Message ||
+            err?.message ||
+            'Lỗi khi tạo incident.',
+          selectId: null,
+        })
+      );
+      navigate({ to: '/incident' });
+    },
+  });
+
+  const handleCreateIncident = () => {
+    if (!selectedAlarm) return;
+    const priorityValue = (
+      selectedAlarm.apiPriorityName?.trim() ||
+      selectedAlarm.pri?.trim() ||
+      ''
+    ).toUpperCase();
+    const sourceValue = selectedAlarm.src?.trim() || selectedAlarm.loc?.trim() || '';
+    if (!sourceValue) {
+      alert('Alarm chưa có nguồn/vị trí để tạo incident.');
+      return;
+    }
+
+    const normalizedAlarmTime = normalizeAlarmTimeForApi(selectedAlarm.alarmTimeRaw);
+    const payload = {
+      Priority: priorityValue || null,
+      SourceId: sourceValue,
+      Status: null,
+      VmsId: filters.key || selectedConnectorId || null,
+      AlarmTime: normalizedAlarmTime,
+      Description: selectedAlarm.title || null,
+      UserId: null,
+      SopId: null,
+    };
+    createIncidentMutation.mutate({
+      ...payload,
+    });
   };
 
   const mapTabToStateName = (tabValue: string): AlarmFilters['stateName'] | undefined => {
@@ -509,7 +610,13 @@ export function AlarmConsole() {
           )}
 
           <div className="flex gap-1.5 mt-2">
-            <button className="flex-1 px-3.5 py-1.5 rounded-md text-[12px] font-medium bg-psim-accent text-bg0 hover:opacity-90 transition-colors">📋 Xử lý Incident</button>
+            <button
+              className="flex-1 px-3.5 py-1.5 rounded-md text-[12px] font-medium bg-psim-accent text-bg0 hover:opacity-90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={handleCreateIncident}
+              disabled={createIncidentMutation.isPending || !selectedAlarm}
+            >
+              {createIncidentMutation.isPending ? '⏳ Đang tạo...' : '📋 Xử lý Incident'}
+            </button>
             <button className="flex-1 px-3.5 py-1.5 rounded-md text-[12px] font-medium bg-bg3 text-t1 border border-border-dim hover:bg-bg4 transition-colors">📷 Xem Camera</button>
           </div>
           <div className="flex gap-1.5">

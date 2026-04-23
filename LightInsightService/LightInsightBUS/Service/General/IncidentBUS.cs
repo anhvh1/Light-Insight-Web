@@ -84,7 +84,7 @@ namespace LightInsightBUS.Service.General
             var result = new BaseResultModel();
             try
             {
-                var validateMsg = ValidateIncident(model?.SourceId, model?.Type);
+                var validateMsg = ValidateIncident(model?.SourceId);
                 if (model == null || validateMsg != null)
                 {
                     result.Status = 0;
@@ -129,7 +129,7 @@ namespace LightInsightBUS.Service.General
                     return result;
                 }
 
-                var validateMsg = ValidateIncident(model.SourceId, model.Type);
+                var validateMsg = ValidateIncident(model.SourceId);
                 if (validateMsg != null)
                 {
                     result.Status = 0;
@@ -199,13 +199,10 @@ namespace LightInsightBUS.Service.General
             return result;
         }
 
-        private static string? ValidateIncident(string? sourceId, string? type)
+        private static string? ValidateIncident(string? sourceId)
         {
             if (string.IsNullOrWhiteSpace(sourceId))
                 return "SourceId không được để trống.";
-
-            if (string.IsNullOrWhiteSpace(type))
-                return "Type không được để trống.";
 
             return null;
         }

@@ -104,7 +104,10 @@ export interface IncidentApiItem {
   priority: string;
   source_id: string;
   status: string;
-  type: string;
+  vms_id: string | null;
+  vms_name: string | null;
+  alarm_time: string | null;
+  description: string | null;
   user_id: string | null;
   created_at: string;
   updated_at: string;
