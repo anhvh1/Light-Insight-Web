@@ -4,33 +4,33 @@
  */
 export const mapV2ProxyRules = {
   '/api': {
-    target: 'https://localhost:7276',
+    target: 'https://lightinsight.gosol.com.vn',
     changeOrigin: true,
     secure: false,
   },
   '/mapstyles': {
-    target: 'https://localhost:7276',
+    target: 'https://lightinsight.gosol.com.vn',
     changeOrigin: true,
     secure: false,
   },
   '/maptiles': {
-    target: 'https://localhost:7276',
+    target: 'https://lightinsight.gosol.com.vn',
     changeOrigin: true,
     secure: false,
   },
   '/hubs': {
-    target: 'https://localhost:7276',
+    target: 'https://lightinsight.gosol.com.vn',
     ws: true,
     changeOrigin: true,
     secure: false,
   },
   '/health': {
-    target: 'https://localhost:7276',
+    target: 'https://lightinsight.gosol.com.vn',
     changeOrigin: true,
     secure: false,
   },
   '/metrics': {
-    target: 'https://localhost:7276',
+    target: 'https://lightinsight.gosol.com.vn',
     changeOrigin: true,
     secure: false,
   }

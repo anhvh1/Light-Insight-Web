@@ -40,7 +40,7 @@ function findFirstMap(nodes: MapTreeNode[]): APIMapTreeNode | null {
 
 function findMapById(nodes: MapTreeNode[], id: string): APIMapTreeNode | null {
   for (const node of nodes) {
-    if (node.map.id === id) return node.map;
+    if (node.map.Id === id) return node.map;
     if (node.children && node.children.length > 0) {
       const found = findMapById(node.children, id);
       if (found) return found;
@@ -54,7 +54,7 @@ function filterMapTree(nodes: MapTreeNode[], query: string): MapTreeNode[] {
   const lowerQuery = query.toLowerCase();
 
   return nodes.map(node => {
-    const isMatch = node.map.name.toLowerCase().includes(lowerQuery);
+    const isMatch = node.map.Name.toLowerCase().includes(lowerQuery);
     if (node.children && node.children.length > 0) {
       const filteredChildren = filterMapTree(node.children, query);
       if (isMatch || filteredChildren.length > 0) {
@@ -148,9 +148,9 @@ function MapViewInternal() {
       let targetMap = savedMapId ? findMapById(mapTree, savedMapId) : null;
       if (!targetMap) targetMap = findFirstMap(mapTree);
       if (targetMap) {
-        setSelectedMapId(targetMap.id);
+        setSelectedMapId(targetMap.Id);
         setActiveMap(targetMap);
-        if (!savedMapId) localStorage.setItem('lastSelectedMapId', targetMap.id);
+        if (!savedMapId) localStorage.setItem('lastSelectedMapId', targetMap.Id);
       }
     }
   }, [mapTree, isLoadingTree, selectedMapId]);
@@ -269,7 +269,7 @@ function MapViewInternal() {
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setIsModalOpen(false)} />
           <div className="relative w-[1200px] h-[80vh] bg-[#0a0f1d] border border-white/10 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-              <div className="flex items-center gap-4"><div className="w-12 h-12 rounded-2xl bg-psim-orange/10 flex items-center justify-center text-psim-orange shadow-inner"><Activity size={24} /></div><div><h2 className="text-xl font-heading font-bold uppercase tracking-widest text-white leading-none mb-1">Nhật ký sự kiện</h2><p className="text-[11px] font-bold text-psim-orange uppercase tracking-tighter opacity-70">Bản đồ: {activeMap?.name}</p></div></div>
+              <div className="flex items-center gap-4"><div className="w-12 h-12 rounded-2xl bg-psim-orange/10 flex items-center justify-center text-psim-orange shadow-inner"><Activity size={24} /></div><div><h2 className="text-xl font-heading font-bold uppercase tracking-widest text-white leading-none mb-1">Nhật ký sự kiện</h2><p className="text-[11px] font-bold text-psim-orange uppercase tracking-tighter opacity-70">Bản đồ: {activeMap?.Name}</p></div></div>
               <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-xl bg-white/5 hover:bg-psim-red hover:text-white flex items-center justify-center transition-all group"><X size={20} className="group-hover:rotate-90 transition-transform duration-300 text-t3 group-hover:text-white" /></button>
             </div>
             <div ref={modalScrollRef} onScroll={handleModalScroll} className="flex-1 overflow-y-auto custom-scrollbar bg-[#05070a]/50">
@@ -296,7 +296,7 @@ function MapViewInternal() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <h1 className="font-heading text-[16px] font-semibold uppercase tracking-tight text-white">Situational Map</h1>
-            {activeMap?.name && <div className="flex items-center h-6 px-3 bg-psim-orange/10 border border-psim-orange/20 rounded text-psim-orange text-[10px] font-bold uppercase tracking-widest animate-in fade-in zoom-in-95 duration-300">{activeMap.name}</div>}
+            {activeMap?.Name && <div className="flex items-center h-6 px-3 bg-psim-orange/10 border border-psim-orange/20 rounded text-psim-orange text-[10px] font-bold uppercase tracking-widest animate-in fade-in zoom-in-95 duration-300">{activeMap.Name}</div>}
           </div>
           <div className="text-[10px] text-t2 font-mono flex gap-4">
             <span><span className="text-psim-red">●</span> {dailyAlarmCount} alarms active</span>
@@ -325,7 +325,7 @@ function MapViewInternal() {
             </div>
           ) : activeMap.type === 'Geo' ? (
             <GeoMapCanvas
-              key={activeMap.id}
+              key={activeMap.Id}
               activeMap={activeMap}
               geoStyleUrl={mapOptions?.Data?.geoStyleUrl}
               markers={markers}
@@ -336,9 +336,9 @@ function MapViewInternal() {
             />
           ) : (
             <ImageMapCanvas
-              key={activeMap.id}
+              key={activeMap.Id}
               activeMapUrl={activeMap.mapImagePath || ''}
-              activeMapName={activeMap.name}
+              activeMapName={activeMap.Name}
               markers={markers}
               alarmsBySource={alarmsBySource}
               cameraStatusMap={cameraStatusMap}
@@ -376,7 +376,7 @@ function MapViewInternal() {
                   />
                 </div>
                 <div className="overflow-y-auto custom-scrollbar flex flex-col gap-1 pr-1">
-                  {isLoadingTree ? <RefreshCcw className="animate-spin mx-auto opacity-40" /> : filteredMapTree.map(node => (<TreeItem key={node.map.id} node={node} level={0} selectedId={selectedMapId} onSelect={(n) => { setSelectedMapId(n.id); setActiveMap(n); localStorage.setItem('lastSelectedMapId', n.id); }} />))}
+                  {isLoadingTree ? <RefreshCcw className="animate-spin mx-auto opacity-40" /> : filteredMapTree.map(node => (<TreeItem key={node.map.Id} node={node} level={0} selectedId={selectedMapId} onSelect={(n) => { setSelectedMapId(n.Id); setActiveMap(n); localStorage.setItem('lastSelectedMapId', n.Id); }} />))}
                 </div>
               </div>
             )}
@@ -405,17 +405,17 @@ export function MapView() { return <MapViewInternal />; }
 
 function TreeItem({ node, level, selectedId, onSelect }: { node: MapTreeNode, level: number, selectedId: string | null, onSelect: (n: APIMapTreeNode) => void }) {
   const [isOpen, setIsExpanded] = useState(true);
-  const isSelected = selectedId === node.map.id;
+  const isSelected = selectedId === node.map.Id;
   return (
     <div className="flex flex-col">
       <div onClick={() => onSelect(node.map)} style={{ paddingLeft: `${level * 16 + 8}px` }} className={cn("flex items-center justify-between py-2.5 px-3 rounded-xl cursor-pointer transition-all", isSelected ? "bg-psim-orange/10 text-psim-orange" : "hover:bg-white/[0.04] text-t2 hover:text-white")}>
         <div className="flex items-center gap-2.5 overflow-hidden">
           {node.children.length > 0 ? (<button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isOpen); }} className="w-4 h-4 flex items-center justify-center">{isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</button>) : (<div className="w-4" />)}
-          <span className="text-[12px] font-medium truncate">{node.map.name}</span>
+          <span className="text-[12px] font-medium truncate">{node.map.Name}</span>
         </div>
         {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-psim-orange shadow-[0_0_8px_rgba(255,107,0,0.8)]" />}
       </div>
-      {node.children.length > 0 && isOpen && (<div className="flex flex-col">{node.children.map(child => (<TreeItem key={child.map.id} node={child} level={level + 1} selectedId={selectedId} onSelect={onSelect} />))}</div>)}
+      {node.children.length > 0 && isOpen && (<div className="flex flex-col">{node.children.map(child => (<TreeItem key={child.map.Id} node={child} level={level + 1} selectedId={selectedId} onSelect={onSelect} />))}</div>)}
     </div>
   );
 }
