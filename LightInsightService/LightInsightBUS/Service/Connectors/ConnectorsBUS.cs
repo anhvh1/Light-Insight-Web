@@ -35,11 +35,14 @@ namespace LightInsightBUS.Service.Connectors
             try
             {
                 var connectors = await _connectorsDAL.GetAllConnectorsAsync();
+                var cacheEntryOptions = new MemoryCacheEntryOptions()
+                    .SetPriority(CacheItemPriority.NeverRemove);
+
                 foreach (var item in connectors)
                 {
                     string cacheKey = $"{item.Id}";
-                    _cache.Set(cacheKey, item);
-                    Console.WriteLine($"[CACHE] Loaded Key: {cacheKey} for Connector: {item.VmsName}");
+                    _cache.Set(cacheKey, item, cacheEntryOptions);
+                    Console.WriteLine($"[CACHE] Loaded Key: {cacheKey} for Connector: {item.Name}");
                 }
 
                 result.Status = 1;
@@ -82,7 +85,9 @@ namespace LightInsightBUS.Service.Connectors
                 if (newID != null)
                 {
                     model.Id = (Guid)newID;
-                    _cache.Set($"VMS_{model.VMSID}", model);
+                    var cacheEntryOptions = new MemoryCacheEntryOptions()
+                        .SetPriority(CacheItemPriority.NeverRemove);
+                    _cache.Set($"{newID}", model, cacheEntryOptions);
 
                     result.Status = 1;
                     result.Message = "Thêm connector thành công.";
@@ -152,7 +157,9 @@ namespace LightInsightBUS.Service.Connectors
                 if (success)
                 {
                     // Cập nhật Cache sau khi cập nhật thành công - Dùng Key đồng nhất VMS_{id}
-                    _cache.Set($"VMS_{model.VMSID}", model);
+                    var cacheEntryOptions = new MemoryCacheEntryOptions()
+                        .SetPriority(CacheItemPriority.NeverRemove);
+                    _cache.Set($"{model.Id}", model, cacheEntryOptions);
 
                     result.Status = 1;
                     result.Message = "Cập nhật connector thành công.";
