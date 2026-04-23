@@ -33,11 +33,11 @@ export function ConfigurationLayout() {
   return (
     <div className="flex flex-col h-full bg-bg0 overflow-hidden relative">
       {/* Header */}
-      <header className="h-12 border-b border-white/5 bg-bg1 flex items-center px-3 shrink-0">
+      {/* <header className="h-12 border-b border-white/5 bg-bg1 flex items-center px-3 shrink-0">
         <h1 className="text-[15px] font-semibold text-t-0 tracking-tight">
           Configuration & Administration
         </h1>
-      </header>
+      </header> */}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
