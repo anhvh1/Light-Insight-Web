@@ -120,10 +120,10 @@ export interface IncidentPagingParams {
 export type MapLayoutType = 'Image' | 'Geo';
 
 export interface MapTreeNode {
-  Id: string;
-  Name: string;
-  Code: string;
-  ParentId: string | null;
+  id: string;
+  name: string;
+  code: string;
+  parentId: string | null;
   Children: MapTreeNode[];
   mapImagePath: string | null;
   type: MapLayoutType;

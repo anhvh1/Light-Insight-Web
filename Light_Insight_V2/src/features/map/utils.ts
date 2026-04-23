@@ -25,20 +25,20 @@ export const buildMapTree = (maps: APIMapTreeNode[]) => {
   const flatMaps = flatten(safeMaps);
 
   flatMaps.forEach((map) => {
-    nodes.set(map.Id, { map, children: [] });
+    nodes.set(map.id, { map, children: [] });
   });
 
   const roots: MapTreeNode[] = [];
   nodes.forEach((node) => {
-    if (node.map.ParentId && nodes.has(node.map.ParentId)) {
-      nodes.get(node.map.ParentId)?.children.push(node);
+    if (node.map.parentId && nodes.has(node.map.parentId)) {
+      nodes.get(node.map.parentId)?.children.push(node);
     } else {
       roots.push(node);
     }
   });
 
   const sortNodes = (items: MapTreeNode[]) => {
-    items.sort((a, b) => a.map.Name.localeCompare(b.map.Name));
+    items.sort((a, b) => a.map.name.localeCompare(b.map.name));
     items.forEach((item) => sortNodes(item.children));
   };
   sortNodes(roots);
