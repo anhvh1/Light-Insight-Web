@@ -65,3 +65,10 @@ eventTypes.json
 milestone-2025-r2-upgrade-final.md
 event_summary.txt
 websocket_response.json
+/LightJSC.Api
+/LightJSC.Web
+/LightInsightService/LightInsightService/MapData/mapstyles
+/LightInsightService/LightInsightService/MapData/mbtiles
+/LightInsightService/LightInsightService/MapData/pbf/config-openmaptiles.json
+/LightInsightService/LightInsightService/MapData/pbf/process-openmaptiles.lua
+/LightInsightService/LightInsightService/MapData/pbf/vietnam-260111.osm.pbf
