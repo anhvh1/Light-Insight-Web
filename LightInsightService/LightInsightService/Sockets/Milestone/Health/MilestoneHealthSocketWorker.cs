@@ -285,45 +285,44 @@ namespace LightInsightService.Sockets.Milestone.Health
 
                             private void SyncInfrastructureStatuses(string cid)
                             {
-                            var state = _globalStates[cid];
-                            foreach (var item in state.Infrastructure)
-                            {
-                            string sourceKey = "";
-                            if (item.Type == "server") {
-                            var rsMatch = _sourceNames.FirstOrDefault(kvp => kvp.Key.StartsWith("recordingServers/") && kvp.Value == item.MachineName);
-                            sourceKey = rsMatch.Key;
-                            } else if (item.Type == "hardware") {
-                            var hwMatch = _sourceNames.FirstOrDefault(kvp => kvp.Key.StartsWith("hardware/") && kvp.Value == item.Name);
-                            sourceKey = hwMatch.Key;
-                            } else if (item.Type == "camera") {
-                            var camMatch = _sourceNames.FirstOrDefault(kvp => kvp.Key.StartsWith("cameras/") && kvp.Value == item.Name);
-                            sourceKey = camMatch.Key;
+                                var state = _globalStates[cid];
+                                foreach (var item in state.Infrastructure)
+                                {
+                                    if (!string.IsNullOrEmpty(item.SourceId) && state.ResourceStates.TryGetValue(item.SourceId, out var guids))
+                                    {
+                                        item.Status = MapStateGuidToStatus(guids);
+                                    }
+                                }
                             }
-
-                            if (!string.IsNullOrEmpty(sourceKey) && state.ResourceStates.TryGetValue(sourceKey, out var guids))
-                            {
-                            item.Status = MapStateGuidToStatus(guids);
-                            }
-                            }
-                            }
-
         private string MapStateGuidToStatus(List<string> guids)
         {
             if (guids == null || guids.Count == 0) return "ONLINE";
-            var resolvedNames = new List<(string Name, bool IsProblem)>();
+
+            var resolvedNames = new List<(string Name, int Severity)>();
             foreach (var guid in guids) {
                 if (_eventDefinitions.TryGetValue(guid, out var def)) {
                     string name = def.Name;
                     string lower = name.ToLower();
-                    bool isProblem = lower.Contains("stopped") || lower.Contains("error") || lower.Contains("critical") || 
-                                     lower.Contains("lost") || lower.Contains("broken") || lower.Contains("terminated") ||
-                                     lower.Contains("unavailable") || lower.Contains("fail");
-                    resolvedNames.Add((name, isProblem));
+                    
+                    int severity = 4; // Default: Normal (Priority 4)
+                    
+                    // Priority 1: Critical Connectivity/Service Failure
+                    if (lower.Contains("error") || lower.Contains("stopped") || lower.Contains("lost") || lower.Contains("broken") || lower.Contains("unavailable"))
+                        severity = 1;
+                    // Priority 2: Logic/Performance/Storage Failure
+                    else if (lower.Contains("critical") || lower.Contains("failed") || lower.Contains("full"))
+                        severity = 2;
+                    // Priority 3: Degraded Performance/Handshake Issues
+                    else if (lower.Contains("warning") || lower.Contains("slow") || lower.Contains("bad") || lower.Contains("disconnected"))
+                        severity = 3;
+                    
+                    resolvedNames.Add((name, severity));
                 }
             }
-            var problem = resolvedNames.FirstOrDefault(r => r.IsProblem);
-            if (problem.Name != null) return problem.Name;
-            return resolvedNames.FirstOrDefault().Name ?? "ONLINE";
+
+            // Return the state with the LOWEST severity number (1 is highest priority)
+            var topState = resolvedNames.OrderBy(r => r.Severity).FirstOrDefault();
+            return topState.Name ?? "ONLINE";
         }
 
         private async Task PushUpdate(string cid)
@@ -367,7 +366,8 @@ namespace LightInsightService.Sockets.Milestone.Health
                             Type = "server", 
                             Status = rsStatus, 
                             ConnectorId = cid,
-                            MachineName = hostname 
+                            MachineName = hostname,
+                            SourceId = rsSource
                         });
 
                         // 1. Fetch Hardware
@@ -388,7 +388,14 @@ namespace LightInsightService.Sockets.Milestone.Health
                                         string hStatus = "ONLINE";
                                         if (_globalStates[cid].ResourceStates.TryGetValue(hSource, out var hGuids)) hStatus = MapStateGuidToStatus(hGuids);
 
-                                        newInfra.Add(new InfrastructureHealth { Name = hName, Type = "hardware", Status = hStatus, ConnectorId = cid, MachineName = hostname });
+                                        newInfra.Add(new InfrastructureHealth { 
+                                            Name = hName, 
+                                            Type = "hardware", 
+                                            Status = hStatus, 
+                                            ConnectorId = cid, 
+                                            MachineName = hostname,
+                                            SourceId = hSource
+                                        });
                                     }
                                 }
                             }
@@ -407,8 +414,9 @@ namespace LightInsightService.Sockets.Milestone.Health
                                         string storageId = d.GetProperty("id").GetString();
                                         string storageName = d.GetProperty("name").GetString();
                                         string diskPath = d.TryGetProperty("diskPath", out var p) ? p.GetString() : "Unknown path";
+                                        string sSource = $"storages/{storageId}";
                                         
-                                        _sourceNames[$"storages/{storageId}"] = storageName;
+                                        _sourceNames[sSource] = storageName;
 
                                         newInfra.Add(new InfrastructureHealth { 
                                             Name = storageName, 
@@ -416,7 +424,8 @@ namespace LightInsightService.Sockets.Milestone.Health
                                             Status = "ONLINE", 
                                             Description = $"Disk path: {diskPath}", 
                                             ConnectorId = cid, 
-                                            MachineName = hostname 
+                                            MachineName = hostname,
+                                            SourceId = sSource
                                         });
                                     }
                                 }
@@ -441,7 +450,14 @@ namespace LightInsightService.Sockets.Milestone.Health
                                         string camStatus = "ONLINE";
                                         if (_globalStates[cid].ResourceStates.TryGetValue(camSource, out var camGuids)) camStatus = MapStateGuidToStatus(camGuids);
 
-                                        newInfra.Add(new InfrastructureHealth { Name = camName, Type = "camera", Status = camStatus, ConnectorId = cid, MachineName = hostname });
+                                        newInfra.Add(new InfrastructureHealth { 
+                                            Name = camName, 
+                                            Type = "camera", 
+                                            Status = camStatus, 
+                                            ConnectorId = cid, 
+                                            MachineName = hostname,
+                                            SourceId = camSource
+                                        });
                                     }
                                 }
                             }
