@@ -52,6 +52,7 @@ builder.Services
 
 
 // ADD SCROPED SERVICES
+builder.Services.AddHttpClient();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ICameraService, CameraServiceBUS>();
 builder.Services.AddScoped<ICameraDropDown, CameraDropdownBUS>();
