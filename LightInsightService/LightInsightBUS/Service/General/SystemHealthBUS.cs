@@ -95,23 +95,37 @@ namespace LightInsightBUS.Service.General
 
             if (_cache.TryGetValue($"AGENT_METRIC_{lookupKey}", out MilestoneServerMetric metrics))
             {
-                item.CpuUsage = metrics.CpuUsage;
-                item.RamUsage = metrics.RamUsage;
-                item.TotalRamGb = metrics.TotalRamGb;
-                item.FreeRamGb = metrics.FreeRamGb;
-
                 if (item.Type == "server")
                 {
+                    item.CpuUsage = metrics.CpuUsage;
+                    item.RamUsage = metrics.RamUsage;
+                    item.TotalRamGb = metrics.TotalRamGb;
+                    item.FreeRamGb = metrics.FreeRamGb;
                     item.Description = $"CPU {metrics.CpuUsage}% · RAM {metrics.RamUsage}% · Disks: {metrics.Disks.Count}";
                 }
 
-                // Map disks
+                // Map all disks for the server view
                 item.Disks = metrics.Disks.Select(d => new InfrastructureDisk {
                     DriveName = d.DriveName,
                     UsagePercentage = d.UsagePercentage,
                     TotalSize = d.TotalSizeGb,
                     FreeSpace = d.FreeSpaceGb
                 }).ToList();
+
+                // If this is a specific storage item, try to find the matching disk metric
+                if (item.Type == "storage")
+                {
+                    // Description usually contains "Disk path: C:\..."
+                    var matchingDisk = metrics.Disks.FirstOrDefault(d => 
+                        !string.IsNullOrEmpty(item.Description) && 
+                        item.Description.Contains(d.DriveName, StringComparison.OrdinalIgnoreCase));
+
+                    if (matchingDisk != null)
+                    {
+                        item.DiskUsage = matchingDisk.UsagePercentage;
+                        item.Description = $"{matchingDisk.DriveName} | Free {matchingDisk.FreeSpaceGb}GB / {matchingDisk.TotalSizeGb}GB";
+                    }
+                }
             }
         }
     }

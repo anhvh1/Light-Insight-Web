@@ -161,8 +161,34 @@ export function SystemHealthPage() {
           const matchKey = item.MachineName || item.Name;
           const baseMatchKey = matchKey.split('.')[0].toLowerCase();
           const baseReportId = sId.split('.')[0].toLowerCase();
+          
           if (baseMatchKey === baseReportId) {
-            return { ...item, CpuUsage: cpu, RamUsage: ram, TotalRamGb: totalRam, FreeRamGb: freeRam, Disks: disks, Description: item.Type === 'server' ? `CPU ${cpu}% • RAM ${ram}% • Disks: ${disks.length}` : item.Description };
+            // Update Server item
+            if (item.Type === 'server') {
+              return { 
+                ...item, 
+                CpuUsage: cpu, 
+                RamUsage: ram, 
+                TotalRamGb: totalRam, 
+                FreeRamGb: freeRam, 
+                Disks: disks, 
+                Description: `CPU ${cpu}% • RAM ${ram}% • Disks: ${disks.length}` 
+              };
+            }
+            
+            // Update Storage item by matching drive letter
+            if (item.Type === 'storage') {
+              const matchingDisk = disks.find((d: any) => 
+                item.Description && item.Description.toLowerCase().includes(d.DriveName.toLowerCase())
+              );
+              if (matchingDisk) {
+                return {
+                  ...item,
+                  DiskUsage: matchingDisk.UsagePercentage,
+                  Description: `${matchingDisk.DriveName} | Free ${matchingDisk.FreeSpace}GB / ${matchingDisk.TotalSize}GB`
+                };
+              }
+            }
           }
           return item;
         });
@@ -256,13 +282,24 @@ export function SystemHealthPage() {
                         </div>
                         <div className="p-1 flex flex-col gap-1">
                           {items.map((item, i) => (
-                            <div key={i} className="flex items-center gap-2 px-2 py-1 bg-bg-2/30 border border-white/[0.02] rounded-md">
-                              <div className="text-[11px] opacity-70">⚙️</div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-[10px] font-semibold truncate uppercase">{item.Name}</div>
-                                <div className="text-[8px] text-t-2 font-mono uppercase truncate opacity-50">{item.Description}</div>
+                            <div key={i} className="flex flex-col gap-1 px-2 py-1.5 bg-bg-2/30 border border-white/[0.02] rounded-md">
+                              <div className="flex items-center gap-2">
+                                <div className="text-[11px] opacity-70">{item.Type === 'storage' ? '💾' : '⚙️'}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[10px] font-semibold truncate uppercase">{item.Name}</div>
+                                  <div className="text-[8px] text-t-2 font-mono uppercase truncate opacity-50">{item.Description}</div>
+                                </div>
+                                <StatusBadge status={item.Status} />
                               </div>
-                              <StatusBadge status={item.Status} />
+                              {item.Type === 'storage' && item.DiskUsage !== undefined && (
+                                <div className="px-1 pb-0.5">
+                                  <UsageBar 
+                                    label="Dung lượng đã dùng" 
+                                    value={item.DiskUsage} 
+                                    colorClass={item.DiskUsage > 90 ? "bg-psim-red" : "bg-psim-green"} 
+                                  />
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
