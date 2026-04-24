@@ -73,8 +73,14 @@ namespace LightInsightBUS.Service.General
 
             report.LastUpdate = DateTime.Now;
             
+            // Robust matching: Use NetBIOS name (first part of hostname) for the cache key
+            string lookupKey = report.ServerId.Split('.')[0].ToUpper();
+            
+            // New Diagnostic Log
+            Console.WriteLine($"[AGENT] Received metrics for machine: {lookupKey} (CPU: {report.CpuUsage}% | RAM: {report.RamUsage}%)");
+
             // Lưu vào Cache (Hết hạn sau 10 phút nếu không có report mới)
-            _cache.Set($"AGENT_METRIC_{report.ServerId}", report, TimeSpan.FromMinutes(10));
+            _cache.Set($"AGENT_METRIC_{lookupKey}", report, TimeSpan.FromMinutes(10));
 
             return new BaseResultModel { Status = 1, Message = "Report received" };
         }

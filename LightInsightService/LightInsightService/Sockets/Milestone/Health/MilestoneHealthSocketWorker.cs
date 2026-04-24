@@ -24,7 +24,7 @@ namespace LightInsightService.Sockets.Milestone.Health
         private readonly IServiceProvider _scopeFactory;
         private readonly HttpClient _httpClient;
         private readonly IMemoryCache _cache;
-        private readonly IHubContext<CameraStatusHub> _hubContext;
+        private readonly IHubContext<AuditLogHub> _hubContext;
 
         private static readonly ConcurrentDictionary<string, MilestoneLiveState> _globalStates = new ConcurrentDictionary<string, MilestoneLiveState>();
         private readonly ConcurrentDictionary<string, Task> _activeConnections = new ConcurrentDictionary<string, Task>();
@@ -39,7 +39,7 @@ namespace LightInsightService.Sockets.Milestone.Health
             IServiceProvider scopeFactory,
             HttpClient httpClient,
             IMemoryCache cache,
-            IHubContext<CameraStatusHub> hubContext)
+            IHubContext<AuditLogHub> hubContext)
         {
             _logger = logger;
             _scopeFactory = scopeFactory;
@@ -79,7 +79,9 @@ namespace LightInsightService.Sockets.Milestone.Health
                         }
                     }
                 }
-                catch (Exception ex) { _logger.LogError($"Main Loop Error: {ex.Message}"); }
+                catch (Exception ex) { 
+                    // _logger.LogError($"Main Loop Error: {ex.Message}"); 
+                }
                 await Task.Delay(30000, stoppingToken); 
             }
         }
@@ -102,7 +104,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                     string protocol = (config.Port == 443 || config.Port == 8443) ? "wss" : "ws";
                     var wsUri = new Uri($"{protocol}://{config.IpServer}:{config.Port}/api/ws/events/v1");
 
-                    _logger.LogInformation($"[HANDSHAKE] Connecting to {config.Name} at {wsUri}...");
+                    // _logger.LogInformation($"[HANDSHAKE] Connecting to {config.Name} at {wsUri}...");
                     ws.Options.SetRequestHeader("Authorization", $"Bearer {token}");
                     ws.Options.AddSubProtocol("EventsAndStateWebSocketApi");
                     
@@ -118,7 +120,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                     await ReceiveAsync(ws, config.Name, linkedHandshake.Token);
 
                     _globalStates[cid].Status = "ONLINE";
-                    _logger.LogInformation($"[HANDSHAKE] SUCCESS for {config.Name}!");
+                    // _logger.LogInformation($"[HANDSHAKE] SUCCESS for {config.Name}!");
 
                     // 4. BACKGROUND DISCOVERY & REFINEMENT
                     _ = Task.Run(async () => {
@@ -140,7 +142,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                             if (healthGuids.Count > 0) {
                                 var refinedFilter = new { modifier = "include", resourceTypes = new[] { "*" }, eventTypes = healthGuids };
                                 await SendAsync(ws, new { command = "addSubscription", commandId = 103, filters = new[] { refinedFilter } }, config.Name, ct);
-                                _logger.LogInformation($"[REFINE] {config.Name} subscription refined with {healthGuids.Count} health GUIDs.");
+                                // _logger.LogInformation($"[REFINE] {config.Name} subscription refined with {healthGuids.Count} health GUIDs.");
                             }
                         } catch { }
                     }, ct);
@@ -172,7 +174,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                 {
                     _globalStates[cid].Status = "DISCONNECTED";
                     await PushUpdate(cid);
-                    _logger.LogError($"[CONNECTION] {config.Name} ({cid}) error: {ex.Message}");
+                    // _logger.LogError($"[CONNECTION] {config.Name} ({cid}) error: {ex.Message}");
                 }
                 await Task.Delay(10000, ct);
             }
@@ -196,6 +198,8 @@ namespace LightInsightService.Sockets.Milestone.Health
                             if (elapsed > 2000) _globalStates[cid].Status = "BAD";
                             else if (elapsed > 500) _globalStates[cid].Status = "SLOW";
                             else _globalStates[cid].Status = "ONLINE";
+
+                            _logger.LogDebug($"[MilestoneHealth] {vmsConfig.Name} Latency: {elapsed}ms");
                             
                             // Optimized Swap
                             if (root.TryGetProperty("states", out var statesArray)) {
@@ -224,10 +228,10 @@ namespace LightInsightService.Sockets.Milestone.Health
                                 }
                                 _globalStates[cid].ResourceStates = newResourceStates;
                                 
-                                if (alerts.Count > 0) {
-                                    _logger.LogInformation($"[STATE_SYNC] {vmsConfig.Name} Heartbeat:\n   - {string.Join("\n   - ", alerts.Take(20))}{(alerts.Count > 20 ? "\n   - ..." : "")}");
-                                }
-                                _logger.LogInformation($"[STATE_SNAPSHOT] {vmsConfig.Name}: Total {stateCount} status points updated.");
+                                // if (alerts.Count > 0) {
+                                //     _logger.LogInformation($"[STATE_SYNC] {vmsConfig.Name} Heartbeat:\n   - {string.Join("\n   - ", alerts.Take(20))}{(alerts.Count > 20 ? "\n   - ..." : "")}");
+                                // }
+                                // _logger.LogInformation($"[STATE_SNAPSHOT] {vmsConfig.Name}: Total {stateCount} status points updated.");
                             }
                             await PushUpdate(cid);
                         }
@@ -261,7 +265,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                             if (!_globalStates[cid].ResourceStates[source].Contains(eventTypeId))
                                 _globalStates[cid].ResourceStates[source].Add(eventTypeId);
 
-                            _logger.LogInformation($"[LIVE_EVENT] {vmsConfig.Name}: '{deviceName}' changed to '{eventName}'");
+                            // _logger.LogInformation($"[LIVE_EVENT] {vmsConfig.Name}: '{deviceName}' changed to '{eventName}'");
                             
                             string category = _eventDefinitions.ContainsKey(eventTypeId) ? _eventDefinitions[eventTypeId].Category : "Unknown";
                             
@@ -280,7 +284,9 @@ namespace LightInsightService.Sockets.Milestone.Health
                             await PushUpdate(cid);
                             }
                             }
-                            } catch { }
+                            } catch (Exception ex) { 
+                                _logger.LogError($"[MilestoneHealth] ProcessWsMessage error for {vmsConfig.Name}: {ex.Message}");
+                            }
                             }
 
                             private void SyncInfrastructureStatuses(string cid)
@@ -531,9 +537,24 @@ namespace LightInsightService.Sockets.Milestone.Health
 
         private async Task<string> ReceiveAsync(ClientWebSocket ws, string serverName, CancellationToken ct) {
             var buffer = new byte[1024 * 64];
-            var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
-            if (result.MessageType == WebSocketMessageType.Close) return null;
-            return Encoding.UTF8.GetString(buffer, 0, result.Count);
+            using var ms = new MemoryStream();
+            
+            while (true)
+            {
+                var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
+                if (result.MessageType == WebSocketMessageType.Close) return null;
+                
+                ms.Write(buffer, 0, result.Count);
+                if (result.EndOfMessage) break;
+
+                if (ms.Length > 1024 * 1024 * 10) // 10MB limit safety
+                {
+                    _logger.LogWarning($"[MilestoneHealth] Message from {serverName} too large, dropping.");
+                    return null;
+                }
+            }
+
+            return Encoding.UTF8.GetString(ms.ToArray());
         }
     }
 }
