@@ -132,8 +132,10 @@ export interface MapTreeNode {
 
 // --- SOP TYPES ---
 export interface SopTrigger {
-  vms_camera_id: string;
-  event_name: string;
+  id?: string;
+  connector_id: string;
+  camera_id: string;
+  event_id: string;
 }
 
 export interface SopStep {

@@ -9,6 +9,14 @@ using System.Threading.Tasks;
 
 namespace LightInsightDAL.Repositories.General
 {
+    public sealed class SopTriggerLookupRow
+    {
+        public Guid SopId { get; set; }
+        public Guid ConnectorId { get; set; }
+        public Guid CameraId { get; set; }
+        public Guid EventId { get; set; }
+    }
+
     public class SopDAL
     {
         private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
@@ -153,6 +161,40 @@ namespace LightInsightDAL.Repositories.General
             }
 
             return (items, total);
+        }
+
+        public async Task<List<SopTriggerLookupRow>> GetAllTriggersAsync()
+        {
+            var rows = new List<SopTriggerLookupRow>();
+            await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
+            await conn.OpenAsync();
+
+            var sql = "SELECT sop_id, connector_id, camera_id, event_id FROM public.sop_triggers";
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            await using var reader = await cmd.ExecuteReaderAsync();
+
+            var sopIdIdx = reader.GetOrdinal("sop_id");
+            var connectorIdIdx = reader.GetOrdinal("connector_id");
+            var cameraIdIdx = reader.GetOrdinal("camera_id");
+            var eventIdIdx = reader.GetOrdinal("event_id");
+
+            while (await reader.ReadAsync())
+            {
+                if (reader.IsDBNull(sopIdIdx) || reader.IsDBNull(connectorIdIdx) || reader.IsDBNull(cameraIdIdx) || reader.IsDBNull(eventIdIdx))
+                {
+                    continue;
+                }
+
+                rows.Add(new SopTriggerLookupRow
+                {
+                    SopId = reader.GetGuid(sopIdIdx),
+                    ConnectorId = reader.GetGuid(connectorIdIdx),
+                    CameraId = reader.GetGuid(cameraIdIdx),
+                    EventId = reader.GetGuid(eventIdIdx)
+                });
+            }
+
+            return rows;
         }
     }
 }

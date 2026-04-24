@@ -7,8 +7,10 @@ export const priorityApi = {
     return response.data || [];
   },
 
-  getAnalyticsEvents: async () => {
-    const response = await apiClient.get<ApiResponse<AnalyticsEvent[]>>('/Priorities/AnalyticsEvents');
+  getAnalyticsEvents: async (key: string) => {
+    const response = await apiClient.get<ApiResponse<AnalyticsEvent[]>>('/Priorities/AnalyticsEvents', {
+      params: { key },
+    });
     return response.data || { Data: [], Status: 0, Message: '' };
   },
 

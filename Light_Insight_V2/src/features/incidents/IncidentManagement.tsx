@@ -294,13 +294,13 @@ export function IncidentManagement() {
     const seen = new Set<string>();
 
     for (const trigger of sopDetail.triggers ?? []) {
-      const id = (trigger.vms_camera_id || '').trim();
+      const id = (trigger.camera_id || '').trim();
       if (!id || seen.has(id)) continue;
       seen.add(id);
       rows.push({
         id,
         name: cameraNameById.get(id) ?? id,
-        sub: trigger.event_name || '',
+        sub: trigger.event_id || '',
         time: formatDateTime(selectedIncident?.created_at),
         icon: '🚨',
       });

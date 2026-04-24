@@ -27,6 +27,7 @@ export function AlarmPrioritySection({ actualConnectors }: AlarmPrioritySectionP
   const [basket, setBasket] = useState<string[]>([]);
   const [selectedPriorityId, setSelectedPriorityId] = useState<number>(2);
   const [modalSearch, setModalSearch] = useState('');
+  const defaultConnectorId = (actualConnectors?.[0]?.Id ?? actualConnectors?.[0]?.id ?? '') as string;
   // const [editingMapping, setEditingMapping] = useState<{ id: number; name: string; currentPriorityId: number } | null>(null);
   // const [responseModal, setResponseModal] = useState<{ isOpen: boolean; status: number; message: string }>({
   //   isOpen: false,
@@ -47,8 +48,9 @@ export function AlarmPrioritySection({ actualConnectors }: AlarmPrioritySectionP
   });
 
   const { data: allEventsResponse } = useQuery({
-    queryKey: ['analytics-events'],
-    queryFn: priorityApi.getAnalyticsEvents,
+    queryKey: ['analytics-events', defaultConnectorId],
+    queryFn: () => priorityApi.getAnalyticsEvents(defaultConnectorId),
+    enabled: !!defaultConnectorId,
   });
   const allEvents = allEventsResponse?.Data || [];
 

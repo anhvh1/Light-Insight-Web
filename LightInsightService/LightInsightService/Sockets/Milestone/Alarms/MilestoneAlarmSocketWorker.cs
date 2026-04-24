@@ -1,6 +1,9 @@
 using System.Net.WebSockets;
 using System.Text;
+using LightInsightBUS.Interfaces.General;
+using LightInsightModel.General;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json.Linq;
 
 namespace LightInsightService.Sockets.Milestone.Alarms
@@ -9,10 +12,14 @@ namespace LightInsightService.Sockets.Milestone.Alarms
     {
         // Nhúng SignalR Hub Context để có thể gọi FE
         private readonly IHubContext<MilestoneAlarmHub> _hubContext;
+        private readonly IServiceScopeFactory _scopeFactory;
 
-        public MilestoneAlarmSocketWorker(IHubContext<MilestoneAlarmHub> hubContext)
+        public MilestoneAlarmSocketWorker(
+            IHubContext<MilestoneAlarmHub> hubContext,
+            IServiceScopeFactory scopeFactory)
         {
             _hubContext = hubContext;
+            _scopeFactory = scopeFactory;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -36,6 +43,7 @@ namespace LightInsightService.Sockets.Milestone.Alarms
                             var transformedData = Transform(rawStr);
 
                             // --- BƯỚC: GỬI SANG REACT FE QUA SIGNALR ---
+                            await TryCreateIncidentFromAlarmAsync(transformedData, stoppingToken);
                             await Broadcast(transformedData, stoppingToken);
                         }
                     }
@@ -47,12 +55,12 @@ namespace LightInsightService.Sockets.Milestone.Alarms
         }
 
         // Đổi kiểu trả về thành object để SignalR tự động map ra JSON
-        private object Transform(string json)
+        private MilestoneAlarmPayload Transform(string json)
         {
             try
             {
                 var raw = JObject.Parse(json);
-                var feData = new
+                var feData = new MilestoneAlarmPayload
                 {
                     alarmId = raw["AlarmId"]?.ToString(),
                     alarmName = raw["AlarmName"]?.ToString(),
@@ -74,12 +82,25 @@ namespace LightInsightService.Sockets.Milestone.Alarms
             }
             catch
             {
-                // Trả về chuỗi gốc nếu parse lỗi
-                return json;
+                return new MilestoneAlarmPayload();
             }
         }
 
-        private async Task Broadcast(object data, CancellationToken ct)
+        private async Task TryCreateIncidentFromAlarmAsync(MilestoneAlarmPayload payload, CancellationToken ct)
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var autoIncidentService = scope.ServiceProvider.GetRequiredService<IAutoIncidentFromAlarm>();
+                await autoIncidentService.TryCreateFromAlarmAsync(payload, ct);
+            }
+            catch
+            {
+                // Không throw để không ảnh hưởng luồng realtime push sang FE.
+            }
+        }
+
+        private async Task Broadcast(MilestoneAlarmPayload data, CancellationToken ct)
         {
             // Gửi dữ liệu tới tất cả client đang kết nối vào Hub
             // Gọi hàm có tên "ReceiveAlarm" trên Frontend (React)
