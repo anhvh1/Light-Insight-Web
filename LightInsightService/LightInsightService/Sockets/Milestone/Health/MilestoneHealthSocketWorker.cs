@@ -354,10 +354,10 @@ namespace LightInsightService.Sockets.Milestone.Health
                     int severity = 4; // Default: Normal (Priority 4)
                     
                     // Priority 1: Critical Connectivity/Service Failure
-                    if (lower.Contains("error") || lower.Contains("stopped") || lower.Contains("lost") || lower.Contains("broken") || lower.Contains("unavailable"))
+                    if (lower.Contains("error") || lower.Contains("stopped") || lower.Contains("lost") || lower.Contains("broken") || lower.Contains("unavailable") || lower.Contains("offline") || lower.Contains("ended") || lower.Contains("failed"))
                         severity = 1;
                     // Priority 2: Logic/Performance/Storage Failure
-                    else if (lower.Contains("critical") || lower.Contains("failed") || lower.Contains("full"))
+                    else if (lower.Contains("critical") || lower.Contains("full") || lower.Contains("warning"))
                         severity = 2;
                     // Priority 3: Degraded Performance/Handshake Issues
                     else if (lower.Contains("warning") || lower.Contains("slow") || lower.Contains("bad") || lower.Contains("disconnected"))
@@ -566,7 +566,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                 // Exclude "Motion Stopped" or other non-critical stopped events
                 if (n.Contains("motion")) return false;
                 
-                return n.Contains("error") || n.Contains("stopped") || n.Contains("lost") || n.Contains("critical") || n.Contains("fail") || n.Contains("unavailable");
+                return n.Contains("error") || n.Contains("stopped") || n.Contains("lost") || n.Contains("critical") || n.Contains("fail") || n.Contains("unavailable") || n.Contains("broken") || n.Contains("offline");
             }
             return false;
         }
