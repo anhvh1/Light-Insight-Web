@@ -210,7 +210,7 @@ export function SystemHealthPage() {
   const allInfrastructure = healthResponse?.Data?.Infrastructure || [];
 
   const groupedInfrastructure = useMemo(() => {
-    const filtered = allInfrastructure.filter(item => (item.ConnectorId === selectedConnectorId || item.ConnectorId === 'LOCAL') && (item.Type === 'server' || item.Type === 'storage'));
+    const filtered = allInfrastructure.filter(item => (item.ConnectorId === selectedConnectorId || item.ConnectorId === 'LOCAL') && (item.Type === 'server' || item.Type === 'storage' || item.Type === 'event_server'));
     const groups: Record<string, typeof allInfrastructure> = {};
     filtered.forEach(item => {
       const groupKey = item.MachineName || (item.ConnectorId === 'LOCAL' ? 'LOCAL' : 'Unknown');
@@ -284,7 +284,7 @@ export function SystemHealthPage() {
                           {items.map((item, i) => (
                             <div key={i} className="flex flex-col gap-1 px-2 py-1.5 bg-bg-2/30 border border-white/[0.02] rounded-md">
                               <div className="flex items-center gap-2">
-                                <div className="text-[11px] opacity-70">{item.Type === 'storage' ? '💾' : '⚙️'}</div>
+                                <div className="text-[11px] opacity-70">{item.Type === 'storage' ? '💾' : item.Type === 'event_server' ? '🌐' : '⚙️'}</div>
                                 <div className="flex-1 min-w-0">
                                   <div className="text-[10px] font-semibold truncate uppercase">{item.Name}</div>
                                   <div className="text-[8px] text-t-2 font-mono uppercase truncate opacity-50">{item.Description}</div>
