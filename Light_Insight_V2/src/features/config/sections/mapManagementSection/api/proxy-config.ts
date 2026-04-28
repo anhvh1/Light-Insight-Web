@@ -3,11 +3,11 @@
  * Giúp chuyển hướng các yêu cầu API và Map Styles sang Server Backend.
  */
 export const mapV2ProxyRules = {
-  // '/api': {
-  //   target: 'https://lightinsight.gosol.com.vn',
-  //   changeOrigin: true,
-  //   secure: false,
-  // },
+  '/api': {
+    target: 'https://lightinsight.gosol.com.vn',
+    changeOrigin: true,
+    secure: false,
+  },
   '/mapstyles': {
     target: 'https://lightinsight.gosol.com.vn',
     changeOrigin: true,
