@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Badge,
   Box,
   Button,
@@ -43,8 +44,15 @@ const {
   DEFAULT_ICON_SCALE,
   DEFAULT_FOV_DEGREES,
   MIN_ICON_SCALE,
-  MAX_ICON_SCALE
+  MAX_ICON_SCALE,
+  CAMERA_ICON_MAP
 } = Constants;
+
+const CAMERA_ICONS = [
+  { label: 'IPRO', value: 'ipro-camera.svg' },
+  { label: 'CCTV', value: CAMERA_ICON_MAP['CCTV'] || 'security-camera.png' },
+  { label: 'Volume', value: 'volume-up.png' }
+];
 
 const {
   clamp,
@@ -722,6 +730,51 @@ export function MapLayoutManagerPanel() {
                     </Button>
                   </>
                 )}
+                {selectedCameraId && (
+                  <Group gap={10} style={{ background: 'rgba(255,107,0,0.05)', padding: '4px 12px', borderRadius: '999px', border: '1px solid rgba(255,107,0,0.1)', height: 35, flexShrink: 0 }}>
+                    <Text size="12px" fw={800} style={{ color: 'var(--orange)', letterSpacing: '0.05em' }}>Icon</Text>
+                    <Group gap={4}>
+                      {CAMERA_ICONS.map(icon => {
+                        const isSelected = positionsByCamera.get(selectedCameraId)?.Icon === icon.value || (!positionsByCamera.get(selectedCameraId)?.Icon && icon.value === 'ipro-camera.svg');
+                        return (
+                          <ActionIcon
+                            key={icon.value}
+                            variant="filled"
+                            style={{
+                              width: 22,
+                              height: 22,
+                              minWidth: 22,
+                              flexShrink: 0,
+                              aspectRatio: '1/1',
+                              borderRadius: '50%',
+                              backgroundColor: isSelected ? 'var(--orange)' : 'rgba(255, 255, 255, 0.9)',
+                              border: isSelected ? '1.5px solid var(--bg0)' : 'none',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 0,
+                              transition: 'all 0.2s ease'
+                            }}
+                            onClick={() => updatePosition(selectedCameraId, { Icon: icon.value })}
+                            title={icon.label}
+                          >
+                            <img
+                              src={`/${icon.value}`}
+                              style={{
+                                width: 12,
+                                height: 12,
+                                objectFit: 'contain',
+                                filter: isSelected ? 'brightness(0) invert(1)' : 'none',
+                                pointerEvents: 'none'
+                              }}
+                            />
+                          </ActionIcon>
+                        );
+                      })}
+                    </Group>
+                    <Box style={{ width: 1, height: 14, backgroundColor: 'rgba(255,107,0,0.2)', margin: '0 4px' }} />
+                  </Group>
+                )}
                 <Button variant="filled" size="xs" disabled={!selectedMapId || !positionsDirty || savePositionsMutation.isPending} loading={savePositionsMutation.isPending} onClick={() => savePositionsMutation.mutate(positions)} style={{ backgroundColor: (selectedMapId && positionsDirty) ? 'var(--accent)' : 'var(--bg3)', color: (selectedMapId && positionsDirty) ? 'var(--bg0)' : 'var(--t2)', fontWeight: 700 }}>{t('pages.maps.actions.savePositions')}</Button>
               </Group>
             </Group>
@@ -761,8 +814,8 @@ export function MapLayoutManagerPanel() {
                 mapContainerRef={mapContainerRef} mapInstanceRef={mapInstanceRef} mapMarkersRef={mapMarkersRef} geoFovFeatures={geoFovFeatures}
                 resolveCameraLabel={resolveCameraLabel} createCameraMarkerElement={() => {
                   const w = document.createElement('div'); w.style.cssText = 'position:relative;width:0;height:0;pointer-events:none;';
-                  const iw = document.createElement('div'); iw.dataset.role = 'icon-wrap'; iw.style.cssText = 'position:absolute;left:0;top:0;transform:translate(-50%,-50%);pointer-events:auto;cursor:grab;';
-                  const i = document.createElement('div'); i.dataset.role = 'icon'; i.style.cssText = 'width:100%;height:100%;background:url(/ipro-camera.svg) center/contain no-repeat;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.45));transform-origin:center;';
+                  const iw = document.createElement('div'); iw.dataset.role = 'icon-wrap'; iw.style.cssText = 'position:absolute;left:0;top:0;transform:translate(-50%,-50%);pointer-events:auto;cursor:grab;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.35);';
+                  const i = document.createElement('div'); i.dataset.role = 'icon'; i.style.cssText = 'width:70%;height:70%;background:url(/ipro-camera.svg) center / contain no-repeat;transform-origin:center;';
                   const l = document.createElement('div'); l.dataset.role = 'label'; l.style.cssText = 'position:absolute;left:0;top:0;transform:translate(-50%,-100%);padding:2px 6px;border-radius:999px;font-size:12px;font-weight:600;background:var(--t0);color:var(--bg0);white-space:nowrap;pointer-events:none;';
                   const rb = document.createElement('button'); rb.dataset.role = 'remove-btn'; rb.style.cssText = 'position:absolute;width:22px;height:22px;border-radius:50%;border:none;background:var(--red);color:var(--t0);font-size:12px;cursor:pointer;display:none;padding:0;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,0.35);pointer-events:auto;'; rb.textContent = 'x';
                   const rh = document.createElement('div'); rh.dataset.role = 'rotate-handle'; rh.style.cssText = 'position:absolute;border-radius:50%;background:var(--accent);border:2px solid var(--bg0);cursor:grab;display:none;pointer-events:auto;';
@@ -788,8 +841,20 @@ export function MapLayoutManagerPanel() {
                   const vs = params.viewScale; const size = Math.round(32 * vs * params.scale);
                   const hSize = Math.round(10 * vs); const rOff = Math.round(18 * vs);
                   const lOff = params.selected ? (size / 2 + rOff + hSize + Math.round(4 * vs)) : (size / 2 + Math.round(4 * vs));
-                  if (iw) { iw.style.width = iw.style.height = `${size}px`; iw.style.border = params.selected ? '1px dashed var(--accent)' : 'none'; iw.style.borderRadius = '8px'; iw.onpointerdown = (e) => startGeoCameraDrag(e, params.cameraId); }
-                  if (i) i.style.transform = `rotate(${normalizeAngle(params.angle - 90)}deg)`;
+                  if (iw) { 
+                    iw.style.width = iw.style.height = `${size}px`; 
+                    iw.style.border = params.selected ? '2px solid var(--accent)' : '2px solid #fff'; 
+                    iw.onpointerdown = (e) => startGeoCameraDrag(e, params.cameraId); 
+                  }
+                  if (i) {
+                    i.style.transform = `rotate(${normalizeAngle(params.angle - 90)}deg)`;
+                    let iconPath = params.icon || 'ipro-camera.svg';
+                    iconPath = CAMERA_ICON_MAP[iconPath] || iconPath;
+                    i.style.backgroundImage = `url(/${iconPath})`;
+                    i.style.backgroundSize = 'contain';
+                    i.style.backgroundPosition = 'center';
+                    i.style.backgroundRepeat = 'no-repeat';
+                  }
                   if (l) { l.textContent = params.label; l.style.top = `-${lOff}px`; l.style.fontSize = `${Math.round(11 * Geometry.clamp(vs, 0.7, 1.2))}px`; }
                   if (rb) { const bSize = Math.round(22 * vs); rb.style.width = rb.style.height = `${bSize}px`; rb.style.left = `${size / 2 + rOff - bSize}px`; rb.style.top = `${-size / 2 - rOff - hSize - Math.round(8 * vs)}px`; rb.style.display = params.selected ? 'block' : 'none'; rb.onclick = (e) => { e.stopPropagation(); removePosition(params.cameraId); }; }
                   if (rh) { rh.style.width = rh.style.height = `${hSize}px`; rh.style.left = `${-hSize / 2}px`; rh.style.top = `${-size / 2 - rOff - hSize}px`; rh.style.display = params.selected ? 'block' : 'none'; rh.onpointerdown = (e) => startGeoRotateDrag(e, params.cameraId); }

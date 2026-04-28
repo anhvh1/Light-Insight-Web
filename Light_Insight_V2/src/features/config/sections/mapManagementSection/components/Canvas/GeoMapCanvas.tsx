@@ -206,7 +206,8 @@ export function GeoMapCanvas({
         fovDegrees: typeof p.fovDegrees === 'number' ? clampFov(p.fovDegrees) : DEFAULT_FOV_DEGREES,
         range: typeof p.range === 'number' ? p.range : DEFAULT_RANGE_GEO,
         map,
-        cameraId: p.cameraId
+        cameraId: p.cameraId,
+        icon: p.Icon
       };
 
       if (existing) {

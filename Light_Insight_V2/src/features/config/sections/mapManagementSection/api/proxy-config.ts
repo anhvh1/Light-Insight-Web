@@ -3,23 +3,23 @@
  * Giúp chuyển hướng các yêu cầu API và Map Styles sang Server Backend.
  */
 export const mapV2ProxyRules = {
-  // '/api': {
-  //   target: 'https://lightinsight.gosol.com.vn',
-  //   changeOrigin: true,
-  //   secure: false,
-  // },
+  '/api': {
+    target: 'https://localhost:7276',
+    changeOrigin: true,
+    secure: false,
+  },
   '/mapstyles': {
-    target: 'https://lightinsight.gosol.com.vn',
+    target: 'https://localhost:7276',
     changeOrigin: true,
     secure: false,
   },
   '/maptiles': {
-    target: 'https://lightinsight.gosol.com.vn',
+    target: 'https://localhost:7276',
     changeOrigin: true,
     secure: false,
   },
   '/hubs': {
-    target: 'https://lightinsight.gosol.com.vn',
+    target: 'https://localhost:7276',
     ws: true,
     changeOrigin: true,
     secure: false,
@@ -29,9 +29,9 @@ export const mapV2ProxyRules = {
   //   changeOrigin: true,
   //   secure: false,
   // },
-  // '/metrics': {
-  //   target: 'https://lightinsight.gosol.com.vn',
-  //   changeOrigin: true,
-  //   secure: false,
-  // }
+  '/metrics': {
+    target: 'https://localhost:7276',
+    changeOrigin: true,
+    secure: false,
+  }
 };

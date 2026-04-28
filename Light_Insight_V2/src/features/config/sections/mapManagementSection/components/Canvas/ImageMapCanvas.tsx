@@ -13,7 +13,8 @@ const {
   DEFAULT_ANGLE_DEGREES,
   DEFAULT_FOV_DEGREES,
   DEFAULT_ICON_SCALE,
-  DEFAULT_RANGE_IMAGE
+  DEFAULT_RANGE_IMAGE,
+  CAMERA_ICON_MAP
 } = Constants;
 
 const {
@@ -319,10 +320,13 @@ export function ImageMapCanvas({
                       )}
                       <Box style={{ position: 'relative', width: iconSize, height: iconSize }}>
                         <Box
+                          key="icon-main"
+                          data-no-pan="true"
+                          onPointerDown={(e) => startCameraDrag(e, position.cameraId)}
                           style={{
                             width: iconSize,
                             height: iconSize,
-                            background: 'url(/ipro-camera.svg) center / contain no-repeat',
+                            background: `url(/${CAMERA_ICON_MAP[position.Icon || 'ipro-camera.svg'] || position.Icon || 'ipro-camera.svg'}) center / contain no-repeat`,
                             filter: isSelected ? 'drop-shadow(0 0 8px var(--accent))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45))',
                             transform: `rotate(${normalizeAngle(angle + ICON_ROTATION_OFFSET)}deg)`,
                             transformOrigin: 'center'

@@ -18,3 +18,10 @@ export const GEO_MARKER_SCALE_FACTOR = 0.28;
 export const GEO_MARKER_MIN_SCALE = 0.55;
 export const GEO_MARKER_MAX_SCALE = 2.4;
 export const EARTH_RADIUS_METERS = 6378137;
+
+export const CAMERA_ICON_MAP: Record<string, string> = {
+  'IPRO': 'ipro-camera.svg',
+  'Cctv': 'ipro-camera.svg',
+  'CCTV': 'security-camera.png',
+  'Volume': 'volume-up.png'
+};

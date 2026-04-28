@@ -118,7 +118,7 @@ export const saveMapCameras = (id: string, payload: MapCameraPositionRequest[]) 
         CameraName: p.CameraName || p.label || "",
         PosX: p.x ?? 0,
         PosY: p.y ?? 0,
-        Icon: p.Icon || 'Cctv',
+        Icon: p.Icon || 'ipro-camera.svg',
         VmsId: p.VmsId ?? 0,
         Rotation: p.angleDegrees ?? 0,
         Type: p.Type ?? 0,

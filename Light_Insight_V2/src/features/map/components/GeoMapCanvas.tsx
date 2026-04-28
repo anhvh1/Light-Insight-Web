@@ -5,10 +5,15 @@ import { cn } from '@/lib/utils';
 import type { Alarm } from '@/types';
 import { IconZoomIn, IconZoomOut, IconFocus2 } from '@tabler/icons-react';
 import * as Geometry from '../utils';
+import * as Constants from '../constants';
 
 const {
   getGeoMarkerScale,
 } = Geometry;
+
+const {
+  CAMERA_ICON_MAP
+} = Constants;
 
 interface GeoMapCanvasProps {
   activeMap: any;
@@ -213,7 +218,8 @@ export function GeoMapCanvas({
     icon.className = 'marker-icon-dynamic';
     icon.style.width = '100%';
     icon.style.height = '100%';
-    const iconUrl = (m && m.Icon && m.Icon !== 'Cctv') ? `/icons/${m.Icon}.svg` : '/ipro-camera.svg';
+    const curIcon = m?.Icon || 'ipro-camera.svg';
+    const iconUrl = `/${CAMERA_ICON_MAP[curIcon] || curIcon}`;
     icon.style.background = `url(${iconUrl}) center / contain no-repeat`;
     icon.style.transform = `rotate(${Geometry.normalizeAngle(angle - 90)}deg)`;
     icon.style.filter = alarm 
@@ -261,7 +267,8 @@ export function GeoMapCanvas({
 
     const icon = el.querySelector('.marker-icon-dynamic') as HTMLElement;
     if (icon) {
-      const iconUrl = (m && m.Icon && m.Icon !== 'Cctv') ? `/icons/${m.Icon}.svg` : '/ipro-camera.svg';
+      const curIcon = m?.Icon || 'ipro-camera.svg';
+      const iconUrl = `/${CAMERA_ICON_MAP[curIcon] || curIcon}`;
       icon.style.background = `url(${iconUrl}) center / contain no-repeat`;
       icon.style.transform = `rotate(${Geometry.normalizeAngle(angle - 90)}deg)`;
       icon.style.filter = alarm 

@@ -6,6 +6,7 @@ import * as Constants from '../constants';
 import * as Geometry from '../utils';
 
 const {
+  CAMERA_ICON_MAP
 } = Constants;
 
 interface ImageMapCanvasProps {
@@ -276,7 +277,7 @@ export function ImageMapCanvas({
                         <div 
                             style={{
                               width: '100%', height: '100%',
-                              background: `url(${m.Icon && m.Icon !== 'Cctv' ? `/icons/${m.Icon}.svg` : '/ipro-camera.svg'}) center / contain no-repeat`,
+                              background: `url(/${CAMERA_ICON_MAP[m.Icon || 'ipro-camera.svg'] || m.Icon || 'ipro-camera.svg'}) center / contain no-repeat`,
                               filter: alarmForMarker 
                                 ? `drop-shadow(0 0 8px ${alarmForMarker.pri === 'critical' ? '#ff4d4d' : alarmForMarker.pri === 'high' ? '#ff6b00' : alarmForMarker.pri === 'medium' ? '#00c2ff' : '#22c55e'})` 
                                 : `drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45))`,

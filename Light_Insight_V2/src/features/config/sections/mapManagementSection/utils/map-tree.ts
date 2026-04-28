@@ -70,6 +70,6 @@ export const toPositionRequest = (position: any): MapCameraPositionRequest => {
     VmsId: position.VmsId ?? position.vmsId ?? position.Vmsid ?? 0,
     Type: position.Type ?? position.type ?? 0,
     Connectorid: position.Connectorid || position.connectorId || position.ConnectorId || position.ConnectorID || position.connectorid || null,
-    Icon: position.Icon || position.icon || 'Cctv'
+    Icon: position.Icon || position.icon || 'ipro-camera.svg'
   };
 };
