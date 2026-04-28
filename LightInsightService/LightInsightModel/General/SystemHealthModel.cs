@@ -27,9 +27,10 @@ namespace LightInsightModel.General
         public string Name { get; set; }
         public string Description { get; set; }
         public string Status { get; set; }
-        public string Type { get; set; } // server, storage, camera
+        public string Type { get; set; } // server, storage, hardware, camera
         public string ConnectorId { get; set; } // Dùng để lọc hạ tầng theo connector
         public string? MachineName { get; set; } // To link storage to a specific server agent
+        public string? SourceId { get; set; } // The Milestone source path (e.g. cameras/guid)
 
         // Hardware Metrics
         public double? CpuUsage { get; set; }
