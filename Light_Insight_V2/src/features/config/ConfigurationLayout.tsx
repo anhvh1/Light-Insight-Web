@@ -1,34 +1,6 @@
-import { useState } from 'react';
-import { cn } from '@/lib/utils';
-import { 
-  Users, 
-  Zap, 
-  ClipboardList, 
-  Plug2, 
-  BellRing, 
-  ShieldCheck,
-  Sliders,
-  Map as MapIcon,
-  ChevronLeft,
-  ChevronRight
-} from 'lucide-react';
-import { Link, Outlet, useLocation } from '@tanstack/react-router';
+import { Outlet } from '@tanstack/react-router';
 
 export function ConfigurationLayout() {
-  const location = useLocation();
-  const currentPath = location.pathname;
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  const navItems = [
-    { id: 'roles', label: 'User & Roles', icon: Users, group: 'Admin', path: '/config/users-roles' },
-    { id: 'rules', label: 'Rule & Alarm Config', icon: Zap, group: 'Admin', path: '/config/rules' },
-    { id: 'priority', label: 'Alarm Priority V3', icon: Sliders, group: 'Admin', path: '/config/priority' },
-    { id: 'sop', label: 'SOP Builder', icon: ClipboardList, group: 'Admin', path: '/config/sop' },
-    { id: 'connectors', label: 'Connectors', icon: Plug2, group: 'Admin', path: '/config/connectors' },
-    { id: 'map_management', label: 'Map Management', icon: MapIcon, group: 'Admin', path: '/config/map' },
-    { id: 'escalation', label: 'Escalation Rules', icon: ShieldCheck, group: 'Hệ thống', path: '/config/escalation' },
-    { id: 'notif', label: 'Notifications', icon: BellRing, group: 'Hệ thống', path: '/config/notif' },
-  ];
 
   return (
     <div className="flex flex-col h-full bg-bg0 overflow-hidden relative">

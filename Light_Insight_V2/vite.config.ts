@@ -3,7 +3,7 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
 import path from "path"
-import { mapV2ProxyRules } from './src/features/map-v2/api/proxy-config'
+import { mapV2ProxyRules } from './src/features/config/sections/mapManagementSection/api/proxy-config'
 
 // https://vite.dev/config/
 export default defineConfig({

@@ -65,6 +65,7 @@ eventTypes.json
 milestone-2025-r2-upgrade-final.md
 event_summary.txt
 websocket_response.json
+MapData
 /LightJSC.Api
 /LightJSC.Web
 /LightInsightService/LightInsightService/MapData/mapstyles

@@ -94,6 +94,15 @@ namespace LightInsightBUS.Service.HealthProviders.Milestone
             {
                 // Fallback nếu chưa có dữ liệu cache
                 infra.Add(new InfrastructureHealth {
+                    Name = "Milestone Event Server",
+                    Description = "WebSocket Gateway",
+                    Status = "OFFLINE",
+                    Type = "event_server",
+                    MachineName = "VMS Services",
+                    ConnectorId = config.IpServer
+                });
+
+                infra.Add(new InfrastructureHealth {
                     Name = "Milestone Management Server",
                     Description = $"VMS System @ {config.IpServer}",
                     Status = "ONLINE",

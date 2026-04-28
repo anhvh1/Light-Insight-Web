@@ -73,8 +73,14 @@ namespace LightInsightBUS.Service.General
 
             report.LastUpdate = DateTime.Now;
             
+            // Robust matching: Use NetBIOS name (first part of hostname) for the cache key
+            string lookupKey = report.ServerId.Split('.')[0].ToUpper();
+            
+            // New Diagnostic Log
+            Console.WriteLine($"[AGENT] Received metrics for machine: {lookupKey} (CPU: {report.CpuUsage}% | RAM: {report.RamUsage}%)");
+
             // Lưu vào Cache (Hết hạn sau 10 phút nếu không có report mới)
-            _cache.Set($"AGENT_METRIC_{report.ServerId}", report, TimeSpan.FromMinutes(10));
+            _cache.Set($"AGENT_METRIC_{lookupKey}", report, TimeSpan.FromMinutes(10));
 
             return new BaseResultModel { Status = 1, Message = "Report received" };
         }
@@ -89,23 +95,37 @@ namespace LightInsightBUS.Service.General
 
             if (_cache.TryGetValue($"AGENT_METRIC_{lookupKey}", out MilestoneServerMetric metrics))
             {
-                item.CpuUsage = metrics.CpuUsage;
-                item.RamUsage = metrics.RamUsage;
-                item.TotalRamGb = metrics.TotalRamGb;
-                item.FreeRamGb = metrics.FreeRamGb;
-
                 if (item.Type == "server")
                 {
+                    item.CpuUsage = metrics.CpuUsage;
+                    item.RamUsage = metrics.RamUsage;
+                    item.TotalRamGb = metrics.TotalRamGb;
+                    item.FreeRamGb = metrics.FreeRamGb;
                     item.Description = $"CPU {metrics.CpuUsage}% · RAM {metrics.RamUsage}% · Disks: {metrics.Disks.Count}";
                 }
 
-                // Map disks
+                // Map all disks for the server view
                 item.Disks = metrics.Disks.Select(d => new InfrastructureDisk {
                     DriveName = d.DriveName,
                     UsagePercentage = d.UsagePercentage,
                     TotalSize = d.TotalSizeGb,
                     FreeSpace = d.FreeSpaceGb
                 }).ToList();
+
+                // If this is a specific storage item, try to find the matching disk metric
+                if (item.Type == "storage")
+                {
+                    // Description usually contains "Disk path: C:\..."
+                    var matchingDisk = metrics.Disks.FirstOrDefault(d => 
+                        !string.IsNullOrEmpty(item.Description) && 
+                        item.Description.Contains(d.DriveName, StringComparison.OrdinalIgnoreCase));
+
+                    if (matchingDisk != null)
+                    {
+                        item.DiskUsage = matchingDisk.UsagePercentage;
+                        item.Description = $"{matchingDisk.DriveName} | Free {matchingDisk.FreeSpaceGb}GB / {matchingDisk.TotalSizeGb}GB";
+                    }
+                }
             }
         }
     }

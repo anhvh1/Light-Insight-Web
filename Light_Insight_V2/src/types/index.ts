@@ -120,10 +120,10 @@ export interface IncidentPagingParams {
 export type MapLayoutType = 'Image' | 'Geo';
 
 export interface MapTreeNode {
-  Id: string;
-  Name: string;
-  Code: string;
-  ParentId: string | null;
+  id: string;
+  name: string;
+  code: string;
+  parentId: string | null;
   Children: MapTreeNode[];
   mapImagePath: string | null;
   type: MapLayoutType;
@@ -131,6 +131,38 @@ export interface MapTreeNode {
   geoCenterLongitude?: number | null;
   geoZoom?: number | null;
   createdAt: string;
+}
+
+// --- SOP TYPES ---
+export interface SopTrigger {
+  vms_camera_id: string;
+  event_name: string;
+}
+
+export interface SopStep {
+  id?: string;
+  step_order: number;
+  step_name: string;
+  execution_type: string;
+  target_device_id: string | null;
+  action_code: string;
+  action_payload?: unknown;
+}
+
+export interface SopListItem {
+  Id: string;
+  Name: string;
+  Description: string | null;
+  CreatedAt: string;
+}
+
+export interface SopDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  triggers: SopTrigger[];
+  steps: SopStep[];
 }
 
 export interface MapOptions {
