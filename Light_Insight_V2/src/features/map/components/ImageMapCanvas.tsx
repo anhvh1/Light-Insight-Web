@@ -277,14 +277,26 @@ export function ImageMapCanvas({
                         <div 
                             style={{
                               width: '100%', height: '100%',
-                              background: `url(/${CAMERA_ICON_MAP[m.Icon || 'ipro-camera.svg'] || m.Icon || 'ipro-camera.svg'}) center / contain no-repeat`,
+                              backgroundColor: '#fff',
+                              borderRadius: '50%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.35)',
                               filter: alarmForMarker 
                                 ? `drop-shadow(0 0 8px ${alarmForMarker.pri === 'critical' ? '#ff4d4d' : alarmForMarker.pri === 'high' ? '#ff6b00' : alarmForMarker.pri === 'medium' ? '#00c2ff' : '#22c55e'})` 
-                                : `drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45))`,
+                                : `none`,
                               transform: `rotate(${Geometry.normalizeAngle(angle - 90)}deg)`,
-                              transformOrigin: 'center'
                             }}
-                        />
+                        >
+                          <div 
+                            style={{
+                              width: '70%',
+                              height: '70%',
+                              background: `url(/${CAMERA_ICON_MAP[m.Icon || 'ipro-camera.svg'] || m.Icon || 'ipro-camera.svg'}) center / contain no-repeat`,
+                            }}
+                          />
+                        </div>
                     </div>
                  </div>
                </div>
