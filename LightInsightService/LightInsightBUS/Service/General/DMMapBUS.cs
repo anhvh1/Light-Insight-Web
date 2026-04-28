@@ -468,5 +468,31 @@ namespace LightInsightBUS.Service.General
             }
             return result;
         }
+
+        public async Task<BaseResultModel> GetConnectorIdByCameraIdAsync(string cameraId)
+        {
+            var result = new BaseResultModel();
+            try
+            {
+                var connectorId = await _dmMapDAL.GetConnectorIdByCameraIdAsync(cameraId);
+                if (connectorId != null)
+                {
+                    result.Status = 1;
+                    result.Message = "Lấy ConnectorId thành công.";
+                    result.Data = connectorId;
+                }
+                else
+                {
+                    result.Status = 0;
+                    result.Message = "Không tìm thấy ConnectorId cho Camera này.";
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Status = -1;
+                result.Message = ex.Message;
+            }
+            return result;
+        }
     }
 }

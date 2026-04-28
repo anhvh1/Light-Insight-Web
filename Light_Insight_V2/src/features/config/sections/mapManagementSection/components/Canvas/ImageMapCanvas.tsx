@@ -33,25 +33,25 @@ interface ImageMapCanvasProps {
   setImageNaturalSize: (size: { width: number; height: number }) => void;
   imageView: { scale: number; translateX: number; translateY: number };
   setImageViewportNode: (node: HTMLDivElement | null) => void;
-  
+
   positions: MapCameraPositionRequest[];
   selectedCameraId: string | null;
-  
+
   onDrop: (event: DragEvent<HTMLDivElement>) => void;
   onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
   onWheel: (event: React.WheelEvent<HTMLDivElement>) => void;
-  
+
   startCameraDrag: (event: React.PointerEvent<HTMLDivElement>, id: string) => void;
   startRotateDrag: (event: React.PointerEvent<HTMLDivElement>, id: string) => void;
   startScaleDrag: (event: React.PointerEvent<HTMLDivElement>, id: string) => void;
   startFovDrag: (event: React.PointerEvent<HTMLDivElement>, id: string, side: 'left' | 'right') => void;
   removePosition: (id: string) => void;
-  
+
   zoomImage: (factor: number, x: number, y: number) => void;
   resetImageView: () => void;
   viewportWidth: number;
   viewportHeight: number;
-  
+
   resolveCameraLabel: (id: string) => string;
   t: (key: string, params?: any) => string;
 }
@@ -191,7 +191,7 @@ export function ImageMapCanvas({
                 }}
                 draggable={false}
               />
-              
+
               {/* SVG Layer for FOVs */}
               <svg
                 width="100%"
@@ -227,7 +227,7 @@ export function ImageMapCanvas({
                 if (position.x == null || position.y == null) return null;
                 const currentW = imageNaturalSize.width;
                 const currentH = imageNaturalSize.height;
-                
+
                 const left = position.x * currentW;
                 const top = position.y * currentH;
                 const angle = position.angleDegrees ?? DEFAULT_ANGLE_DEGREES;
@@ -243,44 +243,44 @@ export function ImageMapCanvas({
 
                 return (
                   <Box key={position.cameraId} style={{ position: 'relative', zIndex: isSelected ? 100 : 1 }}>
-                    {isSelected && (                      <>
-                        <Box
-                          data-no-pan="true"
-                          onPointerDown={(e) => startFovDrag(e, position.cameraId, 'left')}
-                          style={{
-                            position: 'absolute',
-                            left: edges.left.x,
-                            top: edges.left.y,
-                            width: HANDLE_SIZE,
-                            height: HANDLE_SIZE,
-                            borderRadius: '50%',
-                            background: 'var(--orange)',
-                            border: '2px solid var(--bg0)',
-                            transform: 'translate(-50%, -50%)',
-                            cursor: 'pointer',
-                            boxShadow: '0 0 10px var(--orange)',
-                            pointerEvents: 'auto'
-                          }}
-                        />
-                        <Box
-                          data-no-pan="true"
-                          onPointerDown={(e) => startFovDrag(e, position.cameraId, 'right')}
-                          style={{
-                            position: 'absolute',
-                            left: edges.right.x,
-                            top: edges.right.y,
-                            width: HANDLE_SIZE,
-                            height: HANDLE_SIZE,
-                            borderRadius: '50%',
-                            background: 'var(--orange)',
-                            border: '2px solid var(--bg0)',
-                            transform: 'translate(-50%, -50%)',
-                            cursor: 'pointer',
-                            boxShadow: '0 0 10px var(--orange)',
-                            pointerEvents: 'auto'
-                          }}
-                        />
-                      </>
+                    {isSelected && (<>
+                      <Box
+                        data-no-pan="true"
+                        onPointerDown={(e) => startFovDrag(e, position.cameraId, 'left')}
+                        style={{
+                          position: 'absolute',
+                          left: edges.left.x,
+                          top: edges.left.y,
+                          width: HANDLE_SIZE,
+                          height: HANDLE_SIZE,
+                          borderRadius: '50%',
+                          background: 'var(--orange)',
+                          border: '2px solid var(--bg0)',
+                          transform: 'translate(-50%, -50%)',
+                          cursor: 'pointer',
+                          boxShadow: '0 0 10px var(--orange)',
+                          pointerEvents: 'auto'
+                        }}
+                      />
+                      <Box
+                        data-no-pan="true"
+                        onPointerDown={(e) => startFovDrag(e, position.cameraId, 'right')}
+                        style={{
+                          position: 'absolute',
+                          left: edges.right.x,
+                          top: edges.right.y,
+                          width: HANDLE_SIZE,
+                          height: HANDLE_SIZE,
+                          borderRadius: '50%',
+                          background: 'var(--orange)',
+                          border: '2px solid var(--bg0)',
+                          transform: 'translate(-50%, -50%)',
+                          cursor: 'pointer',
+                          boxShadow: '0 0 10px var(--orange)',
+                          pointerEvents: 'auto'
+                        }}
+                      />
+                    </>
                     )}
                     <Box
                       data-no-pan="true"
@@ -401,20 +401,20 @@ export function ImageMapCanvas({
               })}
             </Box>
             <Box style={{ position: 'absolute', top: 10, right: 10, zIndex: 10 }} data-no-pan="true">
-              <Paper 
-                radius="sm" 
-                withBorder 
-                style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  backgroundColor: '#ffffff', 
+              <Paper
+                radius="sm"
+                withBorder
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  backgroundColor: '#ffffff',
                   borderColor: '#cccccc',
                   overflow: 'hidden',
                   boxShadow: '0 1px 5px rgba(0,0,0,0.2)'
                 }}
               >
-                <ActionIcon 
-                  variant="subtle" 
+                <ActionIcon
+                  variant="subtle"
                   size={29}
                   onClick={() => zoomImage(1.1, (viewportWidth || 0) / 2, (viewportHeight || 0) / 2)}
                   style={{ color: '#000000', borderRadius: 0, borderBottom: '1px solid #eeeeee' }}
@@ -422,8 +422,8 @@ export function ImageMapCanvas({
                 >
                   <IconZoomIn size={18} />
                 </ActionIcon>
-                <ActionIcon 
-                  variant="subtle" 
+                <ActionIcon
+                  variant="subtle"
                   size={29}
                   onClick={() => zoomImage(0.9, (viewportWidth || 0) / 2, (viewportHeight || 0) / 2)}
                   style={{ color: '#000000', borderRadius: 0, borderBottom: '1px solid #eeeeee' }}
@@ -431,8 +431,8 @@ export function ImageMapCanvas({
                 >
                   <IconZoomOut size={18} />
                 </ActionIcon>
-                <ActionIcon 
-                  variant="subtle" 
+                <ActionIcon
+                  variant="subtle"
                   size={29}
                   onClick={resetImageView}
                   style={{ color: '#000000', borderRadius: 0 }}

@@ -76,7 +76,7 @@ export function MapLayoutManagerPanel() {
   const { t } = useI18n();
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
   const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
-  
+
   const [responseOpened, responseHandlers] = useDisclosure(false);
   const [responseStatus, setResponseStatus] = useState<'success' | 'error'>('success');
   const [responseText, setResponseText] = useState('');
@@ -272,7 +272,7 @@ export function MapLayoutManagerPanel() {
   const [mapSearch, setMapSearch] = useState('');
   const [search, setSearch] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
-  
+
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any | null>(null);
   const mapMarkersRef = useRef<Map<string, any>>(new Map());
@@ -285,7 +285,7 @@ export function MapLayoutManagerPanel() {
   const geoDragStateRef = useRef<GeoDragState | null>(null);
   const lastPositionsMapIdRef = useRef<string | null>(null);
   const geoFovFeaturesRef = useRef<any[]>([]);
-  
+
   const { ref: imageViewportSizeRef, width: viewportWidth, height: viewportHeight } = useElementSize();
   const [imageNaturalSize, setImageNaturalSize] = useState({ width: 0, height: 0 });
   const [imageView, setImageView] = useState({ scale: 1, translateX: 0, translateY: 0 });
@@ -334,41 +334,41 @@ export function MapLayoutManagerPanel() {
 
   const cameraById = useMemo(() => {
     const map = new Map<string, { CameraName?: string | null; label?: string | null; IP?: string | null }>();
-    
+
     // 1. Add metadata from current positions (already on map)
     (positions || []).forEach(p => {
       if (p.cameraId) {
-        map.set(p.cameraId, { 
-          CameraName: p.CameraName, 
-          label: p.label, 
-          IP: p.IP 
+        map.set(p.cameraId, {
+          CameraName: p.CameraName,
+          label: p.label,
+          IP: p.IP
         });
       }
     });
 
     // 2. Add/Override with data from devices query (connector selection)
     (devicesQuery.data || []).forEach(c => {
-      map.set(c.cameraId, { 
-        CameraName: c.name || c.CameraName, 
-        label: c.code || c.label, 
-        IP: c.IP || c.ipAddress 
+      map.set(c.cameraId, {
+        CameraName: c.name || c.CameraName,
+        label: c.code || c.label,
+        IP: c.IP || c.ipAddress
       });
     });
 
     return map;
   }, [devicesQuery.data, positions]);
 
-  const resolveMapTypeLabel = (type?: MapLayoutType | null) => 
+  const resolveMapTypeLabel = (type?: MapLayoutType | null) =>
     type === 'Geo' ? t('pages.maps.types.geo') : type === 'Image' ? t('pages.maps.types.image') : (type ?? '-');
 
   const resolveCameraLabel = (cameraId: string) => {
     const camera = cameraById.get(cameraId);
     if (!camera) return cameraId;
-    
+
     const name = camera.CameraName?.trim();
     const code = camera.label?.trim();
     const ip = camera.IP?.trim();
-    
+
     if (name) return name;
     if (code && ip) return `${code} - ${ip}`;
     return code || ip || cameraId;
@@ -405,16 +405,16 @@ export function MapLayoutManagerPanel() {
     const scaleY = viewportHeight / imageNaturalSize.height;
     const fitScale = Math.min(scaleX, scaleY);
 
-    setImageView({ 
-      scale: fitScale, 
-      translateX: (viewportWidth - imageNaturalSize.width * fitScale) / 2, 
-      translateY: (viewportHeight - imageNaturalSize.height * fitScale) / 2 
+    setImageView({
+      scale: fitScale,
+      translateX: (viewportWidth - imageNaturalSize.width * fitScale) / 2,
+      translateY: (viewportHeight - imageNaturalSize.height * fitScale) / 2
     });
   }, [imageNaturalSize, viewportWidth, viewportHeight]);
 
   useEffect(() => {
     if (!activeMap || activeMap.type !== 'Image' || !imageNaturalSize.width || !viewportWidth || !viewportHeight) return;
-    
+
     // Only reset if it's a new map or explicitly requested (like entering fullscreen)
     if (lastImageMapIdRef.current !== activeMap.id) {
       resetImageView();
@@ -427,7 +427,7 @@ export function MapLayoutManagerPanel() {
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || activeMap?.type !== 'Geo' || !activeMap?.id) return;
-    
+
     // Kiểm tra xem bản đồ đã được khởi tạo vị trí cho Map ID này chưa
     if (lastAppliedGeoMapIdRef.current === activeMap.id) return;
 
@@ -472,24 +472,24 @@ export function MapLayoutManagerPanel() {
     const handleMoveEnd = () => {
       const center = map.getCenter();
       const zoom = map.getZoom();
-      
+
       // Safety check: NEVER save 0,0 as center
       if (Math.abs(center.lat) < 0.0001 && Math.abs(center.lng) < 0.0001) {
         console.warn('Prevented saving 0,0 coordinate to backend');
         return;
       }
 
-      const payload: MapViewRequest = { 
-        geoCenterLatitude: center.lat, 
-        geoCenterLongitude: center.lng, 
-        geoZoom: zoom 
+      const payload: MapViewRequest = {
+        geoCenterLatitude: center.lat,
+        geoCenterLongitude: center.lng,
+        geoZoom: zoom
       };
 
       const last = lastSavedGeoViewRef.current;
-      if (last && 
-          Math.abs(last.geoCenterLatitude - payload.geoCenterLatitude) < 1e-6 && 
-          Math.abs(last.geoCenterLongitude - payload.geoCenterLongitude) < 1e-6 &&
-          Math.abs(last.geoZoom - payload.geoZoom) < 1e-2) return;
+      if (last &&
+        Math.abs(last.geoCenterLatitude - payload.geoCenterLatitude) < 1e-6 &&
+        Math.abs(last.geoCenterLongitude - payload.geoCenterLongitude) < 1e-6 &&
+        Math.abs(last.geoZoom - payload.geoZoom) < 1e-2) return;
 
       if (saveGeoViewTimeoutRef.current) window.clearTimeout(saveGeoViewTimeoutRef.current);
       saveGeoViewTimeoutRef.current = window.setTimeout(() => {
@@ -499,9 +499,9 @@ export function MapLayoutManagerPanel() {
     };
 
     map.on('moveend', handleMoveEnd);
-    return () => { 
-      map.off('moveend', handleMoveEnd); 
-      if (saveGeoViewTimeoutRef.current) window.clearTimeout(saveGeoViewTimeoutRef.current); 
+    return () => {
+      map.off('moveend', handleMoveEnd);
+      if (saveGeoViewTimeoutRef.current) window.clearTimeout(saveGeoViewTimeoutRef.current);
     };
   }, [activeMap?.id, activeMap?.type, saveGeoViewMutation]);
 
@@ -691,27 +691,27 @@ export function MapLayoutManagerPanel() {
               <Group gap="xs">
                 {activeMap?.type === 'Image' && (
                   <>
-                    <Button 
-                      variant="subtle" 
-                      size="xs" 
+                    <Button
+                      variant="subtle"
+                      size="xs"
                       onClick={handleDownloadSample}
                       styles={{ root: { color: 'var(--orange)', fontWeight: 700, backgroundColor: 'rgba(255, 140, 0, 0.05)', '&:hover': { backgroundColor: 'rgba(255, 140, 0, 0.1)' } } }}
                       leftSection={<IconDownload size={14} />}
                     >
                       Ảnh mẫu
                     </Button>
-                    <Button 
-                      variant="subtle" 
-                      size="xs" 
+                    <Button
+                      variant="subtle"
+                      size="xs"
                       onClick={uploadWizardHandlers.open}
                       styles={{ root: { color: 'var(--accent)', fontWeight: 700, backgroundColor: 'rgba(0, 194, 255, 0.05)', '&:hover': { backgroundColor: 'rgba(0, 194, 255, 0.1)' } } }}
                       leftSection={<IconUpload size={14} />}
                     >
                       Tải ảnh
                     </Button>
-                    <Button 
-                      variant="subtle" 
-                      color="red" 
+                    <Button
+                      variant="subtle"
+                      color="red"
                       size="xs"
                       disabled={!activeMap.mapImagePath && !activeMap.imageUrl}
                       onClick={() => deleteImageMutation.mutate()}
@@ -726,7 +726,7 @@ export function MapLayoutManagerPanel() {
               </Group>
             </Group>
           </Box>
-          <Box 
+          <Box
             ref={imageViewportSizeRef}
             style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', padding: '5px 0' }}
           >
@@ -738,81 +738,81 @@ export function MapLayoutManagerPanel() {
               <GeoMapCanvas
                 activeMap={activeMap} geoStyleUrl={geoStyleUrl} isFullscreen={isFullscreen} setIsFullscreen={setIsFullscreen} positions={positions}
                 selectedCameraId={selectedCameraId} setSelectedCameraId={setSelectedCameraId} geoZoom={geoZoom} setGeoZoom={setGeoZoom}
-                onDrop={(e) => { 
-                  e.preventDefault(); 
-                  const id = e.dataTransfer.getData('camera-id'); 
-                  const map = mapInstanceRef.current; 
-                  if (id && map) { 
-                    const rect = e.currentTarget.getBoundingClientRect(); 
-                    const p = map.unproject([e.clientX - rect.left, e.clientY - rect.top]); 
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const id = e.dataTransfer.getData('camera-id');
+                  const map = mapInstanceRef.current;
+                  if (id && map) {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const p = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
                     const camData = devicesQuery.data?.find(c => c.cameraId === id);
-                    updatePosition(id, { 
-                      latitude: p.lat, 
+                    updatePosition(id, {
+                      latitude: p.lat,
                       longitude: p.lng,
                       CameraName: camData?.name || camData?.CameraName,
                       IP: camData?.IP || camData?.ipAddress || camData?.ip,
                       Connectorid: camData?.Connectorid || camData?.connectorId,
                       Type: camData?.type,
                       VmsId: connectorsQuery.data?.find(c => c.Id === (camData?.Connectorid || camData?.connectorId))?.VmsID
-                    }); 
-                  } 
+                    });
+                  }
                 }}
                 startGeoCameraDrag={startGeoCameraDrag} startGeoRotateDrag={startGeoRotateDrag} startGeoFovDrag={startGeoFovDrag} startGeoScaleDrag={startGeoScaleDrag}
                 mapContainerRef={mapContainerRef} mapInstanceRef={mapInstanceRef} mapMarkersRef={mapMarkersRef} geoFovFeatures={geoFovFeatures}
                 resolveCameraLabel={resolveCameraLabel} createCameraMarkerElement={() => {
-                    const w = document.createElement('div'); w.style.cssText = 'position:relative;width:0;height:0;pointer-events:none;';
-                    const iw = document.createElement('div'); iw.dataset.role = 'icon-wrap'; iw.style.cssText = 'position:absolute;left:0;top:0;transform:translate(-50%,-50%);pointer-events:auto;cursor:grab;';
-                    const i = document.createElement('div'); i.dataset.role = 'icon'; i.style.cssText = 'width:100%;height:100%;background:url(/ipro-camera.svg) center/contain no-repeat;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.45));transform-origin:center;';
-                    const l = document.createElement('div'); l.dataset.role = 'label'; l.style.cssText = 'position:absolute;left:0;top:0;transform:translate(-50%,-100%);padding:2px 6px;border-radius:999px;font-size:12px;font-weight:600;background:var(--t0);color:var(--bg0);white-space:nowrap;pointer-events:none;';
-                    const rb = document.createElement('button'); rb.dataset.role = 'remove-btn'; rb.style.cssText = 'position:absolute;width:22px;height:22px;border-radius:50%;border:none;background:var(--red);color:var(--t0);font-size:12px;cursor:pointer;display:none;padding:0;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,0.35);pointer-events:auto;'; rb.textContent = 'x';
-                    const rh = document.createElement('div'); rh.dataset.role = 'rotate-handle'; rh.style.cssText = 'position:absolute;border-radius:50%;background:var(--accent);border:2px solid var(--bg0);cursor:grab;display:none;pointer-events:auto;';
-                    const fl = document.createElement('div'); fl.dataset.role = 'fov-left'; fl.style.cssText = 'position:absolute;border-radius:50%;background:var(--orange);border:2px solid var(--bg0);transform:translate(-50%,-50%);cursor:pointer;display:none;pointer-events:auto;';
-                    const fr = document.createElement('div'); fr.dataset.role = 'fov-right'; fr.style.cssText = 'position:absolute;border-radius:50%;background:var(--orange);border:2px solid var(--bg0);transform:translate(-50%,-50%);cursor:pointer;display:none;pointer-events:auto;';
-                    iw.appendChild(i); w.appendChild(l); w.appendChild(fl); w.appendChild(fr); w.appendChild(rb); w.appendChild(rh);
-                    ['tl', 'tr', 'bl', 'br'].forEach(role => {
-                      const sh = document.createElement('div'); sh.dataset.role = 'scale-handle'; sh.dataset.handle = role;
-                      sh.style.cssText = 'position:absolute;background:var(--orange);border:2px solid var(--bg0);border-radius:4px;cursor:nwse-resize;display:none;pointer-events:auto;';
-                      w.appendChild(sh);
-                    });
-                    w.appendChild(iw); return w;
+                  const w = document.createElement('div'); w.style.cssText = 'position:relative;width:0;height:0;pointer-events:none;';
+                  const iw = document.createElement('div'); iw.dataset.role = 'icon-wrap'; iw.style.cssText = 'position:absolute;left:0;top:0;transform:translate(-50%,-50%);pointer-events:auto;cursor:grab;';
+                  const i = document.createElement('div'); i.dataset.role = 'icon'; i.style.cssText = 'width:100%;height:100%;background:url(/ipro-camera.svg) center/contain no-repeat;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.45));transform-origin:center;';
+                  const l = document.createElement('div'); l.dataset.role = 'label'; l.style.cssText = 'position:absolute;left:0;top:0;transform:translate(-50%,-100%);padding:2px 6px;border-radius:999px;font-size:12px;font-weight:600;background:var(--t0);color:var(--bg0);white-space:nowrap;pointer-events:none;';
+                  const rb = document.createElement('button'); rb.dataset.role = 'remove-btn'; rb.style.cssText = 'position:absolute;width:22px;height:22px;border-radius:50%;border:none;background:var(--red);color:var(--t0);font-size:12px;cursor:pointer;display:none;padding:0;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,0.35);pointer-events:auto;'; rb.textContent = 'x';
+                  const rh = document.createElement('div'); rh.dataset.role = 'rotate-handle'; rh.style.cssText = 'position:absolute;border-radius:50%;background:var(--accent);border:2px solid var(--bg0);cursor:grab;display:none;pointer-events:auto;';
+                  const fl = document.createElement('div'); fl.dataset.role = 'fov-left'; fl.style.cssText = 'position:absolute;border-radius:50%;background:var(--orange);border:2px solid var(--bg0);transform:translate(-50%,-50%);cursor:pointer;display:none;pointer-events:auto;';
+                  const fr = document.createElement('div'); fr.dataset.role = 'fov-right'; fr.style.cssText = 'position:absolute;border-radius:50%;background:var(--orange);border:2px solid var(--bg0);transform:translate(-50%,-50%);cursor:pointer;display:none;pointer-events:auto;';
+                  iw.appendChild(i); w.appendChild(l); w.appendChild(fl); w.appendChild(fr); w.appendChild(rb); w.appendChild(rh);
+                  ['tl', 'tr', 'bl', 'br'].forEach(role => {
+                    const sh = document.createElement('div'); sh.dataset.role = 'scale-handle'; sh.dataset.handle = role;
+                    sh.style.cssText = 'position:absolute;background:var(--orange);border:2px solid var(--bg0);border-radius:4px;cursor:nwse-resize;display:none;pointer-events:auto;';
+                    w.appendChild(sh);
+                  });
+                  w.appendChild(iw); return w;
                 }}
                 updateCameraMarkerElement={(el, params) => {
-                    const iw = el.querySelector('[data-role="icon-wrap"]') as HTMLElement;
-                    const i = el.querySelector('[data-role="icon"]') as HTMLElement;
-                    const l = el.querySelector('[data-role="label"]') as HTMLElement;
-                    const rb = el.querySelector('[data-role="remove-btn"]') as HTMLElement;
-                    const rh = el.querySelector('[data-role="rotate-handle"]') as HTMLElement;
-                    const fl = el.querySelector('[data-role="fov-left"]') as HTMLElement;
-                    const fr = el.querySelector('[data-role="fov-right"]') as HTMLElement;
-                    const shs = Array.from(el.querySelectorAll('[data-role="scale-handle"]')) as HTMLElement[];
-                    const vs = params.viewScale; const size = Math.round(32 * vs * params.scale);
-                    const hSize = Math.round(10 * vs); const rOff = Math.round(18 * vs);
-                    const lOff = params.selected ? (size/2 + rOff + hSize + Math.round(4 * vs)) : (size/2 + Math.round(4 * vs));
-                    if (iw) { iw.style.width = iw.style.height = `${size}px`; iw.style.border = params.selected ? '1px dashed var(--accent)' : 'none'; iw.style.borderRadius = '8px'; iw.onpointerdown = (e) => startGeoCameraDrag(e, params.cameraId); }
-                    if (i) i.style.transform = `rotate(${normalizeAngle(params.angle - 90)}deg)`;
-                    if (l) { l.textContent = params.label; l.style.top = `-${lOff}px`; l.style.fontSize = `${Math.round(11 * Geometry.clamp(vs, 0.7, 1.2))}px`; }
-                    if (rb) { const bSize = Math.round(22 * vs); rb.style.width = rb.style.height = `${bSize}px`; rb.style.left = `${size/2 + rOff - bSize}px`; rb.style.top = `${-size/2 - rOff - hSize - Math.round(8*vs)}px`; rb.style.display = params.selected ? 'block' : 'none'; rb.onclick = (e) => { e.stopPropagation(); removePosition(params.cameraId); }; }
-                    if (rh) { rh.style.width = rh.style.height = `${hSize}px`; rh.style.left = `${-hSize/2}px`; rh.style.top = `${-size/2 - rOff - hSize}px`; rh.style.display = params.selected ? 'block' : 'none'; rh.onpointerdown = (e) => startGeoRotateDrag(e, params.cameraId); }
-                    shs.forEach(sh => {
-                      const role = sh.dataset.handle; const isL = role==='tl'||role==='bl'; const isT = role==='tl'||role==='tr';
-                      sh.style.width = sh.style.height = `${hSize}px`; sh.style.left = `${(isL ? -hSize/2 : size - hSize/2) - size/2}px`;
-                      sh.style.top = `${(isT ? -hSize/2 : size - hSize/2) - size/2}px`; sh.style.display = params.selected ? 'block' : 'none';
-                      sh.onpointerdown = (e) => startGeoScaleDrag(e, params.cameraId);
-                    });
-                    if (fl && fr) {
-                      if (!params.selected) { fl.style.display = fr.style.display = 'none'; } else {
-                        const safeR = Math.max(1, params.range) * params.scale / vs;
-                        const lp = Geometry.destinationPoint(params.latitude, params.longitude, params.angle - params.fovDegrees/2, safeR);
-                        const rp = Geometry.destinationPoint(params.latitude, params.longitude, params.angle + params.fovDegrees/2, safeR);
-                        const cPx = params.map.project([params.longitude, params.latitude]);
-                        const lPx = params.map.project([lp.longitude, lp.latitude]);
-                        const rPx = params.map.project([rp.longitude, rp.latitude]);
-                        fl.style.width = fl.style.height = fr.style.width = fr.style.height = `${hSize}px`;
-                        fl.style.left = `${lPx.x - cPx.x}px`; fl.style.top = `${lPx.y - cPx.y}px`;
-                        fr.style.left = `${rPx.x - cPx.x}px`; fr.style.top = `${rPx.y - cPx.y}px`;
-                        fl.style.display = fr.style.display = 'block'; fl.onpointerdown = (e) => startGeoFovDrag(e, params.cameraId, 'left'); fr.onpointerdown = (e) => startGeoFovDrag(e, params.cameraId, 'right');
-                      }
+                  const iw = el.querySelector('[data-role="icon-wrap"]') as HTMLElement;
+                  const i = el.querySelector('[data-role="icon"]') as HTMLElement;
+                  const l = el.querySelector('[data-role="label"]') as HTMLElement;
+                  const rb = el.querySelector('[data-role="remove-btn"]') as HTMLElement;
+                  const rh = el.querySelector('[data-role="rotate-handle"]') as HTMLElement;
+                  const fl = el.querySelector('[data-role="fov-left"]') as HTMLElement;
+                  const fr = el.querySelector('[data-role="fov-right"]') as HTMLElement;
+                  const shs = Array.from(el.querySelectorAll('[data-role="scale-handle"]')) as HTMLElement[];
+                  const vs = params.viewScale; const size = Math.round(32 * vs * params.scale);
+                  const hSize = Math.round(10 * vs); const rOff = Math.round(18 * vs);
+                  const lOff = params.selected ? (size / 2 + rOff + hSize + Math.round(4 * vs)) : (size / 2 + Math.round(4 * vs));
+                  if (iw) { iw.style.width = iw.style.height = `${size}px`; iw.style.border = params.selected ? '1px dashed var(--accent)' : 'none'; iw.style.borderRadius = '8px'; iw.onpointerdown = (e) => startGeoCameraDrag(e, params.cameraId); }
+                  if (i) i.style.transform = `rotate(${normalizeAngle(params.angle - 90)}deg)`;
+                  if (l) { l.textContent = params.label; l.style.top = `-${lOff}px`; l.style.fontSize = `${Math.round(11 * Geometry.clamp(vs, 0.7, 1.2))}px`; }
+                  if (rb) { const bSize = Math.round(22 * vs); rb.style.width = rb.style.height = `${bSize}px`; rb.style.left = `${size / 2 + rOff - bSize}px`; rb.style.top = `${-size / 2 - rOff - hSize - Math.round(8 * vs)}px`; rb.style.display = params.selected ? 'block' : 'none'; rb.onclick = (e) => { e.stopPropagation(); removePosition(params.cameraId); }; }
+                  if (rh) { rh.style.width = rh.style.height = `${hSize}px`; rh.style.left = `${-hSize / 2}px`; rh.style.top = `${-size / 2 - rOff - hSize}px`; rh.style.display = params.selected ? 'block' : 'none'; rh.onpointerdown = (e) => startGeoRotateDrag(e, params.cameraId); }
+                  shs.forEach(sh => {
+                    const role = sh.dataset.handle; const isL = role === 'tl' || role === 'bl'; const isT = role === 'tl' || role === 'tr';
+                    sh.style.width = sh.style.height = `${hSize}px`; sh.style.left = `${(isL ? -hSize / 2 : size - hSize / 2) - size / 2}px`;
+                    sh.style.top = `${(isT ? -hSize / 2 : size - hSize / 2) - size / 2}px`; sh.style.display = params.selected ? 'block' : 'none';
+                    sh.onpointerdown = (e) => startGeoScaleDrag(e, params.cameraId);
+                  });
+                  if (fl && fr) {
+                    if (!params.selected) { fl.style.display = fr.style.display = 'none'; } else {
+                      const safeR = Math.max(1, params.range) * params.scale / vs;
+                      const lp = Geometry.destinationPoint(params.latitude, params.longitude, params.angle - params.fovDegrees / 2, safeR);
+                      const rp = Geometry.destinationPoint(params.latitude, params.longitude, params.angle + params.fovDegrees / 2, safeR);
+                      const cPx = params.map.project([params.longitude, params.latitude]);
+                      const lPx = params.map.project([lp.longitude, lp.latitude]);
+                      const rPx = params.map.project([rp.longitude, rp.latitude]);
+                      fl.style.width = fl.style.height = fr.style.width = fr.style.height = `${hSize}px`;
+                      fl.style.left = `${lPx.x - cPx.x}px`; fl.style.top = `${lPx.y - cPx.y}px`;
+                      fr.style.left = `${rPx.x - cPx.x}px`; fr.style.top = `${rPx.y - cPx.y}px`;
+                      fl.style.display = fr.style.display = 'block'; fl.onpointerdown = (e) => startGeoFovDrag(e, params.cameraId, 'left'); fr.onpointerdown = (e) => startGeoFovDrag(e, params.cameraId, 'right');
                     }
+                  }
                 }}
                 t={t}
               />
@@ -821,24 +821,24 @@ export function MapLayoutManagerPanel() {
                 activeMap={activeMap} resolvedImageUrl={(activeMap.imageUrl || activeMap.mapImagePath) ? buildApiUrl(activeMap.imageUrl || activeMap.mapImagePath!) : null} isFullscreen={isFullscreen} setIsFullscreen={setIsFullscreen}
                 imageNaturalSize={imageNaturalSize} setImageNaturalSize={setImageNaturalSize} imageView={imageView} setImageViewportNode={(node) => { imageViewportRef.current = node; }}
                 positions={positions} selectedCameraId={selectedCameraId}
-                onDrop={(e) => { 
-                  e.preventDefault(); 
-                  const id = e.dataTransfer.getData('camera-id'); 
-                  if (id && imageNaturalSize.width) { 
-                    const rect = imageViewportRef.current!.getBoundingClientRect(); 
-                    const mx = (e.clientX - rect.left - imageView.translateX) / imageView.scale; 
-                    const my = (e.clientY - rect.top - imageView.translateY) / imageView.scale; 
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const id = e.dataTransfer.getData('camera-id');
+                  if (id && imageNaturalSize.width) {
+                    const rect = imageViewportRef.current!.getBoundingClientRect();
+                    const mx = (e.clientX - rect.left - imageView.translateX) / imageView.scale;
+                    const my = (e.clientY - rect.top - imageView.translateY) / imageView.scale;
                     const camData = devicesQuery.data?.find(c => c.cameraId === id);
-                    updatePosition(id, { 
-                      x: clamp01(mx / imageNaturalSize.width), 
+                    updatePosition(id, {
+                      x: clamp01(mx / imageNaturalSize.width),
                       y: clamp01(my / imageNaturalSize.height),
                       CameraName: camData?.name || camData?.CameraName,
                       IP: camData?.IP || camData?.ipAddress || camData?.ip,
                       Connectorid: camData?.Connectorid || camData?.connectorId,
                       Type: camData?.type,
                       VmsId: connectorsQuery.data?.find(c => c.Id === (camData?.Connectorid || camData?.connectorId))?.VmsID
-                    }); 
-                  } 
+                    });
+                  }
                 }}
                 onPointerDown={(e) => { if (e.button !== 0 || (e.target as HTMLElement).closest('[data-no-pan="true"]')) return; setSelectedCameraId(null); dragStateRef.current = { kind: 'pan', startX: e.clientX, startY: e.clientY, originX: imageView.translateX, originY: imageView.translateY }; }}
                 onWheel={(e) => { if (!imageNaturalSize.width) return; e.preventDefault(); const rect = imageViewportRef.current!.getBoundingClientRect(); const factor = e.deltaY < 0 ? 1.1 : 0.9; const ax = e.clientX - rect.left; const ay = e.clientY - rect.top; setImageView((prev) => { const nextScale = clamp(prev.scale * factor, 0.2, 6); const dx = (ax - prev.translateX) / prev.scale; const dy = (ay - prev.translateY) / prev.scale; return { scale: nextScale, translateX: ax - dx * nextScale, translateY: ay - dy * nextScale }; }); }}
@@ -855,21 +855,21 @@ export function MapLayoutManagerPanel() {
       </Group>
 
       <MapModals
-        createOpened={createOpened} onCreateClose={handleCloseCreate} 
-        newMapName={newMapName} onNewMapNameChange={setNewMapName} 
+        createOpened={createOpened} onCreateClose={handleCloseCreate}
+        newMapName={newMapName} onNewMapNameChange={setNewMapName}
         newMapCode={newMapCode} onNewMapCodeChange={setNewMapCode}
-        newMapType={newMapType} onNewMapTypeChange={setNewMapType} 
-        newMapParentId={newMapParentId} onNewMapParentIdChange={setNewMapParentId} 
+        newMapType={newMapType} onNewMapTypeChange={setNewMapType}
+        newMapParentId={newMapParentId} onNewMapParentIdChange={setNewMapParentId}
         parentOptions={parentOptions}
         onCreateSubmit={() => createMapMutation.mutate({ name: newMapName.trim(), code: newMapCode.trim(), type: newMapType, parentId: newMapParentId ?? undefined })} isCreateLoading={createMapMutation.isPending}
-        editOpened={editOpened} onEditClose={handleCloseEdit} 
-        editMapName={editMapName} onEditMapNameChange={setEditMapName} 
+        editOpened={editOpened} onEditClose={handleCloseEdit}
+        editMapName={editMapName} onEditMapNameChange={setEditMapName}
         editMapCode={editMapCode} onEditMapCodeChange={setEditMapCode}
-        editMapType={editMapType} onEditMapTypeChange={setEditMapType} 
-        editMapParentId={editMapParentId} onEditMapParentIdChange={setEditMapParentId} 
+        editMapType={editMapType} onEditMapTypeChange={setEditMapType}
+        editMapParentId={editMapParentId} onEditMapParentIdChange={setEditMapParentId}
         editParentOptions={editParentOptions}
         onEditSubmit={() => { if (editMap) updateMapMutation.mutate({ id: editMap.id, payload: { name: editMapName.trim(), code: editMapCode.trim(), type: editMapType, parentId: editMapParentId ?? undefined } }); }} isEditLoading={updateMapMutation.isPending} hasEditMap={Boolean(editMap)}
-        deleteOpened={deleteOpened} onDeleteClose={deleteHandlers.close} deleteTargetName={deleteTarget?.name ?? ''} onDeleteConfirm={() => deleteTarget && deleteMapMutation.mutate(deleteTarget.id)} isDeleteLoading={deleteMapMutation.isPending} 
+        deleteOpened={deleteOpened} onDeleteClose={deleteHandlers.close} deleteTargetName={deleteTarget?.name ?? ''} onDeleteConfirm={() => deleteTarget && deleteMapMutation.mutate(deleteTarget.id)} isDeleteLoading={deleteMapMutation.isPending}
         responseOpened={responseOpened} onResponseClose={responseHandlers.close} responseStatus={responseStatus} responseText={responseText}
         t={t}
       />
@@ -888,7 +888,7 @@ export function MapLayoutManagerPanel() {
 function useElementSize() {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const observerRef = useRef<ResizeObserver | null>(null);
-  
+
   const ref = useCallback((node: HTMLDivElement | null) => {
     if (observerRef.current) {
       observerRef.current.disconnect();

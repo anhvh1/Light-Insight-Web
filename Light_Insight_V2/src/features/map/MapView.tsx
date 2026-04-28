@@ -10,7 +10,8 @@ import {
   Activity,
   Cctv,
   RefreshCcw,
-  X
+  X,
+  Play
 } from 'lucide-react';
 import { mapApi } from '@/lib/map-api';
 import type { MapTreeNode as APIMapTreeNode, Alarm } from '@/types';
@@ -83,6 +84,10 @@ function MapViewInternal() {
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const modalScrollRef = useRef<HTMLDivElement>(null);
+  
+  // Playback Modal States
+  const [selectedPlaybackAlarm, setSelectedPlaybackAlarm] = useState<Alarm | null>(null);
+  const [isPlaybackModalOpen, setIsPlaybackModalOpen] = useState(false);
 
   // Tree Fetching
   const { data: mapTreeResponse, isLoading: isLoadingTree } = useQuery({
@@ -141,6 +146,21 @@ function MapViewInternal() {
     const target = e.currentTarget;
     if (target.scrollHeight - target.scrollTop <= target.clientHeight + 50) void fetchModalAlarms(modalPage + 1, true);
   };
+
+  const handleAlarmClick = (alarm: Alarm) => {
+    setSelectedPlaybackAlarm(alarm);
+    setIsPlaybackModalOpen(true);
+  };
+
+  const playbackEmbedUrl = useMemo(() => {
+    if (!selectedPlaybackAlarm || !selectedPlaybackAlarm.cameraId || !selectedPlaybackAlarm.connectorName) return null;
+    const params = new URLSearchParams({
+      key: selectedPlaybackAlarm.connectorName,
+      cameraId: selectedPlaybackAlarm.cameraId,
+      alarmTime: selectedPlaybackAlarm.alarmTimeRaw || selectedPlaybackAlarm.time || '',
+    });
+    return `/embed/playback?${params.toString()}`;
+  }, [selectedPlaybackAlarm]);
 
   useEffect(() => {
     if (!selectedMapId && !isLoadingTree && mapTree.length > 0) {
@@ -273,21 +293,113 @@ function MapViewInternal() {
               <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-xl bg-white/5 hover:bg-psim-red hover:text-white flex items-center justify-center transition-all group"><X size={20} className="group-hover:rotate-90 transition-transform duration-300 text-t3 group-hover:text-white" /></button>
             </div>
             <div ref={modalScrollRef} onScroll={handleModalScroll} className="flex-1 overflow-y-auto custom-scrollbar bg-[#05070a]/50">
-              <div className="sticky top-0 z-20 grid grid-cols-[120px_120px_1fr_200px_150px_150px] gap-6 px-8 py-4 bg-[#161b2e] border-b border-white/10 text-[10px] font-heading font-bold uppercase tracking-widest text-t3"><div>Thời gian</div><div>Mức độ</div><div>Nội dung sự kiện</div><div>Nguồn</div><div>Hệ thống</div><div>Địa chỉ IP</div></div>
+              <div className="sticky top-0 z-20 grid grid-cols-[120px_100px_1fr_200px_120px_140px_80px] gap-6 px-8 py-4 bg-[#161b2e] border-b border-white/10 text-[10px] font-heading font-bold uppercase tracking-widest text-t3">
+                <div>Thời gian</div>
+                <div>Mức độ</div>
+                <div>Nội dung sự kiện</div>
+                <div>Nguồn</div>
+                <div>Hệ thống</div>
+                <div>Địa chỉ IP</div>
+                <div className="text-center">Playback</div>
+              </div>
               <div className="flex flex-col min-h-full">
                 {modalAlarms.map((alarm, idx) => (
-                  <div key={alarm.id + idx} className="grid grid-cols-[120px_120px_1fr_200px_150px_150px] gap-6 px-8 py-4 border-b border-white/[0.03] hover:bg-white/[0.03] transition-all items-center group/row">
+                  <div 
+                    key={alarm.id + idx} 
+                    onClick={() => handleAlarmClick(alarm)}
+                    className="grid grid-cols-[120px_100px_1fr_200px_120px_140px_80px] gap-6 px-8 py-4 border-b border-white/[0.03] hover:bg-white/[0.03] transition-all items-center group/row cursor-pointer relative overflow-hidden"
+                  >
                     <div className="text-[12px] font-mono text-t2 font-semibold group-hover/row:text-white transition-colors">{alarm.time}</div>
                     <div><span className={cn("text-[10px] font-heading font-bold px-3 py-1 rounded-lg uppercase tracking-wider border inline-block text-center min-w-[80px]", alarm.pri === 'critical' ? "border-psim-red/40 bg-psim-red/10 text-psim-red" : alarm.pri === 'high' ? "border-psim-orange/40 bg-psim-orange/10 text-psim-orange" : alarm.pri === 'medium' ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-500" : "border-psim-green/40 bg-psim-green/10 text-psim-green")}>{alarm.pri}</span></div>
                     <div className="text-[14px] font-medium text-white/90 group-hover/row:text-psim-accent transition-colors truncate" title={alarm.title}>{alarm.title}</div>
                     <div className="text-[13px] font-medium text-t2 group-hover/row:text-white transition-colors truncate flex items-center gap-2" title={alarm.src}><Cctv size={14} className="opacity-50" /><span className="truncate">{alarm.src || '---'}</span></div>
                     <div className="text-[13px] font-medium text-t2 group-hover/row:text-white transition-colors truncate" title={alarm.connectorName}>{alarm.connectorName || '---'}</div>
                     <div className="text-[12px] font-mono text-t3 group-hover/row:text-white transition-colors truncate" title={alarm.ipadress}>{alarm.ipadress || '---'}</div>
+                    <div className="flex justify-center">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleAlarmClick(alarm); }}
+                        className="w-8 h-8 rounded-full bg-psim-accent/10 text-psim-accent hover:bg-psim-accent hover:text-bg0 flex items-center justify-center transition-all shadow-sm"
+                        title="Xem Playback"
+                      >
+                        <Play size={14} fill="currentColor" className="ml-0.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {isFetchingMore && <div className="p-10 flex flex-col items-center justify-center gap-3 text-psim-orange"><RefreshCcw size={24} className="animate-spin" /><span className="text-[11px] font-heading font-bold uppercase tracking-[0.2em]">Đang đồng bộ dữ liệu...</span></div>}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isPlaybackModalOpen && selectedPlaybackAlarm && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setIsPlaybackModalOpen(false)} />
+          <div className="relative w-[90%] max-w-[800px] max-h-[95vh] bg-[#0a0f1d] border border-white/10 rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+             <div className="px-8 py-5 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                <div className="flex items-center gap-4">
+                   <div className="w-12 h-12 rounded-2xl bg-psim-accent/10 flex items-center justify-center text-psim-accent shadow-inner">
+                      <Cctv size={24} />
+                   </div>
+                   <div>
+                      <h2 className="text-xl font-bold text-white leading-none mb-1">Playback Sự kiện</h2>
+                      <p className="text-[10px] text-t3 uppercase font-mono tracking-widest opacity-60">ID: {selectedPlaybackAlarm.id}</p>
+                   </div>
+                </div>
+                <button onClick={() => setIsPlaybackModalOpen(false)} className="w-10 h-10 rounded-xl bg-white/5 hover:bg-psim-red hover:text-white flex items-center justify-center transition-all group">
+                  <X size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+                </button>
+             </div>
+
+             <div className="p-6 md:p-8 flex flex-col gap-6 md:gap-8 overflow-y-auto custom-scrollbar">
+                <div className="aspect-video bg-black rounded-[1.5rem] border border-white/10 overflow-hidden relative shadow-2xl group">
+                   {playbackEmbedUrl ? (
+                      <iframe 
+                        src={playbackEmbedUrl} 
+                        className="w-full h-full"
+                        title="Playback"
+                        allowFullScreen
+                      />
+                   ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-psim-orange gap-4 bg-[#05070a]">
+                         {!selectedPlaybackAlarm.cameraId ? (
+                            <>
+                              <Activity size={32} className="opacity-20" />
+                              <span className="text-[12px] font-bold uppercase tracking-widest opacity-50">Không tìm thấy Camera ID cho sự kiện này</span>
+                            </>
+                         ) : (
+                            <>
+                              <RefreshCcw className="animate-spin" size={32} />
+                              <span className="text-[12px] font-bold uppercase tracking-widest animate-pulse">Đang chuẩn bị luồng video...</span>
+                            </>
+                         )}
+                      </div>
+                   )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="bg-white/[0.03] p-5 rounded-2xl border border-white/5 group hover:bg-white/[0.05] transition-colors">
+                      <div className="text-[10px] font-black text-t3 uppercase tracking-[0.15em] mb-2 opacity-50">Mô tả sự kiện</div>
+                      <div className="text-base font-semibold text-white group-hover:text-psim-accent transition-colors">{selectedPlaybackAlarm.title}</div>
+                   </div>
+                   <div className="bg-white/[0.03] p-5 rounded-2xl border border-white/5 group hover:bg-white/[0.05] transition-colors">
+                      <div className="text-[10px] font-black text-t3 uppercase tracking-[0.15em] mb-2 opacity-50">Thời gian ghi hình</div>
+                      <div className="text-base font-mono font-bold text-psim-orange">{selectedPlaybackAlarm.time}</div>
+                   </div>
+                   <div className="bg-white/[0.03] p-5 rounded-2xl border border-white/5 group hover:bg-white/[0.05] transition-colors">
+                      <div className="text-[10px] font-black text-t3 uppercase tracking-[0.15em] mb-2 opacity-50">Nguồn dữ liệu (Camera)</div>
+                      <div className="text-base font-semibold text-white flex items-center gap-2">
+                        <Cctv size={16} className="text-t3" />
+                        {selectedPlaybackAlarm.src || 'Không xác định'}
+                      </div>
+                   </div>
+                   <div className="bg-white/[0.03] p-5 rounded-2xl border border-white/5 group hover:bg-white/[0.05] transition-colors">
+                      <div className="text-[10px] font-black text-t3 uppercase tracking-[0.15em] mb-2 opacity-50">Vị trí lắp đặt</div>
+                      <div className="text-base font-semibold text-white">{selectedPlaybackAlarm.loc || 'Chưa cập nhật'}</div>
+                   </div>
+                </div>
+             </div>
           </div>
         </div>
       )}
@@ -331,7 +443,7 @@ function MapViewInternal() {
               markers={markers}
               alarmsBySource={alarmsBySource}
               cameraStatusMap={cameraStatusMap}
-              onMarkerClick={(a) => setDismissedAlarmIds(prev => new Set(prev).add(a.id))}
+              onMarkerClick={handleAlarmClick}
               showLegend={showLegend}
             />
           ) : (
@@ -342,7 +454,7 @@ function MapViewInternal() {
               markers={markers}
               alarmsBySource={alarmsBySource}
               cameraStatusMap={cameraStatusMap}
-              onMarkerClick={(a) => setDismissedAlarmIds(prev => new Set(prev).add(a.id))}
+              onMarkerClick={handleAlarmClick}
               showLegend={showLegend}
             />
           )}
@@ -403,14 +515,41 @@ function MapViewInternal() {
           <div className="px-4 py-4 border-b border-white/5 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-psim-accent animate-pulse" /><span className="text-[11px] font-black uppercase text-white">Live Event</span></div></div>
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 custom-scrollbar">
             {latestAlarms.map((alarm) => (
-              <div key={alarm.id} className="p-2.5 bg-white/[0.03] border border-white/5 rounded-xl hover:bg-white/[0.06] transition-all cursor-pointer relative overflow-hidden flex flex-col gap-1.5">
+              <div 
+                key={alarm.id} 
+                onClick={() => handleAlarmClick(alarm)}
+                className="p-2.5 bg-white/[0.03] border border-white/5 rounded-xl hover:bg-white/[0.06] transition-all cursor-pointer relative overflow-hidden flex flex-col gap-1.5 group/alarm"
+              >
                 <div className={cn("absolute left-0 top-0 bottom-0 w-1", alarm.pri === 'critical' ? "bg-psim-red" : alarm.pri === 'high' ? "bg-psim-orange" : alarm.pri === 'medium' ? "bg-psim-yellow" : "bg-psim-green")} />
-                <div className="flex items-start justify-between gap-2 pl-1"><div className="text-[11px] font-bold text-white uppercase truncate">{alarm.title}</div><span className={cn("text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase", alarm.pri === 'critical' ? "bg-psim-red text-white" : alarm.pri === 'high' ? "bg-psim-orange text-white" : alarm.pri === 'medium' ? "bg-psim-yellow text-black" : "bg-psim-green text-white")}>{alarm.pri}</span></div>
-                <div className="flex items-center justify-between gap-2 border-t border-white/[0.03] pt-1.5 pl-1"><div className="flex items-center gap-1 text-[9px] text-t3 truncate"><Cctv size={10} /><span className="truncate">{alarm.src || 'Unknown'}</span></div><div className="text-[8px] font-mono text-t3">{alarm.time}</div></div>
+                <div className="flex items-start justify-between gap-2 pl-1">
+                  <div className="text-[11px] font-bold text-white uppercase truncate group-hover/alarm:text-psim-accent transition-colors">{alarm.title}</div>
+                  <span className={cn("text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase", alarm.pri === 'critical' ? "bg-psim-red text-white" : alarm.pri === 'high' ? "bg-psim-orange text-white" : alarm.pri === 'medium' ? "border border-psim-yellow/30 text-psim-yellow" : "bg-psim-green text-white")}>{alarm.pri}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t border-white/[0.03] pt-1.5 pl-1">
+                  <div className="flex items-center gap-1 text-[9px] text-t3 truncate"><Cctv size={10} /><span className="truncate">{alarm.src || 'Unknown'}</span></div>
+                  <div className="text-[8px] font-mono text-t3">{alarm.time}</div>
+                </div>
+
+                {/* Play Button Centered */}
+                <div className="flex justify-center mt-1 pt-2 border-t border-white/[0.02]">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleAlarmClick(alarm); }}
+                    className="w-7 h-7 rounded-full bg-psim-accent/10 hover:bg-psim-accent text-psim-accent hover:text-bg0 flex items-center justify-center transition-all shadow-inner group/play"
+                  >
+                    <Play size={10} fill="currentColor" className="ml-0.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
-          <button onClick={handleOpenModal} className="m-4 h-11 text-[10px] font-black border border-white/10 hover:border-psim-orange/50 rounded-xl transition-all text-t2 uppercase">Xem thêm</button>
+          <div className="p-4 border-t border-white/5 flex justify-center">
+            <button 
+              onClick={handleOpenModal} 
+              className="w-full max-w-[200px] h-11 text-[10px] font-black border border-white/10 hover:border-psim-accent/50 hover:bg-psim-accent/5 rounded-xl transition-all text-t2 hover:text-psim-accent uppercase tracking-[0.2em]"
+            >
+              Xem thêm nhật ký
+            </button>
+          </div>
         </div>
       </div>
     </div>

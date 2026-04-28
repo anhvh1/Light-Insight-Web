@@ -29,20 +29,20 @@ interface GeoMapCanvasProps {
   setSelectedCameraId: (id: string | null) => void;
   geoZoom: number | null;
   setGeoZoom: (z: number) => void;
-  
+
   onDrop: (event: DragEvent<HTMLDivElement>) => void;
-  
+
   // Handlers for markers
   startGeoCameraDrag: (event: PointerEvent, id: string) => void;
   startGeoRotateDrag: (event: PointerEvent, id: string) => void;
   startGeoFovDrag: (event: PointerEvent, id: string, side: 'left' | 'right') => void;
   startGeoScaleDrag: (event: PointerEvent, id: string) => void;
-  
+
   mapContainerRef: React.MutableRefObject<HTMLDivElement | null>;
   mapInstanceRef: React.MutableRefObject<MapLibreMap | null>;
   mapMarkersRef: React.MutableRefObject<Map<string, maplibregl.Marker>>;
   geoFovFeatures: any[];
-  
+
   resolveCameraLabel: (id: string) => string;
   createCameraMarkerElement: () => HTMLElement;
   updateCameraMarkerElement: (el: HTMLElement, params: any) => void;
@@ -76,7 +76,7 @@ export function GeoMapCanvas({
   useEffect(() => {
     geoFovFeaturesRef.current = geoFovFeatures;
   }, [geoFovFeatures]);
-  
+
   useEffect(() => {
     const isChangingMap = mapInstanceRef.current && activeMap?.id !== lastMapIdRef.current;
 
@@ -127,20 +127,20 @@ export function GeoMapCanvas({
       if (!map.isStyleLoaded()) return;
       const source = map.getSource('camerfov') as maplibregl.GeoJSONSource | undefined;
       const features = geoFovFeaturesRef.current;
-      
+
       if (!source) {
         map.addSource('camerfov', { type: 'geojson', data: { type: 'FeatureCollection', features } });
-        map.addLayer({ 
-          id: 'camerfov-fill', 
-          type: 'fill', 
-          source: 'camerfov', 
-          paint: { 'fill-color': '#00c2ff', 'fill-opacity': 0.15 } 
+        map.addLayer({
+          id: 'camerfov-fill',
+          type: 'fill',
+          source: 'camerfov',
+          paint: { 'fill-color': '#00c2ff', 'fill-opacity': 0.15 }
         });
-        map.addLayer({ 
-          id: 'camerfov-outline', 
-          type: 'line', 
-          source: 'camerfov', 
-          paint: { 'line-color': '#00c2ff', 'line-width': 1, 'line-opacity': 0.5 } 
+        map.addLayer({
+          id: 'camerfov-outline',
+          type: 'line',
+          source: 'camerfov',
+          paint: { 'line-color': '#00c2ff', 'line-width': 1, 'line-opacity': 0.5 }
         });
       } else {
         source.setData({ type: 'FeatureCollection', features });

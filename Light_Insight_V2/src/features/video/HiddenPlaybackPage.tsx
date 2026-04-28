@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getWebRtcTokenByConnectorKey } from '@/lib/playback-api';
+import { mapApi } from '@/lib/map-api';
 
 type SessionResponse = {
   sessionId: string;
@@ -127,7 +128,20 @@ export function HiddenPlaybackPage() {
       closePeer();
 
       try {
-        const tokenData = await getWebRtcTokenByConnectorKey(connectorKey);
+        let finalConnectorKey = connectorKey;
+        if (cameraId) {
+          const connectorRes = await mapApi.getConnectorIdByCameraId(cameraId);
+          if (connectorRes?.Status === 1 && connectorRes.Data) {
+            finalConnectorKey = connectorRes.Data;
+          }
+        }
+
+        if (!finalConnectorKey) {
+          console.warn('Playback: Không thể xác định connector key (connectorId).');
+          return;
+        }
+
+        const tokenData = await getWebRtcTokenByConnectorKey(finalConnectorKey);
         if (!tokenData.baseUrl || !tokenData.bearerToken) {
           console.warn('Playback: không lấy được baseUrl/bearerToken từ API token.');
           return;
@@ -255,7 +269,7 @@ export function HiddenPlaybackPage() {
         />
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-white/10 px-3 py-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/10 px-3 py-2">
         <button
           type="button"
           className="px-3 py-1 rounded bg-bg3 border border-border-dim text-[11px]"

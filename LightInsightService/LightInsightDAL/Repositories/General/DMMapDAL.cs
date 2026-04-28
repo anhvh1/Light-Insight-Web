@@ -375,5 +375,32 @@ namespace LightInsightDAL.Repositories.General
                 return list;
             }
         }
+
+        public async Task<Guid?> GetConnectorIdByCameraIdAsync(string cameraId)
+        {
+            try
+            {
+                await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
+                await conn.OpenAsync();
+
+                var sql = "SELECT public.fn_get_connector_id_by_camera_id(@p_camera_id)";
+
+                await using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("p_camera_id", cameraId);
+
+                var result = await cmd.ExecuteScalarAsync();
+
+                if (result != null && result != DBNull.Value)
+                {
+                    return (Guid)result;
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetConnectorIdByCameraIdAsync: {ex.Message}");
+                return null;
+            }
+        }
     }
 }

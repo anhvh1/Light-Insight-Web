@@ -93,5 +93,10 @@ export const mapApi = {
   getMilestoneAlarms: async (mapId: string, page = 0, size = 10) => {
     const response = await apiClient.get<ApiResponse<any[]>>(`/milestone/GetAlarms?MapId=${mapId}&Page=${page}&Size=${size}`);
     return response.data || { Data: [], Status: 0, Message: '' };
+  },
+
+  getConnectorIdByCameraId: async (cameraId: string) => {
+    const response = await apiClient.get<ApiResponse<string>>(`/DMMap/GetConnectorIdByCameraId?cameraId=${cameraId}`);
+    return response.data;
   }
 };

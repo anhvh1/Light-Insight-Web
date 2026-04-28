@@ -99,6 +99,13 @@ namespace LightInsightService.Controllers.General
             return Ok(result);
         }
 
+        [HttpGet("GetConnectorIdByCameraId")]
+        public async Task<IActionResult> GetConnectorIdByCameraId(string cameraId)
+        {
+            var result = await _dmMapBUS.GetConnectorIdByCameraIdAsync(cameraId);
+            return Ok(result);
+        }
+
         [HttpGet("GetAllDevicesAsync")]
         public async Task<IActionResult> GetAllDevicesAsync([FromQuery] Guid key)
         {
