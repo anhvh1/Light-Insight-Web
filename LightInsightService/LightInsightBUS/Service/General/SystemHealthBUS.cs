@@ -73,14 +73,18 @@ namespace LightInsightBUS.Service.General
 
             report.LastUpdate = DateTime.Now;
             
-            // Robust matching: Use NetBIOS name (first part of hostname) for the cache key
-            string lookupKey = report.ServerId.Split('.')[0].ToUpper();
-            
-            // New Diagnostic Log
-            Console.WriteLine($"[AGENT] Received metrics for machine: {lookupKey} (CPU: {report.CpuUsage}% | RAM: {report.RamUsage}%)");
+            // 1. Cache by Hostname/ServerId (e.g. WIN-CKAE...)
+            string nameKey = report.ServerId.Split('.')[0].ToUpper();
+            _cache.Set($"AGENT_METRIC_{nameKey}", report, TimeSpan.FromMinutes(10));
+            Console.WriteLine($"[AGENT_REPORT] Cached by Name: {nameKey}");
 
-            // Lưu vào Cache (Hết hạn sau 10 phút nếu không có report mới)
-            _cache.Set($"AGENT_METRIC_{lookupKey}", report, TimeSpan.FromMinutes(10));
+            // 2. Cache by IP Address if available (e.g. 192.168.100.4)
+            if (!string.IsNullOrEmpty(report.IpAddress))
+            {
+                string ipKey = report.IpAddress.ToUpper();
+                _cache.Set($"AGENT_METRIC_{ipKey}", report, TimeSpan.FromMinutes(10));
+                Console.WriteLine($"[AGENT_REPORT] Cached by IP: {ipKey}");
+            }
 
             return new BaseResultModel { Status = 1, Message = "Report received" };
         }
@@ -90,12 +94,24 @@ namespace LightInsightBUS.Service.General
             if (item.Type != "server" && item.Type != "storage" && item.Type != "info") return;
 
             string rawKey = item.MachineName ?? "";
-            if (string.IsNullOrEmpty(rawKey)) return;
+            if (string.IsNullOrEmpty(rawKey)) 
+            {
+                // Console.WriteLine($"[MERGE_SKIP] Item {item.Name} has no MachineName");
+                return;
+            }
             
-            string lookupKey = rawKey.Split('.')[0].ToUpper();
+            string lookupKey = rawKey.ToUpper();
+            
+            // Only split by dot if it's likely a Hostname/FQDN and NOT an IP address
+            // This prevents "192.168.100.4" from being truncated to "192"
+            if (rawKey.Contains('.') && !System.Net.IPAddress.TryParse(rawKey, out _))
+            {
+                lookupKey = rawKey.Split('.')[0].ToUpper();
+            }
 
             if (_cache.TryGetValue($"AGENT_METRIC_{lookupKey}", out MilestoneServerMetric metrics))
             {
+                Console.WriteLine($"[MERGE_MATCH] SUCCESS: Item={item.Name} Machine={rawKey} -> Match found for key: {lookupKey}");
                 if (item.Type == "server")
                 {
                     item.CpuUsage = metrics.CpuUsage;
@@ -126,7 +142,15 @@ namespace LightInsightBUS.Service.General
                         item.DiskUsage = matchingDisk.UsagePercentage;
                         item.Description = $"{matchingDisk.DriveName} | Free {matchingDisk.FreeSpaceGb}GB / {matchingDisk.TotalSizeGb}GB";
                     }
+                    else 
+                    {
+                        Console.WriteLine($"[MERGE_DISK_FAIL] No disk metric matching path for item: {item.Name} (Path: {item.Description})");
+                    }
                 }
+            }
+            else 
+            {
+                Console.WriteLine($"[MERGE_MISS] NO MATCH: Item={item.Name} Machine={rawKey} -> No cache entry for key: {lookupKey}");
             }
         }
     }

@@ -240,7 +240,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                             
                             _globalStates[cid].Status = "ONLINE";
 
-                            _logger.LogDebug($"[MilestoneHealth] {vmsConfig.Name} Latency: {elapsed}ms");
+                            // _logger.LogDebug($"[MilestoneHealth] {vmsConfig.Name} Latency: {elapsed}ms");
                             
                             // Optimized Swap
                             if (root.TryGetProperty("states", out var statesArray)) {
@@ -326,7 +326,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                             }
                             }
                             } catch (Exception ex) { 
-                                _logger.LogError($"[MilestoneHealth] ProcessWsMessage error for {vmsConfig.Name}: {ex.Message}");
+                                // _logger.LogError($"[MilestoneHealth] ProcessWsMessage error for {vmsConfig.Name}: {ex.Message}");
                             }
                             }
 
@@ -612,7 +612,7 @@ namespace LightInsightService.Sockets.Milestone.Health
 
                 if (ms.Length > 1024 * 1024 * 10) // 10MB limit safety
                 {
-                    _logger.LogWarning($"[MilestoneHealth] Message from {serverName} too large, dropping.");
+                    // _logger.LogWarning($"[MilestoneHealth] Message from {serverName} too large, dropping.");
                     return null;
                 }
             }

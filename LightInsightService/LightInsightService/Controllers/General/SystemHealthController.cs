@@ -31,13 +31,21 @@ namespace LightInsightService.Controllers.General
         [HttpPost("Report")]
         public async Task<BaseResultModel> Report([FromBody] MilestoneServerMetric report)
         {
+            // Capture the IP address of the reporting agent
+            var remoteIp = Request.HttpContext.Connection.RemoteIpAddress?.ToString();
+            if (!string.IsNullOrEmpty(remoteIp))
+            {
+                // Strip IPv6 prefix if present
+                if (remoteIp.Contains("::ffff:")) remoteIp = remoteIp.Replace("::ffff:", "");
+                report.IpAddress = remoteIp;
+            }
+
             string json = System.Text.Json.JsonSerializer.Serialize(report);
-            _logger.LogInformation("RECEIVED REPORT: {Json}", json);
+            _logger.LogInformation("RECEIVED REPORT from {Ip}: {Id}", remoteIp, report.ServerId);
 
             var result = await _systemHealthBUS.ReportMetrics(report);
             if (result.Status == 1)
             {
-                _logger.LogInformation("PUSHING TO SIGNALR: {Id}", report.ServerId);
                 await _hubContext.Clients.All.SendAsync("ReceiveAgentMetrics", report);
             }
             return result;
