@@ -30,7 +30,7 @@ const navItems: NavItem[] = [
   { id: 'alarm', icon: Bell, tip: 'Alarm Console', badge: 3, path: '/alarm' },
   { id: 'map', icon: MapIcon, tip: 'Situational Map', path: '/map' },
   { id: 'wall', icon: MonitorPlay, tip: 'Video Wall', path: '/wall' },
-  { id: 'inc', icon: Siren, tip: 'Incident Mgmt', badge: 10, path: '/incident' },
+  { id: 'inc', icon: Siren, tip: 'Incident Management', badge: 10, path: '/incident' },
   { id: 'ana', icon: BarChart3, tip: 'Analytics', path: '/analytics' },
   { id: 'shift', icon: ClipboardList, tip: 'Shift Handover', path: '/shift' },
   { id: 'health', icon: Plug2, tip: 'System Health', path: '/health' },

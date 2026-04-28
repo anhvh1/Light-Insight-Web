@@ -150,7 +150,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                                 sw.Stop();
 
                                 var elapsed = sw.ElapsedMilliseconds;
-                                _logger.LogInformation($"[LATENCY_DEBUG] {config.Name} | Roundtrip: {elapsed}ms");
+                                // _logger.LogInformation($"[LATENCY_DEBUG] {config.Name} | Roundtrip: {elapsed}ms");
 
                                 var state = _globalStates[cid];
                                 state.LatencyMs = elapsed;
@@ -161,11 +161,11 @@ namespace LightInsightService.Sockets.Milestone.Health
 
                                 await Task.Delay(5000, ct);
                             } catch (OperationCanceledException) { 
-                                _logger.LogWarning($"[LATENCY_DEBUG] {config.Name} heartbeat timed out.");
+                                // _logger.LogWarning($"[LATENCY_DEBUG] {config.Name} heartbeat timed out.");
                                 AuditLogger.Log("SYSTEM", "SERVER_TIMEOUT", $"Mất phản hồi từ server: {config.Name} (Timeout 5s)", new { config.Name, config.IpServer }, "System", config.IpServer);
                                 break; 
                             } catch (Exception ex) { 
-                                _logger.LogWarning($"[LATENCY_DEBUG] {config.Name} heartbeat failed: {ex.Message}");
+                                // _logger.LogWarning($"[LATENCY_DEBUG] {config.Name} heartbeat failed: {ex.Message}");
                                 break; 
                             }
                         }

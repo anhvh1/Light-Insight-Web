@@ -45,6 +45,18 @@ function formatDateTime(value?: string | null) {
   return date.toLocaleString('vi-VN');
 }
 
+function splitToTwoLines(value?: string | null): [string, string] {
+  const normalized = (value ?? '').trim();
+  if (!normalized) return ['--', '--'];
+
+  const midpoint = Math.ceil(normalized.length / 2);
+  let splitAt = normalized.indexOf('-', midpoint);
+  if (splitAt === -1) splitAt = normalized.lastIndexOf('-', midpoint);
+  if (splitAt <= 0 || splitAt >= normalized.length - 1) splitAt = midpoint;
+
+  return [normalized.slice(0, splitAt), normalized.slice(splitAt + 1)];
+}
+
 function getStepProgressKey(incidentId?: string | null) {
   return `incident-sop-progress:${incidentId || 'unknown'}`;
 }
@@ -362,9 +374,10 @@ export function IncidentManagement() {
           <div className="shrink-0 grid grid-cols-2 gap-px bg-border-dim border border-border-dim rounded shadow-sm">
             {[
               {
-                label: 'Source ID',
+                label: 'Source',
                 val: selectedIncident?.source_id || '--',
                 mono: true,
+                forceTwoLines: true,
               },
               { label: 'VMS', val: selectedIncident?.vms_name || '--' },
               { label: 'Mô tả', val: selectedIncident?.description || '--' },
@@ -378,7 +391,9 @@ export function IncidentManagement() {
                 val: selectedIncident?.user_id || 'Chưa có người xử lý',
                 mono: true,
               },
-            ].map((m, i) => (
+            ].map((m, i) => {
+              const twoLineValues = m.forceTwoLines ? splitToTwoLines(String(m.val)) : null;
+              return (
               <div key={i} className="bg-bg2 p-2.5 flex flex-col gap-1">
                 <span className="text-[8px] text-t-2 font-mono uppercase tracking-widest">
                   {m.label}
@@ -390,10 +405,17 @@ export function IncidentManagement() {
                     'text-t-1'
                   )}
                 >
-                  {m.val}
+                  {twoLineValues ? (
+                    <>
+                      <span className="block">{twoLineValues[0]}</span>
+                      <span className="block">{twoLineValues[1]}</span>
+                    </>
+                  ) : (
+                    m.val
+                  )}
                 </span>
               </div>
-            ))}
+            )})}
           </div>
 
           {correlationItems.length > 0 && (
