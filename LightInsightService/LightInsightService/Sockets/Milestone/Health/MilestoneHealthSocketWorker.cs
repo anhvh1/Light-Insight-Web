@@ -83,6 +83,23 @@ namespace LightInsightService.Sockets.Milestone.Health
                                         ConnectorId = cid,
                                         MachineName = "Event Server",
                                         Description = "WebSocket Gateway"
+                                    },
+                                    new InfrastructureHealth 
+                                    {
+                                        Name = $"NAME: {vms.IpServer}", 
+                                        Type = "info", 
+                                        Status = "ONLINE", 
+                                        ConnectorId = cid,
+                                        MachineName = vms.IpServer
+                                    },
+                                    new InfrastructureHealth 
+                                    {
+                                        Name = "Recording Server status", 
+                                        Type = "server", 
+                                        Status = "OFFLINE", 
+                                        ConnectorId = cid,
+                                        MachineName = vms.IpServer,
+                                        Description = "Initializing..."
                                     }
                                 }
                             });
@@ -403,6 +420,16 @@ namespace LightInsightService.Sockets.Milestone.Health
                             rsStatus = MapStateGuidToStatus(rsGuids);
                         }
 
+                        // 1. Hostname Row
+                        newInfra.Add(new InfrastructureHealth { 
+                            Name = $"NAME: {hostname}", 
+                            Type = "info", 
+                            Status = "ONLINE", 
+                            ConnectorId = cid,
+                            MachineName = hostname
+                        });
+
+                        // 2. Service Status Row
                         newInfra.Add(new InfrastructureHealth { 
                             Name = "Recording Server status", 
                             Type = "server", 
@@ -412,7 +439,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                             SourceId = rsSource
                         });
 
-                        // 1. Fetch Hardware
+                        // 3. Fetch Hardware
                         try {
                             var hReq = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/recordingServers/{id}/hardware");
                             hReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -443,7 +470,7 @@ namespace LightInsightService.Sockets.Milestone.Health
                             }
                         } catch { }
 
-                        // 2. Fetch Storage
+                        // 4. Fetch Storage
                         try {
                             var sReq = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/recordingServers/{id}/storages");
                             sReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);

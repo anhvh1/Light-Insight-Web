@@ -158,7 +158,9 @@ export function SystemHealthPage() {
       queryClient.setQueryData(['system-health-status'], (old: any) => {
         if (!old || !old.Data) return old;
         const newInfra = old.Data.Infrastructure.map((item: any) => {
-          const matchKey = item.MachineName || item.Name;
+          const matchKey = item.MachineName || "";
+          if (!matchKey) return item;
+
           const baseMatchKey = matchKey.split('.')[0].toLowerCase();
           const baseReportId = sId.split('.')[0].toLowerCase();
           
@@ -182,10 +184,11 @@ export function SystemHealthPage() {
                 item.Description && item.Description.toLowerCase().includes(d.DriveName.toLowerCase())
               );
               if (matchingDisk) {
+                const prefix = item.Description?.split('|')[0].trim() || `Disk path: ${matchingDisk.DriveName}`;
                 return {
                   ...item,
                   DiskUsage: matchingDisk.UsagePercentage,
-                  Description: `${matchingDisk.DriveName} | Free ${matchingDisk.FreeSpace}GB / ${matchingDisk.TotalSize}GB`
+                  Description: `${prefix} | Free ${matchingDisk.FreeSpace}GB / ${matchingDisk.TotalSize}GB`
                 };
               }
             }
@@ -210,10 +213,14 @@ export function SystemHealthPage() {
   const allInfrastructure = healthResponse?.Data?.Infrastructure || [];
 
   const groupedInfrastructure = useMemo(() => {
-    const filtered = allInfrastructure.filter(item => (item.ConnectorId === selectedConnectorId || item.ConnectorId === 'LOCAL') && (item.Type === 'server' || item.Type === 'storage' || item.Type === 'event_server'));
+    const filtered = allInfrastructure.filter(item => (item.ConnectorId === selectedConnectorId || item.ConnectorId === 'LOCAL') && (item.Type === 'server' || item.Type === 'storage' || item.Type === 'event_server' || item.Type === 'info'));
     const groups: Record<string, typeof allInfrastructure> = {};
     filtered.forEach(item => {
-      const groupKey = item.MachineName || (item.ConnectorId === 'LOCAL' ? 'LOCAL' : 'Unknown');
+      let groupKey = 'OTHER';
+      if (item.Type === 'event_server') groupKey = 'EVENT SERVER';
+      else if (item.Type === 'server' || item.Type === 'storage' || item.Type === 'info') groupKey = 'RECORDING SERVER';
+      else groupKey = item.MachineName || 'SYSTEM';
+
       if (!groups[groupKey]) groups[groupKey] = [];
       groups[groupKey].push(item);
     });
@@ -273,24 +280,45 @@ export function SystemHealthPage() {
               <div className="flex-1 overflow-y-auto px-3 py-3 scrollbar-thin scrollbar-thumb-psim-accent/20">
                 <div className="flex flex-col gap-3">
                   {Object.entries(groupedInfrastructure).map(([machineName, items], mi) => {
-                    const machineStats = items.find(item => item.CpuUsage !== undefined);
                     return (
                       <div key={mi} className="bg-bg-2/40 border border-white/5 rounded-lg overflow-hidden">
                         <div className="bg-white/5 px-3 py-1.5 border-b border-white/5 flex flex-col gap-1">
                           <div className="text-[10px] font-bold text-t0 uppercase truncate">{machineName}</div>
-                          {machineStats && <div className="grid grid-cols-2 gap-x-4"><UsageBar label="CPU" value={machineStats.CpuUsage || 0} colorClass={machineStats.CpuUsage! > 80 ? "bg-psim-red" : "bg-psim-green"} /><UsageBar label="RAM" value={machineStats.RamUsage || 0} colorClass={(machineStats.RamUsage || 0) > 80 ? "bg-psim-red" : "bg-psim-green"} /></div>}
                         </div>
                         <div className="p-1 flex flex-col gap-1">
                           {items.map((item, i) => (
                             <div key={i} className="flex flex-col gap-1 px-2 py-1.5 bg-bg-2/30 border border-white/[0.02] rounded-md">
                               <div className="flex items-center gap-2">
-                                <div className="text-[11px] opacity-70">{item.Type === 'storage' ? '💾' : item.Type === 'event_server' ? '🌐' : '⚙️'}</div>
+                                <div className="text-[11px] opacity-70">
+                                  {item.Type === 'storage' ? '💾' : 
+                                   item.Type === 'event_server' ? '🌐' : 
+                                   item.Type === 'info' ? "@" : '⚙️'}
+                                </div>
                                 <div className="flex-1 min-w-0">
-                                  <div className="text-[10px] font-semibold truncate uppercase">{item.Name}</div>
+                                  <div className={cn(
+                                    "text-[10px] font-semibold truncate uppercase",
+                                    item.Type === 'info' && "pl-1"
+                                  )}>
+                                    {item.Name}
+                                  </div>
                                   <div className="text-[8px] text-t-2 font-mono uppercase truncate opacity-50">{item.Description}</div>
                                 </div>
-                                <StatusBadge status={item.Status} />
+                                {item.Type !== 'info' && <StatusBadge status={item.Status} />}
                               </div>
+                              {item.Type === 'server' && item.CpuUsage !== undefined && (
+                                <div className="px-1 pb-0.5 grid grid-cols-2 gap-x-4">
+                                  <UsageBar 
+                                    label="CPU" 
+                                    value={item.CpuUsage} 
+                                    colorClass={item.CpuUsage > 80 ? "bg-psim-red" : "bg-psim-green"} 
+                                  />
+                                  <UsageBar 
+                                    label="RAM" 
+                                    value={item.RamUsage || 0} 
+                                    colorClass={(item.RamUsage || 0) > 80 ? "bg-psim-red" : "bg-psim-green"} 
+                                  />
+                                </div>
+                              )}
                               {item.Type === 'storage' && item.DiskUsage !== undefined && (
                                 <div className="px-1 pb-0.5">
                                   <UsageBar 

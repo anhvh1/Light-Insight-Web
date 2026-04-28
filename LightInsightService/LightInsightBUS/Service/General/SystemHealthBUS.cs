@@ -87,10 +87,11 @@ namespace LightInsightBUS.Service.General
 
         private void MergeAgentMetrics(InfrastructureHealth item)
         {
-            if (item.Type != "server" && item.Type != "storage") return;
+            if (item.Type != "server" && item.Type != "storage" && item.Type != "info") return;
 
-            // Robust matching: Split by '.' to handle FQDN (win-8brd.light.local) vs NetBIOS (win-8brd)
-            string rawKey = item.MachineName ?? item.Name;
+            string rawKey = item.MachineName ?? "";
+            if (string.IsNullOrEmpty(rawKey)) return;
+            
             string lookupKey = rawKey.Split('.')[0].ToUpper();
 
             if (_cache.TryGetValue($"AGENT_METRIC_{lookupKey}", out MilestoneServerMetric metrics))
@@ -101,7 +102,7 @@ namespace LightInsightBUS.Service.General
                     item.RamUsage = metrics.RamUsage;
                     item.TotalRamGb = metrics.TotalRamGb;
                     item.FreeRamGb = metrics.FreeRamGb;
-                    item.Description = $"CPU {metrics.CpuUsage}% · RAM {metrics.RamUsage}% · Disks: {metrics.Disks.Count}";
+                    item.Description = $"CPU {metrics.CpuUsage}% • RAM {metrics.RamUsage}% • Disks: {metrics.Disks.Count}";
                 }
 
                 // Map all disks for the server view
