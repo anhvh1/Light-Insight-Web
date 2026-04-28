@@ -255,7 +255,7 @@ export function HiddenPlaybackPage() {
         />
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-white/10 px-3 py-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/10 px-3 py-2">
         <button
           type="button"
           className="px-3 py-1 rounded bg-bg3 border border-border-dim text-[11px]"

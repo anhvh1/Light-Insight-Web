@@ -24,11 +24,11 @@ export const mapV2ProxyRules = {
     changeOrigin: true,
     secure: false,
   },
-  '/health': {
-    target: 'https://localhost:7276',
-    changeOrigin: true,
-    secure: false,
-  },
+  // '/health': {
+  //   target: 'https://localhost:7276',
+  //   changeOrigin: true,
+  //   secure: false,
+  // },
   '/metrics': {
     target: 'https://localhost:7276',
     changeOrigin: true,
