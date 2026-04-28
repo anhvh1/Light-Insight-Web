@@ -319,19 +319,32 @@ export function ImageMapCanvas({
                         </ActionIcon>
                       )}
                       <Box style={{ position: 'relative', width: iconSize, height: iconSize }}>
-                        <Box
-                          key="icon-main"
-                          data-no-pan="true"
-                          onPointerDown={(e) => startCameraDrag(e, position.cameraId)}
+                        <div 
+                          className="absolute pointer-events-auto cursor-grab"
                           style={{
                             width: iconSize,
                             height: iconSize,
-                            background: `url(/${CAMERA_ICON_MAP[position.Icon || 'ipro-camera.svg'] || position.Icon || 'ipro-camera.svg'}) center / contain no-repeat`,
-                            filter: isSelected ? 'drop-shadow(0 0 8px var(--accent))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45))',
+                            backgroundColor: '#fff',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.35)',
+                            border: isSelected ? '2px solid var(--accent)' : '2px solid #fff',
+                            filter: isSelected ? 'drop-shadow(0 0 8px var(--accent))' : 'none',
                             transform: `rotate(${normalizeAngle(angle + ICON_ROTATION_OFFSET)}deg)`,
                             transformOrigin: 'center'
                           }}
-                        />
+                          onPointerDown={(e) => startCameraDrag(e, position.cameraId)}
+                        >
+                          <div 
+                            style={{
+                              width: '70%',
+                              height: '70%',
+                              background: `url(/${CAMERA_ICON_MAP[position.Icon || 'ipro-camera.svg'] || position.Icon || 'ipro-camera.svg'}) center / contain no-repeat`,
+                            }}
+                          />
+                        </div>
                         {isSelected && (
                           <>
                             <Box style={{ position: 'absolute', inset: -4, border: '1.5px dashed var(--accent)', borderRadius: 8 }} />
