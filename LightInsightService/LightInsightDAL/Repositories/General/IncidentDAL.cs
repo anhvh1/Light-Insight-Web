@@ -1,6 +1,7 @@
 using LightInsightModel.General;
 using LightInsightUtiltites;
 using Npgsql;
+using NpgsqlTypes;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -14,14 +15,16 @@ namespace LightInsightDAL.Repositories.General
             await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
             await conn.OpenAsync();
 
-            var sql = "SELECT public.incident_create(@p_priority, @p_source_id, @p_status, @p_type, @p_user_id, @p_sop_id)";
+            var sql = "SELECT public.incident_create(@p_priority, @p_source_id, @p_status, @p_vms_id, @p_alarm_time, @p_description, @p_user_id, @p_sop_id)";
             await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("p_priority", (object?)model.Priority ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("p_source_id", model.SourceId ?? string.Empty);
-            cmd.Parameters.AddWithValue("p_status", (object?)model.Status ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("p_type", model.Type ?? string.Empty);
-            cmd.Parameters.AddWithValue("p_user_id", (object?)model.UserId ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("p_sop_id", (object?)model.SopId ?? DBNull.Value);
+            cmd.Parameters.Add("p_priority", NpgsqlDbType.Varchar).Value = (object?)model.Priority ?? DBNull.Value;
+            cmd.Parameters.Add("p_source_id", NpgsqlDbType.Varchar).Value = model.SourceId ?? string.Empty;
+            cmd.Parameters.Add("p_status", NpgsqlDbType.Varchar).Value = (object?)model.Status ?? DBNull.Value;
+            cmd.Parameters.Add("p_vms_id", NpgsqlDbType.Uuid).Value = (object?)model.VmsId ?? DBNull.Value;
+            cmd.Parameters.Add("p_alarm_time", NpgsqlDbType.Timestamp).Value = (object?)model.AlarmTime ?? DBNull.Value;
+            cmd.Parameters.Add("p_description", NpgsqlDbType.Text).Value = (object?)model.Description ?? DBNull.Value;
+            cmd.Parameters.Add("p_user_id", NpgsqlDbType.Uuid).Value = (object?)model.UserId ?? DBNull.Value;
+            cmd.Parameters.Add("p_sop_id", NpgsqlDbType.Uuid).Value = (object?)model.SopId ?? DBNull.Value;
 
             var result = await cmd.ExecuteScalarAsync();
             return result is Guid guid ? guid : null;
@@ -32,15 +35,17 @@ namespace LightInsightDAL.Repositories.General
             await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
             await conn.OpenAsync();
 
-            var sql = "SELECT public.incident_update(@p_id, @p_priority, @p_source_id, @p_status, @p_type, @p_user_id, @p_sop_id)";
+            var sql = "SELECT public.incident_update(@p_id, @p_priority, @p_source_id, @p_status, @p_vms_id, @p_alarm_time, @p_description, @p_user_id, @p_sop_id)";
             await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("p_id", model.Id);
-            cmd.Parameters.AddWithValue("p_priority", (object?)model.Priority ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("p_source_id", model.SourceId ?? string.Empty);
-            cmd.Parameters.AddWithValue("p_status", (object?)model.Status ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("p_type", model.Type ?? string.Empty);
-            cmd.Parameters.AddWithValue("p_user_id", (object?)model.UserId ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("p_sop_id", (object?)model.SopId ?? DBNull.Value);
+            cmd.Parameters.Add("p_id", NpgsqlDbType.Uuid).Value = model.Id;
+            cmd.Parameters.Add("p_priority", NpgsqlDbType.Varchar).Value = (object?)model.Priority ?? DBNull.Value;
+            cmd.Parameters.Add("p_source_id", NpgsqlDbType.Varchar).Value = model.SourceId ?? string.Empty;
+            cmd.Parameters.Add("p_status", NpgsqlDbType.Varchar).Value = (object?)model.Status ?? DBNull.Value;
+            cmd.Parameters.Add("p_vms_id", NpgsqlDbType.Uuid).Value = (object?)model.VmsId ?? DBNull.Value;
+            cmd.Parameters.Add("p_alarm_time", NpgsqlDbType.Timestamp).Value = (object?)model.AlarmTime ?? DBNull.Value;
+            cmd.Parameters.Add("p_description", NpgsqlDbType.Text).Value = (object?)model.Description ?? DBNull.Value;
+            cmd.Parameters.Add("p_user_id", NpgsqlDbType.Uuid).Value = (object?)model.UserId ?? DBNull.Value;
+            cmd.Parameters.Add("p_sop_id", NpgsqlDbType.Uuid).Value = (object?)model.SopId ?? DBNull.Value;
 
             var result = await cmd.ExecuteScalarAsync();
             return result is bool b && b;
@@ -71,17 +76,33 @@ namespace LightInsightDAL.Repositories.General
             await using var reader = await cmd.ExecuteReaderAsync();
             if (!await reader.ReadAsync()) return null;
 
+            var idIdx = reader.GetOrdinal("id");
+            var sopIdIdx = reader.GetOrdinal("sop_id");
+            var priorityIdx = reader.GetOrdinal("priority");
+            var sourceIdIdx = reader.GetOrdinal("source_id");
+            var statusIdx = reader.GetOrdinal("status");
+            var vmsIdIdx = reader.GetOrdinal("vms_id");
+            var vmsNameIdx = reader.GetOrdinal("vms_name");
+            var alarmTimeIdx = reader.GetOrdinal("alarm_time");
+            var descriptionIdx = reader.GetOrdinal("description");
+            var userIdIdx = reader.GetOrdinal("user_id");
+            var createdAtIdx = reader.GetOrdinal("created_at");
+            var updatedAtIdx = reader.GetOrdinal("updated_at");
+
             return new IncidentDetailModel
             {
-                Id = reader.GetGuid(0),
-                SopId = reader.IsDBNull(1) ? null : reader.GetGuid(1),
-                Priority = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
-                SourceId = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
-                Status = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                Type = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
-                UserId = reader.IsDBNull(6) ? null : reader.GetGuid(6),
-                CreatedAt = reader.GetDateTime(7),
-                UpdatedAt = reader.GetDateTime(8)
+                Id = reader.GetGuid(idIdx),
+                SopId = reader.IsDBNull(sopIdIdx) ? null : reader.GetGuid(sopIdIdx),
+                Priority = reader.IsDBNull(priorityIdx) ? string.Empty : reader.GetString(priorityIdx),
+                SourceId = reader.IsDBNull(sourceIdIdx) ? string.Empty : reader.GetString(sourceIdIdx),
+                Status = reader.IsDBNull(statusIdx) ? string.Empty : reader.GetString(statusIdx),
+                VmsId = reader.IsDBNull(vmsIdIdx) ? null : reader.GetGuid(vmsIdIdx),
+                VmsName = reader.IsDBNull(vmsNameIdx) ? null : reader.GetString(vmsNameIdx),
+                AlarmTime = reader.IsDBNull(alarmTimeIdx) ? null : reader.GetDateTime(alarmTimeIdx),
+                Description = reader.IsDBNull(descriptionIdx) ? null : reader.GetString(descriptionIdx),
+                UserId = reader.IsDBNull(userIdIdx) ? null : reader.GetGuid(userIdIdx),
+                CreatedAt = reader.GetDateTime(createdAtIdx),
+                UpdatedAt = reader.GetDateTime(updatedAtIdx)
             };
         }
 
@@ -93,7 +114,7 @@ namespace LightInsightDAL.Repositories.General
             await using var conn = new NpgsqlConnection(SQLHelper.appConnectionStrings);
             await conn.OpenAsync();
 
-            var sql = "SELECT * FROM public.incident_get_all_paginated(@p_keyword, @p_status, @p_limit, @p_offset)";
+            var sql = "SELECT * FROM public.incident_get_all(@p_keyword, @p_status, @p_limit, @p_offset)";
             await using var cmd = new NpgsqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("p_keyword", keyword ?? string.Empty);
             cmd.Parameters.AddWithValue("p_status", status ?? string.Empty);
@@ -101,26 +122,43 @@ namespace LightInsightDAL.Repositories.General
             cmd.Parameters.AddWithValue("p_offset", offset);
 
             await using var reader = await cmd.ExecuteReaderAsync();
+            var totalRecordsIdx = reader.GetOrdinal("total_records");
+            var idIdx = reader.GetOrdinal("id");
+            var sopIdIdx = reader.GetOrdinal("sop_id");
+            var priorityIdx = reader.GetOrdinal("priority");
+            var sourceIdIdx = reader.GetOrdinal("source_id");
+            var statusIdx = reader.GetOrdinal("status");
+            var vmsIdIdx = reader.GetOrdinal("vms_id");
+            var vmsNameIdx = reader.GetOrdinal("vms_name");
+            var alarmTimeIdx = reader.GetOrdinal("alarm_time");
+            var descriptionIdx = reader.GetOrdinal("description");
+            var userIdIdx = reader.GetOrdinal("user_id");
+            var createdAtIdx = reader.GetOrdinal("created_at");
+            var updatedAtIdx = reader.GetOrdinal("updated_at");
+
             var totalRead = false;
             while (await reader.ReadAsync())
             {
                 if (!totalRead)
                 {
-                    total = reader.GetInt64(0);
+                    total = reader.GetInt64(totalRecordsIdx);
                     totalRead = true;
                 }
 
                 items.Add(new IncidentListItemModel
                 {
-                    Id = reader.GetGuid(1),
-                    SopId = reader.IsDBNull(2) ? null : reader.GetGuid(2),
-                    Priority = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
-                    SourceId = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                    Status = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
-                    Type = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
-                    UserId = reader.IsDBNull(7) ? null : reader.GetGuid(7),
-                    CreatedAt = reader.GetDateTime(8),
-                    UpdatedAt = reader.GetDateTime(9)
+                    Id = reader.GetGuid(idIdx),
+                    SopId = reader.IsDBNull(sopIdIdx) ? null : reader.GetGuid(sopIdIdx),
+                    Priority = reader.IsDBNull(priorityIdx) ? string.Empty : reader.GetString(priorityIdx),
+                    SourceId = reader.IsDBNull(sourceIdIdx) ? string.Empty : reader.GetString(sourceIdIdx),
+                    Status = reader.IsDBNull(statusIdx) ? string.Empty : reader.GetString(statusIdx),
+                    VmsId = reader.IsDBNull(vmsIdIdx) ? null : reader.GetGuid(vmsIdIdx),
+                    VmsName = reader.IsDBNull(vmsNameIdx) ? null : reader.GetString(vmsNameIdx),
+                    AlarmTime = reader.IsDBNull(alarmTimeIdx) ? null : reader.GetDateTime(alarmTimeIdx),
+                    Description = reader.IsDBNull(descriptionIdx) ? null : reader.GetString(descriptionIdx),
+                    UserId = reader.IsDBNull(userIdIdx) ? null : reader.GetGuid(userIdIdx),
+                    CreatedAt = reader.GetDateTime(createdAtIdx),
+                    UpdatedAt = reader.GetDateTime(updatedAtIdx)
                 });
             }
 

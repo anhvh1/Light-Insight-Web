@@ -64,6 +64,7 @@ builder.Services.AddScoped<IConnectors, ConnectorsBUS>();
 builder.Services.AddScoped<IDMMap, DMMapBUS>();
 builder.Services.AddScoped<ISop, SopBUS>();
 builder.Services.AddScoped<IIncident, IncidentBUS>();
+builder.Services.AddScoped<IAutoIncidentFromAlarm, AutoIncidentFromAlarmBUS>();
 builder.Services.AddScoped<ISystemHealth, SystemHealthBUS>();
 builder.Services.AddScoped<IAuditLog, AuditLogBUS>();
 builder.Services.AddScoped<IToken, TokenBUS>();

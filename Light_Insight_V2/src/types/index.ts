@@ -104,7 +104,10 @@ export interface IncidentApiItem {
   priority: string;
   source_id: string;
   status: string;
-  type: string;
+  vms_id: string | null;
+  vms_name: string | null;
+  alarm_time: string | null;
+  description: string | null;
   user_id: string | null;
   created_at: string;
   updated_at: string;
@@ -135,8 +138,10 @@ export interface MapTreeNode {
 
 // --- SOP TYPES ---
 export interface SopTrigger {
-  vms_camera_id: string;
-  event_name: string;
+  id?: string;
+  connector_id: string;
+  camera_id: string;
+  event_id: string;
 }
 
 export interface SopStep {

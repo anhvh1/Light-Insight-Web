@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { StatusPill, TypeBadge } from '@/components/ui/status-badge';
+import { StatusPill } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 import { alarmApi } from '@/lib/alarm-api';
 import { incidentApi } from '@/lib/incident-api';
 import { priorityApi } from '@/lib/priority-api';
 import { sopApi } from '@/lib/sop-api';
-import type { AlarmType, IncidentApiItem, SopDetail } from '@/types';
+import type { IncidentApiItem, SopDetail } from '@/types';
 import {
   AlertCircle,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -16,6 +17,7 @@ import {
   RefreshCcw,
   Search,
   ShieldAlert,
+  X,
 } from 'lucide-react';
 
 type IncidentTab = 'all' | 'NEW' | 'IN PROGRESS' | 'ON HOLD' | 'CLOSED';
@@ -23,6 +25,10 @@ type IncidentTab = 'all' | 'NEW' | 'IN PROGRESS' | 'ON HOLD' | 'CLOSED';
 const PAGE_SIZE = 30;
 
 type StepProgressState = Record<string, boolean>;
+interface FlashMessage {
+  type: 'success' | 'error';
+  text: string;
+}
 interface ConnectorOption {
   Id?: string;
   id?: string;
@@ -39,22 +45,24 @@ function formatDateTime(value?: string | null) {
   return date.toLocaleString('vi-VN');
 }
 
+function splitToTwoLines(value?: string | null): [string, string] {
+  const normalized = (value ?? '').trim();
+  if (!normalized) return ['--', '--'];
+
+  const midpoint = Math.ceil(normalized.length / 2);
+  let splitAt = normalized.indexOf('-', midpoint);
+  if (splitAt === -1) splitAt = normalized.lastIndexOf('-', midpoint);
+  if (splitAt <= 0 || splitAt >= normalized.length - 1) splitAt = midpoint;
+
+  return [normalized.slice(0, splitAt), normalized.slice(splitAt + 1)];
+}
+
 function getStepProgressKey(incidentId?: string | null) {
   return `incident-sop-progress:${incidentId || 'unknown'}`;
 }
 
 function getStepKey(step: { id?: string; step_order: number }) {
   return step.id || `step-${step.step_order}`;
-}
-
-function mapIncidentTypeToBadge(type?: string | null): AlarmType {
-  const key = (type || '').toLowerCase();
-  if (key.includes('lpr')) return 'lpr';
-  if (key.includes('access') || key.includes('acs')) return 'acs';
-  if (key.includes('fire')) return 'fire';
-  if (key.includes('bms')) return 'bms';
-  if (key.includes('intrusion') || key.includes('ai') || key.includes('vmd')) return 'ai';
-  return 'tech';
 }
 
 function getStatusBadge(status: string) {
@@ -105,6 +113,31 @@ export function IncidentManagement() {
   );
   const [stepProgress, setStepProgress] = useState<StepProgressState>({});
   const [selectedSopId, setSelectedSopId] = useState('');
+  const [flash, setFlash] = useState<FlashMessage | null>(null);
+  const [pendingSelectId, setPendingSelectId] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('incident-flash');
+      if (!raw) return;
+      sessionStorage.removeItem('incident-flash');
+      const payload = JSON.parse(raw) as {
+        type: 'success' | 'error';
+        text: string;
+        selectId: string | null;
+      };
+      setFlash({ type: payload.type, text: payload.text });
+      if (payload.selectId) setPendingSelectId(payload.selectId);
+    } catch {
+      sessionStorage.removeItem('incident-flash');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 4000);
+    return () => clearTimeout(t);
+  }, [flash]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedKeyword(keyword.trim()), 350);
@@ -128,16 +161,26 @@ export function IncidentManagement() {
 
   useEffect(() => {
     if (!incidents.length) {
-      setSelectedIncidentId(null);
+      if (!pendingSelectId) {
+        setSelectedIncidentId(null);
+      }
       return;
     }
+
+    if (pendingSelectId) {
+      const exists = incidents.some((x) => x.id === pendingSelectId);
+      setSelectedIncidentId(exists ? pendingSelectId : incidents[0].id);
+      setPendingSelectId(null);
+      return;
+    }
+
     if (
       !selectedIncidentId ||
       !incidents.some((x) => x.id === selectedIncidentId)
     ) {
       setSelectedIncidentId(incidents[0].id);
     }
-  }, [incidents, selectedIncidentId]);
+  }, [incidents, selectedIncidentId, pendingSelectId]);
 
   const detailQuery = useQuery({
     queryKey: ['incident-detail', selectedIncidentId],
@@ -193,9 +236,11 @@ export function IncidentManagement() {
       incidentApi.update({
         Id: selectedIncident?.id || '',
         SourceId: selectedIncident?.source_id || '',
-        Type: selectedIncident?.type || '',
         Priority: selectedIncident?.priority || null,
         Status: selectedIncident?.status || null,
+        VmsId: selectedIncident?.vms_id || null,
+        AlarmTime: selectedIncident?.alarm_time || null,
+        Description: selectedIncident?.description || null,
         UserId: selectedIncident?.user_id || null,
         SopId: sopId,
       }),
@@ -261,13 +306,13 @@ export function IncidentManagement() {
     const seen = new Set<string>();
 
     for (const trigger of sopDetail.triggers ?? []) {
-      const id = (trigger.vms_camera_id || '').trim();
+      const id = (trigger.camera_id || '').trim();
       if (!id || seen.has(id)) continue;
       seen.add(id);
       rows.push({
         id,
         name: cameraNameById.get(id) ?? id,
-        sub: trigger.event_name || '',
+        sub: trigger.event_id || '',
         time: formatDateTime(selectedIncident?.created_at),
         icon: '🚨',
       });
@@ -316,7 +361,7 @@ export function IncidentManagement() {
                 #INC-{(selectedIncident?.id ?? 'missing-id').slice(0, 8)}
               </div>
               <h2 className="text-[16px] font-heading font-bold text-t0 leading-tight tracking-tight">
-                {selectedIncident?.type || 'Incident'}
+                {selectedIncident?.description || 'Incident'}
               </h2>
             </div>
             <StatusPill
@@ -329,14 +374,16 @@ export function IncidentManagement() {
           <div className="shrink-0 grid grid-cols-2 gap-px bg-border-dim border border-border-dim rounded shadow-sm">
             {[
               {
-                label: 'Source ID',
+                label: 'Source',
                 val: selectedIncident?.source_id || '--',
                 mono: true,
+                forceTwoLines: true,
               },
-              { label: 'Loại incident', val: selectedIncident?.type || '--' },
+              { label: 'VMS', val: selectedIncident?.vms_name || '--' },
+              { label: 'Mô tả', val: selectedIncident?.description || '--' },
               {
                 label: 'Thời gian',
-                val: formatDateTime(selectedIncident?.created_at),
+                val: formatDateTime(selectedIncident?.alarm_time || selectedIncident?.created_at),
                 mono: true,
               },
               {
@@ -344,7 +391,9 @@ export function IncidentManagement() {
                 val: selectedIncident?.user_id || 'Chưa có người xử lý',
                 mono: true,
               },
-            ].map((m, i) => (
+            ].map((m, i) => {
+              const twoLineValues = m.forceTwoLines ? splitToTwoLines(String(m.val)) : null;
+              return (
               <div key={i} className="bg-bg2 p-2.5 flex flex-col gap-1">
                 <span className="text-[8px] text-t-2 font-mono uppercase tracking-widest">
                   {m.label}
@@ -356,10 +405,17 @@ export function IncidentManagement() {
                     'text-t-1'
                   )}
                 >
-                  {m.val}
+                  {twoLineValues ? (
+                    <>
+                      <span className="block">{twoLineValues[0]}</span>
+                      <span className="block">{twoLineValues[1]}</span>
+                    </>
+                  ) : (
+                    m.val
+                  )}
                 </span>
               </div>
-            ))}
+            )})}
           </div>
 
           {correlationItems.length > 0 && (
@@ -586,6 +642,30 @@ export function IncidentManagement() {
         </button>
       </div>
 
+      {flash && (
+        <div
+          className={cn(
+            'mx-3 mt-3 px-4 py-2.5 rounded-lg text-[11px] font-semibold flex items-center gap-2 border',
+            flash.type === 'success'
+              ? 'bg-psim-green/10 border-psim-green/40 text-psim-green'
+              : 'bg-psim-red/10 border-psim-red/40 text-psim-red'
+          )}
+        >
+          {flash.type === 'success' ? (
+            <CheckCircle2 size={14} />
+          ) : (
+            <AlertCircle size={14} />
+          )}
+          <span>{flash.text}</span>
+          <button
+            onClick={() => setFlash(null)}
+            className="ml-auto text-current opacity-60 hover:opacity-100"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Incident List */}
         <div className="flex-1 flex flex-col overflow-hidden bg-bg0">
@@ -645,7 +725,13 @@ export function IncidentManagement() {
                       className="py-2 px-3 text-[10px] font-mono uppercase tracking-wider border-b border-border-dim sticky top-0 z-10 whitespace-nowrap"
                       style={{ background: 'var(--bg1)', color: 'var(--t2)' }}
                     >
-                      Loại
+                      Mô tả
+                    </th>
+                    <th
+                      className="py-2 px-3 text-[10px] font-mono uppercase tracking-wider border-b border-border-dim sticky top-0 z-10 whitespace-nowrap"
+                      style={{ background: 'var(--bg1)', color: 'var(--t2)' }}
+                    >
+                      VMS
                     </th>
                     <th
                       className="py-2 px-3 text-[10px] font-mono uppercase tracking-wider border-b border-border-dim sticky top-0 z-10 whitespace-nowrap"
@@ -690,10 +776,12 @@ export function IncidentManagement() {
                           <StatusPill priority={inc.priority} />
                         </td>
                         <td className="py-2.5 px-3 align-middle text-[12px]">
-                          <TypeBadge
-                            type={mapIncidentTypeToBadge(inc.type)}
-                            label={inc.type || '--'}
-                          />
+                          <span className="text-[11px] text-t-1 line-clamp-2">
+                            {inc.description || '--'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 align-middle text-[11px] text-t-2">
+                          {inc.vms_name || '--'}
                         </td>
                         <td className="py-2.5 px-3 align-middle text-[11px] text-t-2 max-w-[220px] truncate">
                           {inc.source_id || '--'}

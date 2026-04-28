@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useBlocker } from '@tanstack/react-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
   Save,
@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { alarmApi } from '@/lib/alarm-api';
 import { priorityApi } from '@/lib/priority-api';
 import { sopApi } from '@/lib/sop-api';
-import type { CameraDropdownOption, SopStep, SopTrigger } from '@/types';
+import type { AnalyticsEvent, CameraDropdownOption, SopStep, SopTrigger } from '@/types';
 
 const NEW_DRAFT_ID = '__new__';
 
@@ -91,7 +91,6 @@ export function SopBuilderSection() {
   const [originalDraft, setOriginalDraft] = useState<SopDraft | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [flash, setFlash] = useState<FlashMessage | null>(null);
-  const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [pendingNavBlocker, setPendingNavBlocker] = useState<any>(null);
 
@@ -105,28 +104,70 @@ export function SopBuilderSection() {
     [connectorsQuery.data]
   );
 
-  useEffect(() => {
-    if (!connectors.length) {
-      setSelectedConnectorId(null);
-      return;
-    }
-    const hasCurrent = connectors.some(
-      (connector) => (connector.Id ?? connector.id) === selectedConnectorId
-    );
-    if (!selectedConnectorId || !hasCurrent) {
-      setSelectedConnectorId(connectors[0].Id ?? connectors[0].id ?? null);
-    }
-  }, [connectors, selectedConnectorId]);
+  const triggerConnectorIds = useMemo(() => {
+    const ids = (draft?.triggers ?? [])
+      .map((trigger) => trigger.connector_id?.trim())
+      .filter((id): id is string => !!id);
+    return Array.from(new Set(ids));
+  }, [draft?.triggers]);
 
-  const cameraOptionsQuery = useQuery({
-    queryKey: ['camera-dropdown', selectedConnectorId],
-    queryFn: () => alarmApi.getCameraOptions(selectedConnectorId as string),
-    enabled: !!selectedConnectorId,
+  const triggerConnectorOptionQueries = useQueries({
+    queries: triggerConnectorIds.map((connectorId) => ({
+      queryKey: ['sop-trigger-options', connectorId],
+      queryFn: async () => {
+        const [cameras, eventsResponse] = await Promise.all([
+          alarmApi.getCameraOptions(connectorId),
+          priorityApi.getAnalyticsEvents(connectorId),
+        ]);
+        return { cameras, events: eventsResponse.Data ?? [] };
+      },
+      enabled: !!connectorId,
+    })),
   });
 
-  const cameraOptions = useMemo(
-    () => cameraOptionsQuery.data ?? [],
-    [cameraOptionsQuery.data]
+  const triggerOptionsByConnector = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        cameras: CameraDropdownOption[];
+        events: AnalyticsEvent[];
+        camerasLoading: boolean;
+        eventsLoading: boolean;
+      }
+    >();
+    triggerConnectorIds.forEach((connectorId, idx) => {
+      const query = triggerConnectorOptionQueries[idx];
+      map.set(connectorId, {
+        cameras: query?.data?.cameras ?? [],
+        events: query?.data?.events ?? [],
+        camerasLoading: query?.isLoading ?? false,
+        eventsLoading: query?.isLoading ?? false,
+      });
+    });
+    return map;
+  }, [triggerConnectorIds, triggerConnectorOptionQueries]);
+
+  const stepCameraOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: CameraDropdownOption[] = [];
+    triggerConnectorIds.forEach((connectorId) => {
+      const cameras = triggerOptionsByConnector.get(connectorId)?.cameras ?? [];
+      cameras.forEach((camera) => {
+        if (!camera.id || seen.has(camera.id)) return;
+        seen.add(camera.id);
+        merged.push(camera);
+      });
+    });
+    return merged;
+  }, [triggerConnectorIds, triggerOptionsByConnector]);
+
+  const stepCameraLoading = useMemo(
+    () =>
+      triggerConnectorIds.length > 0 &&
+      triggerConnectorIds.some(
+        (connectorId) => triggerOptionsByConnector.get(connectorId)?.camerasLoading ?? false
+      ),
+    [triggerConnectorIds, triggerOptionsByConnector]
   );
 
   const listQuery = useQuery({
@@ -166,8 +207,10 @@ export function SopBuilderSection() {
         name: detail.name ?? '',
         description: detail.description ?? '',
         triggers: (detail.triggers ?? []).map((t) => ({
-          vms_camera_id: t.vms_camera_id ?? '',
-          event_name: t.event_name ?? '',
+          id: t.id,
+          connector_id: t.connector_id ?? '',
+          camera_id: t.camera_id ?? '',
+          event_id: t.event_id ?? '',
         })),
         steps: normalizeSteps(
           (detail.steps ?? []).map((s) => ({
@@ -289,7 +332,7 @@ export function SopBuilderSection() {
       d
         ? {
             ...d,
-            triggers: [...d.triggers, { vms_camera_id: '', event_name: '' }],
+            triggers: [...d.triggers, { connector_id: '', camera_id: '', event_id: '' }],
           }
         : d
     );
@@ -377,10 +420,11 @@ export function SopBuilderSection() {
 
     const payloadTriggers = draft.triggers
       .map((t) => ({
-        vms_camera_id: t.vms_camera_id.trim(),
-        event_name: t.event_name.trim(),
+        connector_id: t.connector_id,
+        camera_id: t.camera_id,
+        event_id: t.event_id,
       }))
-      .filter((t) => t.vms_camera_id || t.event_name);
+      .filter((t) => t.connector_id && t.camera_id && t.event_id);
 
     const payloadSteps = normalizeSteps(draft.steps).map((s) => ({
       id: s.id,
@@ -684,12 +728,9 @@ export function SopBuilderSection() {
 
                 <TriggersEditor
                   readOnly={!isEditing}
-                  cameraOptions={cameraOptions}
-                  cameraLoading={cameraOptionsQuery.isLoading}
+                  triggerOptionsByConnector={triggerOptionsByConnector}
                   connectors={connectors}
                   connectorsLoading={connectorsQuery.isLoading}
-                  selectedConnectorId={selectedConnectorId}
-                  onConnectorChange={setSelectedConnectorId}
                   triggers={draft.triggers}
                   onAdd={addTrigger}
                   onUpdate={updateTrigger}
@@ -698,8 +739,8 @@ export function SopBuilderSection() {
 
                 <StepsEditor
                   readOnly={!isEditing}
-                  cameraOptions={cameraOptions}
-                  cameraLoading={cameraOptionsQuery.isLoading}
+                  cameraOptions={stepCameraOptions}
+                  cameraLoading={stepCameraLoading}
                   steps={draft.steps}
                   onAdd={addStep}
                   onUpdate={updateStep}
@@ -741,12 +782,17 @@ function EmptyEditorState() {
 
 interface TriggersEditorProps {
   readOnly: boolean;
-  cameraOptions: CameraDropdownOption[];
-  cameraLoading: boolean;
+  triggerOptionsByConnector: Map<
+    string,
+    {
+      cameras: CameraDropdownOption[];
+      events: AnalyticsEvent[];
+      camerasLoading: boolean;
+      eventsLoading: boolean;
+    }
+  >;
   connectors: ConnectorOption[];
   connectorsLoading: boolean;
-  selectedConnectorId: string | null;
-  onConnectorChange: (value: string) => void;
   triggers: SopTrigger[];
   onAdd: () => void;
   onUpdate: (idx: number, patch: Partial<SopTrigger>) => void;
@@ -755,12 +801,9 @@ interface TriggersEditorProps {
 
 function TriggersEditor({
   readOnly,
-  cameraOptions,
-  cameraLoading,
+  triggerOptionsByConnector,
   connectors,
   connectorsLoading,
-  selectedConnectorId,
-  onConnectorChange,
   triggers,
   onAdd,
   onUpdate,
@@ -773,38 +816,13 @@ function TriggersEditor({
           Thiết bị kích hoạt SOP
         </label>
         {!readOnly && (
-          <div className="flex items-center gap-3">
-            <select
-              value={selectedConnectorId ?? ''}
-              onChange={(e) => onConnectorChange(e.target.value)}
-              disabled={connectorsLoading || connectors.length === 0}
-              className="min-w-[180px] bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
-            >
-              <option value="" className="bg-[#161b2e]">
-                {connectorsLoading
-                  ? 'Đang tải VMS...'
-                  : connectors.length === 0
-                    ? 'Chưa có hệ thống VMS'
-                    : 'Chọn hệ thống VMS'}
-              </option>
-              {connectors.map((connector) => {
-                const id = connector.Id ?? connector.id ?? '';
-                const name = connector.Name ?? connector.name ?? id;
-                return (
-                  <option key={id} value={id} className="bg-[#161b2e]">
-                    {name}
-                  </option>
-                );
-              })}
-            </select>
-            <button
-              onClick={onAdd}
-              className="text-[10px] font-bold uppercase tracking-wider text-psim-accent hover:text-white transition-colors flex items-center gap-1"
-            >
-              <Plus size={12} />
-              Thêm thiết bị kích hoạt
-            </button>
-          </div>
+          <button
+            onClick={onAdd}
+            className="text-[10px] font-bold uppercase tracking-wider text-psim-accent hover:text-white transition-colors flex items-center gap-1"
+          >
+            <Plus size={12} />
+            Thêm thiết bị kích hoạt
+          </button>
         )}
       </div>
 
@@ -817,40 +835,107 @@ function TriggersEditor({
           {triggers.map((t, idx) => (
             <div
               key={idx}
-              className="grid grid-cols-[1fr_1fr_auto] gap-2 bg-white/[0.02] border border-white/5 rounded-lg p-2"
+              className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 bg-white/[0.02] border border-white/5 rounded-lg p-2"
             >
               <select
-                value={t.vms_camera_id}
-                onChange={(e) => onUpdate(idx, { vms_camera_id: e.target.value })}
-                disabled={readOnly || cameraLoading || cameraOptions.length === 0}
+                value={t.connector_id}
+                onChange={(e) =>
+                  onUpdate(idx, { connector_id: e.target.value, camera_id: '', event_id: '' })
+                }
+                disabled={readOnly || connectorsLoading || connectors.length === 0}
                 className="bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
               >
                 <option value="" className="bg-[#161b2e]">
-                  {cameraLoading
-                    ? 'Đang tải camera...'
-                    : cameraOptions.length === 0
-                      ? 'Chưa có camera'
-                      : 'Chọn camera kích hoạt'}
+                  {connectorsLoading
+                    ? 'Đang tải VMS...'
+                    : connectors.length === 0
+                      ? 'Chưa có hệ thống VMS'
+                      : 'Chọn hệ thống VMS'}
                 </option>
-                {t.vms_camera_id &&
-                  !cameraOptions.some((camera) => camera.id === t.vms_camera_id) && (
-                    <option value={t.vms_camera_id} className="bg-[#161b2e]">
-                      {t.vms_camera_id}
+                {t.connector_id &&
+                  !connectors.some((connector) => (connector.Id ?? connector.id ?? '') === t.connector_id) && (
+                    <option value={t.connector_id} className="bg-[#161b2e]">
+                      {t.connector_id}
                     </option>
                   )}
-                {cameraOptions.map((camera) => (
+                {connectors.map((connector) => {
+                  const id = connector.Id ?? connector.id ?? '';
+                  const name = connector.Name ?? connector.name ?? id;
+                  return (
+                    <option key={id} value={id} className="bg-[#161b2e]">
+                      {name}
+                    </option>
+                  );
+                })}
+              </select>
+              <select
+                value={t.camera_id}
+                onChange={(e) => onUpdate(idx, { camera_id: e.target.value })}
+                disabled={
+                  readOnly ||
+                  !t.connector_id ||
+                  (triggerOptionsByConnector.get(t.connector_id)?.camerasLoading ?? false) ||
+                  (triggerOptionsByConnector.get(t.connector_id)?.cameras.length ?? 0) === 0
+                }
+                className="bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
+              >
+                <option value="" className="bg-[#161b2e]">
+                  {!t.connector_id
+                    ? 'Chọn hệ thống VMS trước'
+                    : triggerOptionsByConnector.get(t.connector_id)?.camerasLoading
+                      ? 'Đang tải camera...'
+                      : (triggerOptionsByConnector.get(t.connector_id)?.cameras.length ?? 0) === 0
+                        ? 'Chưa có camera'
+                        : 'Chọn camera kích hoạt'}
+                </option>
+                {t.camera_id &&
+                  !(triggerOptionsByConnector.get(t.connector_id)?.cameras ?? []).some(
+                    (camera) => camera.id === t.camera_id
+                  ) && (
+                    <option value={t.camera_id} className="bg-[#161b2e]">
+                      {t.camera_id}
+                    </option>
+                  )}
+                {(triggerOptionsByConnector.get(t.connector_id)?.cameras ?? []).map((camera) => (
                   <option key={camera.id} value={camera.id} className="bg-[#161b2e]">
                     {camera.name}
                   </option>
                 ))}
               </select>
-              <input
-                value={t.event_name}
-                onChange={(e) => onUpdate(idx, { event_name: e.target.value })}
-                disabled={readOnly}
-                placeholder="Event name (vd: LPR_UNKNOWN)"
+              <select
+                value={t.event_id}
+                onChange={(e) => onUpdate(idx, { event_id: e.target.value })}
+                disabled={
+                  readOnly ||
+                  !t.connector_id ||
+                  (triggerOptionsByConnector.get(t.connector_id)?.eventsLoading ?? false) ||
+                  (triggerOptionsByConnector.get(t.connector_id)?.events.length ?? 0) === 0
+                }
                 className="bg-black/20 border border-white/10 rounded h-8 px-2 text-[11px] text-white outline-none focus:border-psim-accent/50 transition-all disabled:opacity-100 disabled:text-white disabled:bg-black/20 disabled:cursor-default"
-              />
+              >
+                <option value="" className="bg-[#161b2e]">
+                  {!t.connector_id
+                    ? 'Chọn hệ thống VMS trước'
+                    : triggerOptionsByConnector.get(t.connector_id)?.eventsLoading
+                      ? 'Đang tải event...'
+                      : (triggerOptionsByConnector.get(t.connector_id)?.events.length ?? 0) === 0
+                        ? 'Chưa có event'
+                        : 'Chọn event kích hoạt'}
+                </option>
+                {t.event_id &&
+                  !(triggerOptionsByConnector.get(t.connector_id)?.events ?? []).some(
+                    (eventItem) => eventItem.ID === t.event_id
+                  ) && (
+                    <option value={t.event_id} className="bg-[#161b2e]">
+                      {t.event_id}
+                    </option>
+                  )}
+                {(triggerOptionsByConnector.get(t.connector_id)?.events ?? []).map((eventItem) => (
+                  <option key={eventItem.ID} value={eventItem.ID} className="bg-[#161b2e]">
+                    {eventItem.Name}
+                  </option>
+                ))}
+              </select>
               {!readOnly && (
                 <button
                   onClick={() => onRemove(idx)}

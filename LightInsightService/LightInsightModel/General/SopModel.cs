@@ -9,15 +9,21 @@ namespace LightInsightModel.General
     /// <summary>
     /// Trigger gắn với SOP (map tới bảng sop_triggers).
     /// Tên JSON dùng snake_case để khớp với các hàm PL/pgSQL
-    /// (trigger_item->>'vms_camera_id', trigger_item->>'event_name').
+    /// (trigger_item->>'connector_id', trigger_item->>'camera_id', trigger_item->>'event_id').
     /// </summary>
     public class SopTriggerModel
     {
-        [JsonPropertyName("vms_camera_id")]
-        public string VmsCameraId { get; set; } = string.Empty;
+        [JsonPropertyName("id")]
+        public Guid? Id { get; set; }
 
-        [JsonPropertyName("event_name")]
-        public string EventName { get; set; } = string.Empty;
+        [JsonPropertyName("connector_id")]
+        public Guid ConnectorId { get; set; }
+
+        [JsonPropertyName("camera_id")]
+        public Guid CameraId { get; set; }
+
+        [JsonPropertyName("event_id")]
+        public Guid EventId { get; set; }
     }
 
     /// <summary>

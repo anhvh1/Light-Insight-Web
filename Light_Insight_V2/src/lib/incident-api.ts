@@ -8,9 +8,22 @@ import type {
 export interface IncidentUpdatePayload {
   Id: string;
   SourceId: string;
-  Type: string;
   Priority?: string | null;
   Status?: string | null;
+  VmsId?: string | null;
+  AlarmTime?: string | null;
+  Description?: string | null;
+  UserId?: string | null;
+  SopId?: string | null;
+}
+
+export interface IncidentCreatePayload {
+  Priority?: string | null;
+  SourceId: string;
+  Status?: string | null;
+  VmsId?: string | null;
+  AlarmTime?: string | null;
+  Description?: string | null;
   UserId?: string | null;
   SopId?: string | null;
 }
@@ -28,33 +41,31 @@ function getStringValue(
   return null;
 }
 
+function getNullableStringValue(
+  source: Record<string, unknown>,
+  keys: string[]
+): string | null {
+  const value = getStringValue(source, keys);
+  if (value !== null) return value;
+  return keys.some((key) => source[key] === null) ? null : null;
+}
+
 function normalizeIncidentItem(raw: unknown): IncidentApiItem {
   const source =
     raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const sopId =
-    getStringValue(source, ['sop_id', 'sopId', 'SopId']) ??
-    (source.sop_id === null ||
-    source.sopId === null ||
-    source.SopId === null
-      ? null
-      : null);
-  const userId =
-    getStringValue(source, ['user_id', 'userId', 'UserId']) ??
-    (source.user_id === null ||
-    source.userId === null ||
-    source.UserId === null
-      ? null
-      : null);
 
   return {
     id: getStringValue(source, ['id', 'Id', 'incident_id', 'IncidentId']) ?? '',
-    sop_id: sopId,
+    sop_id: getNullableStringValue(source, ['sop_id', 'sopId', 'SopId']),
     priority: getStringValue(source, ['priority', 'Priority']) ?? '',
     source_id:
       getStringValue(source, ['source_id', 'sourceId', 'SourceId']) ?? '',
     status: getStringValue(source, ['status', 'Status']) ?? '',
-    type: getStringValue(source, ['type', 'Type']) ?? '',
-    user_id: userId,
+    vms_id: getNullableStringValue(source, ['vms_id', 'vmsId', 'VmsId']),
+    vms_name: getNullableStringValue(source, ['vms_name', 'vmsName', 'VmsName']),
+    alarm_time: getNullableStringValue(source, ['alarm_time', 'alarmTime', 'AlarmTime']),
+    description: getNullableStringValue(source, ['description', 'Description']),
+    user_id: getNullableStringValue(source, ['user_id', 'userId', 'UserId']),
     created_at:
       getStringValue(source, ['created_at', 'createdAt', 'CreatedAt']) ?? '',
     updated_at:
@@ -73,6 +84,23 @@ function emptyIncidentPagingResponse(): ApiResponse<IncidentApiItem[]> {
 }
 
 export const incidentApi = {
+  create: async (payload: IncidentCreatePayload) => {
+    try {
+      const res = await apiClient.post<ApiResponse<string>>('/Incident/Add', payload);
+      return (
+        res.data || {
+          Status: -1,
+          Message: 'Create failed',
+          MessageDetail: null,
+          Data: '',
+          TotalRow: 0,
+        }
+      );
+    } catch (error) {
+      throw error;
+    }
+  },
+
   getPaged: async (params: IncidentPagingParams = {}) => {
     const res = await apiClient.get<ApiResponse<IncidentApiItem[]>>(
       '/Incident/GetPaged',
