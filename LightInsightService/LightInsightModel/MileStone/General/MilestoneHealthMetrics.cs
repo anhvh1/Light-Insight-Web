@@ -7,6 +7,7 @@ namespace LightInsightModel.MileStone.General
     {
         public string ServerId { get; set; }
         public string ServerName { get; set; }
+        public string? IpAddress { get; set; } // Added for robust matching
         public double CpuUsage { get; set; }
         public double RamUsage { get; set; }
         public double TotalRamGb { get; set; }
