@@ -216,16 +216,19 @@ export function SystemHealthPage() {
     const filtered = allInfrastructure.filter(item => (item.ConnectorId === selectedConnectorId || item.ConnectorId === 'LOCAL') && (item.Type === 'server' || item.Type === 'storage' || item.Type === 'event_server' || item.Type === 'info'));
     const groups: Record<string, typeof allInfrastructure> = {};
     filtered.forEach(item => {
-      let groupKey = 'OTHER';
-      if (item.Type === 'event_server') groupKey = 'EVENT SERVER';
-      else if (item.Type === 'server' || item.Type === 'storage' || item.Type === 'info') groupKey = 'RECORDING SERVER';
-      else groupKey = item.MachineName || 'SYSTEM';
-
+      // Group by MachineName to ensure separate physical boxes
+      const groupKey = item.MachineName || 'SYSTEM';
       if (!groups[groupKey]) groups[groupKey] = [];
       groups[groupKey].push(item);
     });
     return groups;
   }, [allInfrastructure, selectedConnectorId]);
+
+  const getGroupTitle = (machineName: string, items: any[]) => {
+    if (items.some(i => i.Type === 'event_server')) return 'EVENT SERVER';
+    if (items.some(i => i.Type === 'server' || i.Type === 'info')) return 'RECORDING SERVER';
+    return machineName;
+  };
 
   const groupedDevices = useMemo(() => {
     const filtered = allInfrastructure.filter(item => item.ConnectorId === selectedConnectorId && (item.Type === 'camera' || item.Type === 'hardware'));
@@ -283,7 +286,9 @@ export function SystemHealthPage() {
                     return (
                       <div key={mi} className="bg-bg-2/40 border border-white/5 rounded-lg overflow-hidden">
                         <div className="bg-white/5 px-3 py-1.5 border-b border-white/5 flex flex-col gap-1">
-                          <div className="text-[10px] font-bold text-t0 uppercase truncate">{machineName}</div>
+                          <div className="text-[10px] font-bold text-t0 uppercase truncate">
+                            {getGroupTitle(machineName, items)}
+                          </div>
                         </div>
                         <div className="p-1 flex flex-col gap-1">
                           {items.map((item, i) => (
